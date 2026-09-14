@@ -1,5 +1,5 @@
 /* =========================================================
-   电子提醒器 · 喝水休息提醒  样式表
+   电子坤坤 · 喝水休息提醒器  样式表
    风格：赛博霓虹 / 全息舞台 / CRT 扫描线
    ========================================================= */
 
@@ -301,7 +301,7 @@ body.desktop .titlebar{display:flex}
 .tb-btn:hover{background:rgba(255,255,255,.1);color:#fff}
 .tb-close:hover{background:#e5484d;color:#fff}
 
-/* ---------- 宠物模式：只剩小鸡，窗口透明，整窗可拖，右键出菜单 ---------- */
+/* ---------- 宠物模式：只剩坤坤，窗口透明，整窗可拖，右键出菜单 ---------- */
 body.pet{background:transparent;overflow:hidden;cursor:move}
 body.pet .titlebar,
 body.pet .topbar,

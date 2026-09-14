@@ -1,5 +1,5 @@
 /* =========================================================================
-   电子提醒器 —— Electron 主进程
+   电子坤坤提醒器 —— Electron 主进程
    职责：
      · 无边框窗口 + 自绘标题栏；到点把窗口强制拉到前台
      · 系统托盘常驻（关闭/✕ = 收进右下角托盘，不退出）
@@ -20,7 +20,7 @@ let petBeforeAlert = false; // 提醒前是否在宠物模式
 
 const NORMAL = { width: 1180, height: 880 };
 
-/* 宠物模式只显示主界面本体，窗口透明无边框；迷你（150×170）是最大档 */
+/* 宠物模式只显示坤坤本体，窗口透明无边框；迷你（150×170）是最大档 */
 const PET_SIZES = {
   max: { label: '迷你（150 × 170）', w: 150, h: 170 },
   mid: { label: '小小（118 × 134）', w: 118, h: 134 },
@@ -41,9 +41,9 @@ function createWindow() {
     minWidth: 760,
     minHeight: 560,
     frame: false,                 // 无边框：普通模式用自绘标题栏，宠物模式只剩动画
-    transparent: true,            // 宠物模式下窗口背景完全透明，只看得见小鸡
+    transparent: true,            // 宠物模式下窗口背景完全透明，只看得见坤坤
     backgroundColor: '#00000000',
-    title: '电子提醒器',
+    title: '电子坤坤提醒器',
     icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
     show: false,
@@ -112,7 +112,7 @@ function buildTray() {
   } catch (err) {
     return;
   }
-  tray.setToolTip('电子提醒器 · 喝水休息提醒');
+  tray.setToolTip('电子坤坤 · 喝水休息提醒器');
   tray.on('click', toggleWindow);
   tray.on('double-click', showWindow);
   refreshTrayMenu();
@@ -121,7 +121,7 @@ function buildTray() {
 function refreshTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示主界面', click: showWindow },
+    { label: '显示坤坤', click: showWindow },
     { label: '宠物模式（只剩动画）', type: 'checkbox', checked: petMode, click: (mi) => applyPetMode(mi.checked) },
     { type: 'separator' },
     { label: '💧 立即提醒喝水', click: () => alertNow('water') },
@@ -157,7 +157,7 @@ function hideToTray() {
     balloonShown = true;
     try {
       tray.displayBalloon({
-        title: '已经躲到托盘里了',
+        title: '坤坤躲到托盘里了',
         content: '到点会自动跳出来提醒你。点托盘图标可以随时叫出来 / 收起。'
       });
     } catch (e) { }
@@ -244,7 +244,7 @@ ipcMain.handle('pet-menu', () => {
       }))
     },
     { type: 'separator' },
-    { label: '退出', click: quitApp }
+    { label: '退出坤坤', click: quitApp }
   ]).popup({ window: win });
   return true;
 });
