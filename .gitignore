@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+
+# 打包产物（体积很大，而且 GitHub 单文件上限 100MB）
+dist/
+*.blockmap
+
+# 构建缓存
+.npm-cache/
+.electron-cache/
+.eb-cache/
+
+# 临时/系统文件
+*.log
+Thumbs.db
+.DS_Store
+desktop.ini

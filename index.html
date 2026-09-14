@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>电子坤坤 · 喝水休息提醒器</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 自绘标题栏（无边框窗口用，仅桌面版显示） -->
+<div class="titlebar" id="titlebar">
+  <div class="tb-left">
+    <span class="tb-ico">🐣</span>
+    <span class="tb-name">电子坤坤提醒器</span>
+  </div>
+  <div class="tb-right">
+    <button class="tb-btn" id="tbMin" title="最小化">─</button>
+    <button class="tb-btn" id="tbTray" title="收进右下角托盘（后台继续计时）">▣</button>
+    <button class="tb-btn tb-close" id="tbClose" title="收进托盘，程序不退出">✕</button>
+  </div>
+</div>
+
+<!-- 宠物模式：整窗都可以按住拖动，右键出菜单 -->
+
+<!-- 背景装饰层 -->
+<div class="grid-floor"></div>
+<div class="aurora"></div>
+<div class="scanlines"></div>
+
+<!-- 主内容整体等比缩放（设计尺寸 1180 × 842） -->
+<div id="app">
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">🏀</div>
+    <div class="brand-text">
+      <h1>电子坤坤 <span class="ver">v1.0</span></h1>
+      <p class="sub">唱 · 跳 · rap · 篮球 —— 到点了就喊你喝水 / 休息</p>
+    </div>
+  </div>
+  <div class="clock">
+    <div id="digitalClock" class="digital">--:--:--</div>
+    <div id="dateLine" class="sub">加载中…</div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- 左：电子坤坤舞台 -->
+  <section class="card stage-card">
+    <div class="stage-head">
+      <span class="dot"></span><span class="stage-title">HOLO-STAGE / 全息舞台</span>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="stage"></canvas>
+    </div>
+    <div class="stage-caption" id="stageCaption">待机中 · 坤坤在划水</div>
+
+    <div class="toolbar">
+      <button id="btnToggle" class="btn primary">⏸ 暂停计时</button>
+      <button id="btnResetAll" class="btn">↺ 全部重置</button>
+      <button id="btnTest" class="btn ghost">🎤 试听提醒</button>
+      <button id="btnPet" class="btn ghost" title="缩成悬浮小窗，一直待在最前面">🐣 宠物模式</button>
+      <button id="btnTray" class="btn ghost" hidden title="收进右下角托盘，后台继续计时">📥 收进托盘</button>
+    </div>
+
+    <div class="pet-size-row" id="petSizeRow" hidden>
+      <span class="psr-label">🐣 宠物默认大小</span>
+      <div class="seg" id="petSizeSeg">
+        <button data-size="max" title="150 × 170">迷你</button>
+        <button data-size="mid" title="118 × 134">小小</button>
+        <button data-size="min" title="92 × 104">超小</button>
+      </div>
+    </div>
+    <div class="toolbar toggles">
+      <label class="chk"><input type="checkbox" id="chkSound" checked><span>音效</span></label>
+      <label class="chk"><input type="checkbox" id="chkSpeech" checked><span>语音播报</span></label>
+      <label class="chk"><input type="checkbox" id="chkNotify"><span>系统通知</span></label>
+    </div>
+    <p class="hint">快捷键：<kbd>空格</kbd> 开始/暂停 · <kbd>W</kbd> 立刻喝水提醒 · <kbd>R</kbd> 立刻休息提醒</p>
+  </section>
+
+  <!-- 右：两个计时面板 -->
+  <section class="panels">
+
+    <article class="card panel" id="panel-water" data-kind="water">
+      <header class="panel-head">
+        <h2><span class="ico">💧</span> 喝水提醒</h2>
+        <label class="switch" title="启用/停用">
+          <input type="checkbox" data-role="enable" checked><span class="slider"></span>
+        </label>
+      </header>
+
+      <div class="panel-body">
+        <div class="ring-wrap">
+          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle class="ring-fg" cx="60" cy="60" r="52" data-role="ring"></circle>
+          </svg>
+          <div class="ring-text">
+            <b data-role="countdown">45:00</b>
+            <small>下次提醒</small>
+          </div>
+        </div>
+
+        <div class="ctrl">
+          <div class="row">
+            <span class="label">间隔</span>
+            <input type="number" data-role="minutes" min="1" max="600" step="1" value="45">
+            <span class="unit">分钟</span>
+          </div>
+          <div class="quick">
+            <button class="mini" data-min="15">15分</button>
+            <button class="mini" data-min="30">30分</button>
+            <button class="mini" data-min="45">45分</button>
+            <button class="mini" data-min="60">60分</button>
+          </div>
+          <div class="actions">
+            <button class="btn sm" data-role="reset">重置本轮</button>
+            <button class="btn sm" data-role="skip">立即提醒</button>
+          </div>
+          <div class="stat">今日已 <b data-role="count">0</b> 次 · 目标 8 次</div>
+          <div class="bar"><i data-role="bar"></i></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="card panel" id="panel-rest" data-kind="rest">
+      <header class="panel-head">
+        <h2><span class="ico">🛋️</span> 休息提醒</h2>
+        <label class="switch" title="启用/停用">
+          <input type="checkbox" data-role="enable" checked><span class="slider"></span>
+        </label>
+      </header>
+
+      <div class="panel-body">
+        <div class="ring-wrap">
+          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle class="ring-fg" cx="60" cy="60" r="52" data-role="ring"></circle>
+          </svg>
+          <div class="ring-text">
+            <b data-role="countdown">60:00</b>
+            <small>下次提醒</small>
+          </div>
+        </div>
+
+        <div class="ctrl">
+          <div class="row">
+            <span class="label">间隔</span>
+            <input type="number" data-role="minutes" min="1" max="600" step="1" value="60">
+            <span class="unit">分钟</span>
+          </div>
+          <div class="quick">
+            <button class="mini" data-min="20">20分</button>
+            <button class="mini" data-min="40">40分</button>
+            <button class="mini" data-min="60">60分</button>
+            <button class="mini" data-min="90">90分</button>
+          </div>
+          <div class="actions">
+            <button class="btn sm" data-role="reset">重置本轮</button>
+            <button class="btn sm" data-role="skip">立即提醒</button>
+          </div>
+          <div class="stat">今日已 <b data-role="count">0</b> 次 · 目标 6 次</div>
+          <div class="bar"><i data-role="bar"></i></div>
+        </div>
+      </div>
+    </article>
+
+    <p class="tip card">💡 提示：设置会自动保存在本地。点击「开始使用」后浏览器才会允许播放声音与系统通知。</p>
+  </section>
+</main>
+
+</div><!-- /#app -->
+
+<!-- 提醒弹层（不参与缩放，保持原始大小以保证可读性） -->
+<div class="overlay" id="overlay" hidden>
+  <div class="overlay-card" id="overlayCard">
+    <button class="close" id="alertClose" title="稍后再说">✕</button>
+    <div class="alert-stage-wrap"><canvas id="alertStage"></canvas></div>
+    <div class="glitch" id="alertTitle" data-text="该喝水啦！">该喝水啦！</div>
+    <p class="alert-desc" id="alertDesc"></p>
+    <div class="alert-btns">
+      <button class="btn primary big" id="alertDone">我完成了</button>
+      <button class="btn big" id="alertSnooze">5 分钟后再说</button>
+    </div>
+  </div>
+  <div class="float-words" id="floatWords"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

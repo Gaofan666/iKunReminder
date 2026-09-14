@@ -1,0 +1,74 @@
+{
+  "name": "kunkun-reminder",
+  "productName": "iKunReminder",
+  "version": "1.4.0",
+  "description": "喝水/休息提醒 + 电子宠物：到点自动跳到前台播放动画",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win nsis",
+    "build:fast": "electron-builder --win dir",
+    "build:portable": "electron-builder --win portable"
+  },
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "electron": "^44.3.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.kunkun.reminder",
+    "productName": "iKunReminder",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "app.js",
+      "icon.png",
+      "tray.png",
+      "README.md"
+    ],
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "icon": "icon.png",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "iKunReminder",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "iKunReminder-安装版.exe"
+    },
+    "portable": {
+      "artifactName": "iKunReminder-便携版.exe",
+      "requestExecutionLevel": "user"
+    },
+    "compression": "normal"
+  }
+}
