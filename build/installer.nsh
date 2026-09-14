@@ -1,7 +1,7 @@
 ﻿; ============================================================
 ;  自定义安装向导
 ;   1. 加一页「要不要在桌面创建快捷方式」
-;   2. 用坤坤图标重建快捷方式
+;   2. 用角色图标重建快捷方式
 ;
 ;  为什么需要第 2 点：快捷方式的图标取自目标 exe，而被安装的 iKunReminder.exe
 ;  本身没有图标资源 —— electron-builder 要靠 rcedit 才能写进去，但 rcedit 由
@@ -34,7 +34,7 @@
   ; 插在「选择安装目录」之后、「开始安装」之前
   !macro customPageAfterChangeDir
     Function DesktopLinkPageCreate
-      !insertmacro MUI_HEADER_TEXT "快捷方式" "要不要在桌面放一个坤坤图标？"
+      !insertmacro MUI_HEADER_TEXT "快捷方式" "要不要在桌面放一个角色图标？"
 
       nsDialogs::Create 1018
       Pop $0

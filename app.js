@@ -1,6 +1,6 @@
 /* =========================================================================
-   电子坤坤 · 喝水休息提醒器
-   纯前端实现：计时 / 提醒 / 音效 / 语音 / Canvas 电子坤坤动画
+   电子提醒器 · 喝水休息提醒
+   纯前端实现：计时 / 提醒 / 音效 / 语音 / Canvas 角色动画
    所有美术与音乐均由代码实时绘制与合成（原创），无任何外部素材与依赖
    ========================================================================= */
 (function () {
@@ -20,7 +20,7 @@
       desc: '咕嘟咕嘟～ 补充水分，大脑转得更快，皮肤也会谢谢你。',
       done: '我喝了 💧',
       voice: '该喝水啦，快喝一杯水吧',
-      caption: '坤坤喊你喝水'
+      caption: '提醒你喝水'
     },
     rest: {
       name: '休息',
@@ -30,7 +30,7 @@
       desc: '站起来走两步，看看远处，让眼睛和颈椎放个假。',
       done: '我休息了 🛋️',
       voice: '该休息啦，起来活动一下',
-      caption: '坤坤喊你休息'
+      caption: '提醒你休息'
     }
   };
 
@@ -190,7 +190,7 @@
   }
 
   /* =========================================================================
-     Canvas：电子坤坤
+     Canvas：电子提醒器
      ========================================================================= */
   /* 配色照着参考图取 */
   const C = {
@@ -702,7 +702,7 @@
     el.btnPet.textContent = on ? '🐣 退出宠物模式' : '🐣 宠物模式';
     el.btnPet.classList.toggle('primary', on);
     stage.fit = on ? 268 : 330;
-    setCaption(on ? '宠物模式 · 右键出菜单' : '待机中 · 坤坤在划水，到点会喊你');
+    setCaption(on ? '宠物模式 · 右键出菜单' : '待机中 · 到点会提醒你');
     pushState();
     setTimeout(() => { fitApp(); stage.resize(); alertStage.resize(); }, 80);
   }
@@ -826,7 +826,7 @@
   function notify(title, body) {
     if (!el.chkNotify.checked) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    try { new Notification('电子坤坤 · ' + title, { body: body, tag: 'kunkun-reminder' }); } catch (e) { }
+    try { new Notification('电子提醒器 · ' + title, { body: body, tag: 'kunkun-reminder' }); } catch (e) { }
   }
 
   function askNotify() {
@@ -857,8 +857,8 @@
       if (best === null || r < best) { best = r; bestKind = k; }
     });
     document.title = bestKind
-      ? `${fmt(best)} ${META[bestKind].emoji} 电子坤坤`
-      : '电子坤坤 · 喝水休息提醒器';
+      ? `${fmt(best)} ${META[bestKind].emoji} 电子提醒器`
+      : '电子提醒器 · 喝水休息提醒';
   }
 
   /* ---------------------------------------------------------- 飘字动画 */
@@ -939,8 +939,8 @@
 
     if (!rt.alertKind) {
       const idle = !settings.water.enabled && !settings.rest.enabled;
-      if (idle) setCaption('两个提醒都关掉了 · 坤坤在发呆');
-      else if (!rt.running) setCaption('<b>计时已暂停</b> · 坤坤在喝水');
+      if (idle) setCaption('两个提醒都关掉了');
+      else if (!rt.running) setCaption('<b>计时已暂停</b>');
     }
     updateTitle();
   }
@@ -1022,7 +1022,7 @@
     el.btnToggle.addEventListener('click', () => {
       rt.running = !rt.running;
       Sound.click();
-      setCaption(rt.running ? '计时已继续 · 坤坤继续营业' : '<b>计时已暂停</b> · 坤坤在喝水');
+      setCaption(rt.running ? '计时已继续' : '<b>计时已暂停</b>');
       pushState();
       render();
     });
@@ -1212,8 +1212,8 @@
     setInterval(tick, 250);
     requestAnimationFrame(loop);
 
-    setCaption('待机中 · 坤坤在划水，到点会喊你');
-    setTimeout(() => { if (!rt.alertKind) setCaption('待机中 · 坤坤在划水，到点会喊你'); }, 10);
+    setCaption('待机中 · 到点会提醒你');
+    setTimeout(() => { if (!rt.alertKind) setCaption('待机中 · 到点会提醒你'); }, 10);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
