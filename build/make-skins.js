@@ -613,29 +613,6 @@ function drawPanda(ctx, q, p, kind) {
         ctx.stroke();
       });
     }
-    /* 中指：又长又粗还往外撇 —— 太细太短的话缩到桌面上就只剩个小凸起，
-       根本看不出在比中指。让中指长度接近拳头直径的两倍。 */
-    const out = sg * 5;
-    const half = 4.8;
-    const tipY = 52;                       // 中指高度（原来 43）
-    ctx.beginPath();
-    ctx.moveTo(hx - half, hy - 2);
-    ctx.lineTo(hx + out - half, hy - tipY + 9);
-    ctx.quadraticCurveTo(hx + out, hy - tipY, hx + out + half, hy - tipY + 9);
-    ctx.lineTo(hx + half, hy - 2);
-    ctx.closePath();
-    ctx.fillStyle = '#FFFFFF'; ctx.fill();
-    ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
-    /* 指节纹路（白底上要用深色才看得见） */
-    ctx.strokeStyle = 'rgba(17,17,17,.45)'; ctx.lineWidth = 1.8;
-    [12, 21, 30, 39].forEach(function (dy) {
-      const k = (hy - dy - (hy - 2)) / (hy - tipY - (hy - 2));
-      const cx = hx + out * k;
-      ctx.beginPath();
-      ctx.moveTo(cx - half + 1.4, hy - dy);
-      ctx.lineTo(cx + half - 1.4, hy - dy);
-      ctx.stroke();
-    });
     /* 金戒指已按用户要求移除 */
   });
 
