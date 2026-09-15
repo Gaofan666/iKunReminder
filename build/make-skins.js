@@ -664,9 +664,9 @@ function drawSponge(ctx, q, p, kind) {
 
   /* ---- 网兜：待机时也在轻轻晃，像在找水母 ---- */
   const na = -0.55 - q.arm * 1.05 + swing * (kind === 'dance' ? 0.55 : 0.4);
-  const nx = 30 + Math.cos(na) * 26, ny = -12 + Math.sin(na) * 26;
-  limb(ctx, 30, -12, nx, ny, 3.6, '#b98b52');
-  const hoopX = nx + Math.cos(na) * 12, hoopY = ny + Math.sin(na) * 12;
+  const nx = -30 - Math.cos(na) * 26, ny = -12 + Math.sin(na) * 26;   // 镜像到左侧
+  limb(ctx, -30, -12, nx, ny, 3.6, '#b98b52');
+  const hoopX = nx - Math.cos(na) * 12, hoopY = ny + Math.sin(na) * 12;
   /* 网圈（放大一点才认得出是网兜） */
   ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.ellipse(hoopX, hoopY, 14, 11.5, na, 0, TAU); ctx.stroke();
@@ -686,7 +686,7 @@ function drawSponge(ctx, q, p, kind) {
   }
 
   /* ---- 水母：粉色伞盖 + 触手，甩到就罩进网里 ---- */
-  const jx = caught ? hoopX : hoopX - 5 - swing * 4;
+  const jx = caught ? hoopX : hoopX + 5 + swing * 4;
   const jy = caught ? hoopY + 3 : hoopY - 34 + Math.sin(p * TAU * 2) * 6;
   ctx.globalAlpha = caught ? 1 : 0.88;
   const jg = ctx.createRadialGradient(jx - 4, jy - 8, 2, jx, jy, 15);
@@ -750,7 +750,7 @@ function drawSponge(ctx, q, p, kind) {
   oval(ctx, -25, -18, 7, 5, 0); oval(ctx, 25, -18, 7, 5, 0);
 
   /* 左臂（不拿网的那只） */
-  limb(ctx, -30, -14, -30 - Math.cos(na) * 16, -14 + Math.sin(na) * 16, 4, '#ffd93b');
+  limb(ctx, 30, -14, 30 + Math.cos(na) * 16, -14 + Math.sin(na) * 16, 4, '#ffd93b');
 }
 
 /* ============================================================ ⑤ 粉海星 */

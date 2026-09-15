@@ -1,5 +1,5 @@
 /* =========================================================================
-   电子坤坤提醒器 —— Electron 主进程
+   别感冒提醒器 —— Electron 主进程
    职责：
      · 无边框窗口 + 自绘标题栏；到点把窗口强制拉到前台
      · 系统托盘常驻（关闭/✕ = 收进右下角托盘，不退出）
@@ -63,7 +63,7 @@ function createWindow() {
     frame: false,                 // 无边框：普通模式用自绘标题栏，宠物模式只剩动画
     transparent: true,            // 宠物模式下窗口背景完全透明，只看得见坤坤
     backgroundColor: '#00000000',
-    title: '电子坤坤提醒器',
+    title: '别感冒提醒器',
     icon: iconPath(),
     autoHideMenuBar: true,
     show: false,
@@ -141,7 +141,7 @@ function buildTray() {
   } catch (err) {
     return;
   }
-  tray.setToolTip('电子坤坤 · 喝水休息提醒器');
+  tray.setToolTip('别感冒 · 喝水休息提醒器');
   tray.on('click', toggleWindow);
   tray.on('double-click', showWindow);
   refreshTrayMenu();

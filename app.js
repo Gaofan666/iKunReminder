@@ -1,6 +1,6 @@
 /* =========================================================================
-   电子坤坤 · 喝水休息提醒器
-   纯前端实现：计时 / 提醒 / 音效 / 语音 / Canvas 电子坤坤动画
+   别感冒 · 喝水休息提醒器
+   纯前端实现：计时 / 提醒 / 音效 / 语音 / Canvas 别感冒动画
    所有美术与音乐均由代码实时绘制与合成（原创），无任何外部素材与依赖
    ========================================================================= */
 (function () {
@@ -302,7 +302,7 @@
   }
 
   /* =========================================================================
-     Canvas：电子坤坤
+     Canvas：别感冒
      ========================================================================= */
   /* 配色照着参考图取 */
   const C = {
@@ -464,7 +464,10 @@
     const idx = Math.floor(t * fps) % count;
     const row = a.row || 0;
     /* 与手绘角色对齐：底边落在原点、横向居中，整体高度约 278 个本地单位 */
-    const k = 278 / fh;
+    /* 帧高映射成多少本地单位。调大 = 宠物在界面上更大。
+     之前缩小下边界的做法是让内容下移，视觉上宠物反而往下跑了；
+     正确做法是把它整体放大，下边界的占比自然就小了。 */
+    const k = 310 / fh;
     const dw = fw * k, dh = fh * k;
     try {
       ctx.drawImage(skinState.img, idx * fw, row * fh, fw, fh, -dw / 2, -dh, dw, dh);
@@ -1197,7 +1200,7 @@
   function notify(title, body) {
     if (!el.chkNotify.checked) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    try { new Notification('电子坤坤 · ' + title, { body: body, tag: 'kunkun-reminder' }); } catch (e) { }
+    try { new Notification('别感冒 · ' + title, { body: body, tag: 'kunkun-reminder' }); } catch (e) { }
   }
 
   function askNotify() {
@@ -1229,9 +1232,9 @@
       if (best === null || t.remaining < best) { best = t.remaining; bestKind = it; }
     });
     if (bestKind) {
-      document.title = fmt(best) + ' ' + (bestKind.emoji || '') + ' 电子坤坤';
+      document.title = fmt(best) + ' ' + (bestKind.emoji || '') + ' 别感冒';
     } else {
-      document.title = '电子坤坤 · 喝水休息提醒器';
+      document.title = '别感冒 · 喝水休息提醒器';
     }
   }
 
