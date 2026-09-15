@@ -1851,26 +1851,43 @@ function drawCat(ctx, q, p, kind) {
 
   /* ---------- 尾巴（身后，向左下弯出去） ---------- */
   ctx.save();
-  ctx.translate(-20, 15);
-  ctx.rotate(wag * 0.55);
+  ctx.translate(-20, 17);
     /* 尾巴：先描粗的褐边，再压细的黑芯 —— 就得到带描边的尾巴。
        长度比之前长一截，弯得也更舒展。 */
+    /* 尾巴：像水草那样摆 —— 不用整体旋转（那样很僵硬），
+       改成沿尾巴长度传播的行波：相位随位置往后推、幅度越靠尾尖越大，
+       所以根部几乎不动、尾尖甩得最厉害。 */
     const tailPath = function () {
+      const N = 10;
       ctx.beginPath();
-      ctx.moveTo(8, 2);
-      ctx.quadraticCurveTo(-12, 11, -23, 0 - wag * 10);
-      ctx.quadraticCurveTo(-30, -6 - wag * 10, -32, -14 - wag * 12);
+      for (let i = 0; i <= N; i++) {
+        const u = i / N;                                  // 0=根部 1=尾尖
+        const bx = 8 + (-32 - 8) * u;                     // 基线：向左
+        const by = 2 + (-16 - 2) * u;                     // 基线：略微向上
+        const sag = Math.sin(u * Math.PI) * 9;            // 基础下垂弧度
+        const wave = Math.sin(t * 1.7 - u * 3.6) * 11 * u * u;  // 行波
+        const px = bx - sag * 0.45;
+        const py = by + sag * 0.9 + wave;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
     };
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     tailPath();
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 13; ctx.stroke();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 11; ctx.stroke();     // 褐色描边
     tailPath();
-    ctx.strokeStyle = FUR; ctx.lineWidth = 9.6; ctx.stroke();
+    ctx.strokeStyle = FUR; ctx.lineWidth = 8.2; ctx.stroke();      // 黑色芯
     /* 尾身上一道浅高光 */
-    ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 2.6;
     ctx.beginPath();
-    ctx.moveTo(5, 1);
-    ctx.quadraticCurveTo(-11, 9, -22, -2 - wag * 10);
+    for (let i = 0; i <= 6; i++) {
+      const u = i / 6;
+      const bx = 5 + (-30 - 5) * u;
+      const by = 1 + (-14 - 1) * u;
+      const sag = Math.sin(u * Math.PI) * 9;
+      const wave = Math.sin(t * 1.7 - u * 3.6) * 11 * u * u;
+      const px = bx - sag * 0.45, py = by + sag * 0.9 + wave - 1.6;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
     ctx.stroke();
   ctx.restore();
 
@@ -1892,7 +1909,7 @@ function drawCat(ctx, q, p, kind) {
      颜色和身体一样，只给管子的边缘描一道深色线把它勾出来。
      上端不封口（描边不画顶边），下端是半圆。 */
   [-1, 1].forEach(function (sg) {
-    const cx = sg * 9, halfW = 5.5, topY = 14, botY = 29;
+    const cx = sg * 9, halfW = 4.5, topY = 14, botY = 29;
     ctx.beginPath();
     ctx.moveTo(cx - halfW, topY);
     ctx.lineTo(cx - halfW, botY);
