@@ -1847,7 +1847,7 @@ function drawCat(ctx, q, p, kind) {
   const wag = Math.sin(t * (kind === 'idle' ? 2 : 4)) * (kind === 'idle' ? 0.55 : 0.95);
   const bob = Math.sin(t) * 1 + (kind === 'dance' ? -2.5 : 0);
 
-  shadow(ctx, 46, 24);
+  /* 脚下阴影已按用户要求删除（它比爪子还低，看着像悬空） */
 
   /* ---------- 尾巴（身后，向左下弯出去） ---------- */
   ctx.save();
