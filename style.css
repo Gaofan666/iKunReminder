@@ -182,7 +182,15 @@ body.pet #app{
 
 /* 宠物默认大小选择 */
 .pet-size-row{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap}
-.psr-label{font-size:12.5px;color:var(--dim);letter-spacing:.5px}
+.psr-label{font-size:12.5px;color:var(--dim);letter-spacing:.5px;white-space:nowrap}
+/* 皮肤选择器（用原生 select，保持轻量） */
+.skin-sel{
+  flex:1;min-width:0;max-width:230px;height:28px;padding:0 8px;
+  font-family:inherit;font-size:12.5px;color:var(--text);cursor:pointer;
+  background:#fff;border:1px solid var(--line);border-radius:8px;outline:none;
+}
+.skin-sel:hover{border-color:var(--leaf)}
+.skin-sel:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.18)}
 .seg{
   display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;
   background:rgba(255,255,255,.04);

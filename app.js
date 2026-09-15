@@ -156,6 +156,7 @@
     sound: true,
     speech: true,
     petSize: 'max',            // 宠物默认大小：max 迷你 / mid 小小 / min 超小
+    skin: '__default',         // 宠物形象：__default = 代码手绘，其余为 skins/ 里的皮肤
   };
   const PET_SIZE_KEYS = ['max', 'mid', 'min'];
 
@@ -384,12 +385,12 @@
 
       /* plain = 宠物模式：桌面上只要角色本身，不要地面光圈和环绕粒子 */
       PLAIN = !!this.plain;
-      if (!this.plain) {
-        this.drawGround(ctx, t, mood);
+
+      /* 选了自定义皮肤就用皮肤精灵图；没选或还没加载好就走代码手绘 */
+      if (!drawSkin(ctx, t, mood)) {
+        if (!this.plain) this.drawGround(ctx, t, mood);
         drawFigure(ctx, t, mood, energy);
-        this.drawOrbits(ctx, t, mood);
-      } else {
-        drawFigure(ctx, t, mood, energy);
+        if (!this.plain) this.drawOrbits(ctx, t, mood);
       }
 
       ctx.restore();
@@ -437,6 +438,83 @@
         ctx.shadowBlur = 0;
       }
     }
+  }
+
+  /* ------------------------------------------------------------ 皮肤系统
+     用户可以自己换宠物形象：在 exe 同级的 skins/<名字>/ 里放 skin.json + 一张精灵图。
+     这里只负责把主进程读来的图按 mood 切帧画出来。 */
+  const skinState = { id: '__default', img: null, meta: null, ready: false };
+
+  function skinAnimFor(mood) {
+    const m = skinState.meta;
+    if (!m || !m.animations) return null;
+    return m.animations[mood] || m.animations.idle || null;
+  }
+
+  /* 返回 true 表示这一帧由皮肤画掉了；false 表示该走代码手绘 */
+  function drawSkin(ctx, t, mood) {
+    if (!skinState.ready || !skinState.img || !skinState.meta) return false;
+    const m = skinState.meta;
+    const a = skinAnimFor(mood);
+    if (!a || !m.frame) return false;
+    const fw = m.frame.w, fh = m.frame.h;
+    const count = Math.max(1, a.count || 1);
+    const idx = Math.floor(t * (m.fps || 10)) % count;
+    const row = a.row || 0;
+    /* 与手绘角色对齐：底边落在原点、横向居中，整体高度约 278 个本地单位 */
+    const k = 278 / fh;
+    const dw = fw * k, dh = fh * k;
+    try {
+      ctx.drawImage(skinState.img, idx * fw, row * fh, fw, fh, -dw / 2, -dh, dw, dh);
+    } catch (e) { return false; }
+    return true;
+  }
+
+  function applySkin(data) {
+    if (!data || data.builtin || data.error) {
+      skinState.id = '__default';
+      skinState.img = null;
+      skinState.meta = null;
+      skinState.ready = false;
+      if (data && data.error) setCaption('皮肤加载失败，已用回默认形象：' + data.error);
+      return;
+    }
+    const img = new Image();
+    img.onload = function () {
+      skinState.id = data.id;
+      skinState.img = img;
+      skinState.meta = data.meta;
+      skinState.ready = true;
+      setCaption('已换上新形象：<b>' + (data.name || data.id) + '</b>');
+    };
+    img.onerror = function () {
+      setCaption('皮肤图片读不出来，已用回默认形象');
+    };
+    img.src = data.sheet;
+  }
+
+  function loadSkin(id) {
+    if (!native || !native.skinLoad) return;
+    native.skinLoad(id).then(function (d) {
+      applySkin(d);
+    }).catch(function () { });
+  }
+
+  function fillSkinPicker() {
+    if (!native || !native.skinsList || !el.skinSel) return;
+    native.skinsList().then(function (list) {
+      el.skinSel.innerHTML = '';
+      (list || []).forEach(function (s) {
+        const o = document.createElement('option');
+        o.value = s.id;
+        o.textContent = s.author ? (s.name + ' — ' + s.author) : s.name;
+        el.skinSel.appendChild(o);
+      });
+      /* 存的皮肤没了就退回默认 */
+      const ids = (list || []).map(function (s) { return s.id; });
+      if (ids.indexOf(settings.skin) < 0) settings.skin = '__default';
+      el.skinSel.value = settings.skin;
+    }).catch(function () { });
   }
 
   /* --------------------------------------------------------------- 绘制开关 */
@@ -806,6 +884,8 @@
     tbClose: $('#tbClose'),
     petSizeRow: $('#petSizeRow'),
     petSizeSeg: $('#petSizeSeg'),
+    skinRow: $('#skinRow'),
+    skinSel: $('#skinSel'),
     chkSound: $('#chkSound'),
     chkSpeech: $('#chkSpeech'),
     chkNotify: $('#chkNotify'),
@@ -958,6 +1038,7 @@
         if (typeof s.sound === 'boolean') settings.sound = s.sound;
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
+        if (typeof s.skin === 'string' && s.skin) settings.skin = s.skin;
       }
     } catch (e) { /* 忽略损坏数据 */ }
     if (!settings.items.length) settings.items = defaultItems();
@@ -1843,6 +1924,15 @@
       });
     }
 
+    if (el.skinSel) {
+      el.skinSel.addEventListener('change', function () {
+        settings.skin = el.skinSel.value || '__default';
+        saveSettings();
+        Sound.click();
+        loadSkin(settings.skin);
+      });
+    }
+
     el.alertDone.addEventListener('click', completeAlert);
     el.alertSnooze.addEventListener('click', snoozeAlert);
     el.alertClose.addEventListener('click', snoozeAlert);
@@ -1932,6 +2022,13 @@
     if (native && el.petSizeRow) el.petSizeRow.hidden = false;
     updatePetSizeUI();
     if (native && native.setPetSize) native.setPetSize(settings.petSize);
+
+    /* 皮肤：列出可选形象，并载入上次选的那个 */
+    if (native && native.skinsList && el.skinRow) {
+      el.skinRow.hidden = false;
+      fillSkinPicker();
+      if (settings.skin && settings.skin !== '__default') loadSkin(settings.skin);
+    }
 
     bindAll();
     renderPanels();

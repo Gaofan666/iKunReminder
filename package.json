@@ -44,6 +44,10 @@
       {
         "from": "build/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "skins",
+        "to": "skins"
       }
     ],
     "win": {

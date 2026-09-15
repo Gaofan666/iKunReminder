@@ -266,6 +266,7 @@ function applyPetMode(on, silent) {
     win.setMinimumSize(760, 560);
     if (normalBounds) win.setBounds(normalBounds);
     normalBounds = win.getBounds();
+    destroyBubble();                     // 离开宠物模式就把气泡窗连同它的渲染进程一起释放
   }
   refreshTrayMenu();
   if (!silent && win) win.webContents.send('pet-mode-changed', petMode);
@@ -503,6 +504,17 @@ function hideBubble() {
   if (bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()) bubbleWin.hide();
 }
 
+/* 彻底销毁气泡窗（不只是隐藏）。
+   一个隐藏的 BrowserWindow 仍然占着一整个渲染进程（约 50~120MB），
+   退出宠物模式后根本用不到它，留着纯属浪费 —— 下次进宠物模式再重建。 */
+function destroyBubble() {
+  talkOpen = false;
+  if (bubbleWin && !bubbleWin.isDestroyed()) {
+    try { bubbleWin.destroy(); } catch (e) { /* 忽略 */ }
+  }
+  bubbleWin = null;
+}
+
 /* 渲染进程把文字发过来，主进程只管摆位置和显示 */
 ipcMain.handle('pet-talk', (e, data) => {
   if (!win || !petMode) return false;
@@ -513,6 +525,76 @@ ipcMain.handle('pet-talk-end', () => {
   hideBubble();
   return true;
 });
+/* ====================================================== 皮肤（外部接口）
+   让用户自己换宠物形象：在 skins/<皮肤名>/ 里放 skin.json + 一张精灵图即可。
+
+   三个位置都会找（方便用户放）：
+     1. 装好后 exe 同级的 skins/          ← 推荐，用户最找得到
+     2. 安装目录 resources/skins/          （打包进去的示例）
+     3. 开发时的 <项目>/skins/
+   皮肤图由主进程读成 data URL 再交给渲染进程，所以不用放宽页面的 CSP。 */
+function skinsDirs() {
+  const list = [];
+  try { list.push(path.join(path.dirname(app.getPath('exe')), 'skins')); } catch (e) { }
+  if (process.resourcesPath) list.push(path.join(process.resourcesPath, 'skins'));
+  list.push(path.join(__dirname, 'skins'));
+  return list.filter(function (p, i) { return p && list.indexOf(p) === i; });
+}
+
+function scanSkins() {
+  const found = [];
+  const seen = {};
+  skinsDirs().forEach(function (dir) {
+    let ents;
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    ents.forEach(function (e) {
+      if (!e.isDirectory() || seen[e.name]) return;
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(dir, e.name, 'skin.json'), 'utf8'));
+        if (!j || !j.frame || !j.animations) return;
+        seen[e.name] = true;
+        found.push({
+          id: e.name,
+          name: j.name || e.name,
+          author: j.author || '',
+          dir: dir
+        });
+      } catch (err) { /* 坏掉的皮肤直接跳过，别影响启动 */ }
+    });
+  });
+  return found;
+}
+
+ipcMain.handle('skins-list', () => {
+  const list = [{ id: '__default', name: '默认（代码手绘）', author: '', builtin: true }];
+  scanSkins().forEach(function (s) {
+    list.push({ id: s.id, name: s.name, author: s.author, builtin: false });
+  });
+  return list;
+});
+
+ipcMain.handle('skin-load', (e, id) => {
+  if (!id || id === '__default') return { id: '__default', builtin: true };
+  const s = scanSkins().filter(function (x) { return x.id === id; })[0];
+  if (!s) return null;
+  try {
+    const meta = JSON.parse(fs.readFileSync(path.join(s.dir, id, 'skin.json'), 'utf8'));
+    const sheet = meta.sheet || 'sheet.png';
+    const p = path.join(s.dir, id, sheet);
+    const buf = fs.readFileSync(p);
+    return {
+      id: s.id,
+      builtin: false,
+      name: s.name,
+      author: s.author,
+      meta: meta,
+      sheet: 'data:image/png;base64,' + buf.toString('base64')
+    };
+  } catch (err) {
+    return { id: id, error: String(err && err.message || err) };
+  }
+});
+
 ipcMain.handle('set-pet-size', (e, name) => setPetSize(name));
 ipcMain.handle('get-pet-size', () => petSize);
 ipcMain.handle('minimize', () => { if (win) win.minimize(); });
