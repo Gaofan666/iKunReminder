@@ -17,7 +17,7 @@
 
 ---
 
-## 🆕 v2.0 更新（相对 v1.x）
+## 🆕 v3.0 更新（相对 v1.x）
 
 | 功能 | 说明 |
 | --- | --- |
@@ -37,8 +37,8 @@
 
 **方式一：GitHub Releases（推荐）**
 
-> **v2.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v2.0.0
-> 直接下载：[`iKunReminder-setup.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v2.0.0/iKunReminder-setup.exe)（约 101 MB，安装版）
+> **v3.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.0.0
+> 直接下载：[`iKunReminder-setup-v3.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.0.0/iKunReminder-setup-v3.0.0.exe)（约 110 MB，安装版）
 
 **方式二：百度网盘**
 
@@ -46,7 +46,7 @@
 > **提取码**：`gvkp`
 
 仓库里**只有源码** —— `node_modules` 和打包产物没有提交（GitHub 单文件上限 100MB，
-安装包 101MB 超了，所以走 Releases）。想自己从源码打包，看下面的「自己重新打包」。
+安装包 110MB 超了，所以走 Releases）。想自己从源码打包，看下面的「自己重新打包」。
 
 ---
 
