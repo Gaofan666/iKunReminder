@@ -1643,157 +1643,155 @@ function drawCaishen(ctx, q, p, kind) {
 }
 
 /* ============================================================ ⑫ 拒绝焦虑 */
-/* 绿香蕉躺在椰子树下的躺椅上悠闲喝茶 */
+/* 绿香蕉斜躺在椰子树下的躺椅上，摇着蒲扇扇风。
+   构图刻意收紧凑：程序是按「帧高」缩放的，帧太宽会横向溢出去被裁。 */
 function drawBanana(ctx, q, p, kind) {
   const LINE = '#2E4A1E';
   const s1 = Math.sin(p * TAU);
-  /* 悠闲的呼吸起伏，比别的形象慢 */
-  const breath = Math.sin(p * TAU) * 1.2;
+  const breath = Math.sin(p * TAU) * 1.1;
+  const breeze = Math.sin(p * TAU * 2);
   const sip = kind === 'cheer' ? 1 : kind === 'dance' ? 0.6 : 0.25;
-  shadow(ctx, 54, 44);
+  shadow(ctx, 50, 34);
 
-  /* ---------- 椰子树（左后方） ---------- */
-  /* 树叶：从树顶往四周散开 */
-  const topX = -58, topY = -30;
-  for (let i = 0; i < 7; i++) {
-    const a = -2.9 + i * 0.38;
-    const lx = topX + Math.cos(a) * 44, ly = topY + Math.sin(a) * 32;
+  /* ---------- 椰子树（左后，收小） ---------- */
+  const topX = -40, topY = -34;
+  for (let i = 0; i < 6; i++) {
+    const a = -2.8 + i * 0.42;
+    const lx = topX + Math.cos(a) * 30, ly = topY + Math.sin(a) * 22;
     ctx.beginPath();
     ctx.moveTo(topX, topY);
-    ctx.quadraticCurveTo(topX + Math.cos(a) * 26, topY + Math.sin(a) * 30 - 10, lx, ly);
-    ctx.quadraticCurveTo(topX + Math.cos(a) * 26, topY + Math.sin(a) * 30 + 6, topX, topY);
+    ctx.quadraticCurveTo(topX + Math.cos(a) * 18, topY + Math.sin(a) * 21 - 7, lx, ly);
+    ctx.quadraticCurveTo(topX + Math.cos(a) * 18, topY + Math.sin(a) * 21 + 4, topX, topY);
     ctx.closePath();
     ctx.fillStyle = i % 2 ? '#4E9A3A' : '#66B84A';
     ctx.fill();
-    ctx.lineWidth = 1.6; ctx.strokeStyle = '#2E5A20'; ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#2E5A20'; ctx.stroke();
   }
-  /* 椰子 */
   ctx.fillStyle = '#6B4A2A';
-  [[-52, -22], [-62, -20]].forEach(function (c) {
-    ctx.beginPath(); ctx.arc(c[0], c[1], 5, 0, TAU); ctx.fill();
-    ctx.lineWidth = 1.6; ctx.strokeStyle = '#3A2510'; ctx.stroke();
+  [[-36, -27], [-44, -25]].forEach(function (c) {
+    ctx.beginPath(); ctx.arc(c[0], c[1], 3.8, 0, TAU); ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = '#3A2510'; ctx.stroke();
   });
-  /* 树干 */
-  ctx.strokeStyle = '#8A6236'; ctx.lineWidth = 10; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-62, 54); ctx.quadraticCurveTo(-70, 10, topX, topY + 4); ctx.stroke();
-  ctx.strokeStyle = '#B98B52'; ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.moveTo(-63, 54); ctx.quadraticCurveTo(-70, 10, topX - 1, topY + 4); ctx.stroke();
-  /* 树干上的环纹 */
-  ctx.strokeStyle = 'rgba(90,60,25,.55)'; ctx.lineWidth = 1.4;
+  ctx.strokeStyle = '#8A6236'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-44, 46); ctx.quadraticCurveTo(-50, 4, topX, topY + 4); ctx.stroke();
+  ctx.strokeStyle = '#B98B52'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(-45, 46); ctx.quadraticCurveTo(-50, 4, topX - 1, topY + 4); ctx.stroke();
+  ctx.strokeStyle = 'rgba(90,60,25,.55)'; ctx.lineWidth = 1.2;
   for (let i = 0; i < 6; i++) {
     const t = i / 6;
-    const tx = -62 + (topX + 62) * t, ty = 54 + (topY + 4 - 54) * t;
-    ctx.beginPath(); ctx.moveTo(tx - 5, ty); ctx.lineTo(tx + 5, ty); ctx.stroke();
+    const tx = -44 + (topX + 44) * t, ty = 46 + (topY + 4 - 46) * t;
+    ctx.beginPath(); ctx.moveTo(tx - 4, ty); ctx.lineTo(tx + 4, ty); ctx.stroke();
   }
 
-  /* ---------- 躺椅 ---------- */
-  /* 椅腿 */
-  ctx.strokeStyle = '#C9A227'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-16, 24); ctx.lineTo(-20, 52); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(44, 30); ctx.lineTo(48, 54); ctx.stroke();
-  /* 座面（斜躺） */
+  /* ---------- 躺椅（斜靠背） ---------- */
+  ctx.strokeStyle = '#C9A227'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-10, 22); ctx.lineTo(-13, 44); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(34, 28); ctx.lineTo(37, 46); ctx.stroke();
+  /* 座面 */
   ctx.beginPath();
-  ctx.moveTo(-22, 22); ctx.lineTo(30, 30);
-  ctx.lineTo(46, 34); ctx.lineTo(-18, 30);
+  ctx.moveTo(-15, 20); ctx.lineTo(24, 27); ctx.lineTo(36, 31); ctx.lineTo(-12, 27);
   ctx.closePath();
-  const cg = ctx.createLinearGradient(0, 20, 40, 36);
+  const cg = ctx.createLinearGradient(0, 18, 32, 33);
   cg.addColorStop(0, '#FFF7E4'); cg.addColorStop(1, '#E8D9B0');
   ctx.fillStyle = cg; ctx.fill();
-  ctx.lineWidth = 2.4; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
-  /* 靠背 */
+  ctx.lineWidth = 2.2; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+  /* 靠背（更斜） */
   ctx.beginPath();
-  ctx.moveTo(-22, 22); ctx.lineTo(-8, -14);
-  ctx.lineTo(2, -12); ctx.lineTo(-10, 24);
+  ctx.moveTo(-15, 20); ctx.lineTo(-4, -16);
+  ctx.lineTo(4, -14); ctx.lineTo(-5, 22);
   ctx.closePath();
   ctx.fillStyle = '#FFF7E4'; ctx.fill();
-  ctx.lineWidth = 2.4; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
-  /* 靠背上的条纹 */
-  ctx.strokeStyle = 'rgba(138,106,18,.5)'; ctx.lineWidth = 1.4;
-  [-16, -12, -8, -4].forEach(function (o) {
-    ctx.beginPath(); ctx.moveTo(o, 20); ctx.lineTo(o + 11, -11); ctx.stroke();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+  ctx.strokeStyle = 'rgba(138,106,18,.5)'; ctx.lineWidth = 1.3;
+  [-11, -8, -5, -2].forEach(function (o) {
+    ctx.beginPath(); ctx.moveTo(o, 18); ctx.lineTo(o + 8, -13); ctx.stroke();
   });
 
-  /* ---------- 躺在椅子上的绿香蕉 ---------- */
+  /* ---------- 斜躺的绿香蕉（瘦身版） ---------- */
   ctx.save();
-  ctx.translate(6, 6 + breath);
-  ctx.rotate(-0.34);
-  const bg = ctx.createLinearGradient(-40, -22, 34, 30);
+  ctx.translate(4, 8 + breath);
+  ctx.rotate(-0.52);                    // 更斜
+  const bg = ctx.createLinearGradient(-38, -14, 34, 20);
   bg.addColorStop(0, '#B7E06A'); bg.addColorStop(0.45, '#8CC63F'); bg.addColorStop(1, '#4E8C2A');
   ctx.fillStyle = bg;
   ctx.beginPath();
-  ctx.moveTo(-42, -4);
-  ctx.bezierCurveTo(-44, -20, -20, -28, 4, -24);
-  ctx.bezierCurveTo(28, -20, 44, -6, 42, 10);
-  ctx.bezierCurveTo(40, 24, 16, 28, -8, 24);
-  ctx.bezierCurveTo(-30, 20, -40, 10, -42, -4);
+  ctx.moveTo(-40, -3);
+  ctx.bezierCurveTo(-41, -14, -18, -18, 2, -16);   // 上缘（变薄）
+  ctx.bezierCurveTo(24, -14, 40, -4, 39, 6);
+  ctx.bezierCurveTo(38, 15, 16, 18, -6, 16);       // 下缘
+  ctx.bezierCurveTo(-28, 14, -39, 6, -40, -3);
   ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-  /* 棱线 + 高光 */
-  ctx.strokeStyle = 'rgba(46,74,30,.4)'; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.moveTo(-38, -6); ctx.quadraticCurveTo(0, -14, 40, 6); ctx.stroke();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.strokeStyle = 'rgba(46,74,30,.4)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(-36, -5); ctx.quadraticCurveTo(0, -10, 37, 4); ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,.35)';
-  ctx.beginPath(); ctx.ellipse(-14, -12, 16, 5, -0.24, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-14, -8, 14, 3.6, -0.2, 0, TAU); ctx.fill();
   /* 果蒂 */
   ctx.fillStyle = '#6B5A2E';
   ctx.beginPath();
-  ctx.moveTo(-42, -4); ctx.lineTo(-50, -10); ctx.lineTo(-44, -14); ctx.lineTo(-38, -8);
+  ctx.moveTo(-40, -3); ctx.lineTo(-47, -8); ctx.lineTo(-42, -12); ctx.lineTo(-37, -6);
   ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 1.8; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.lineWidth = 1.6; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* 脸：惬意 —— 闭眼弯月 + 小微笑 */
-  ctx.strokeStyle = '#2E4A1E'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(-8, -12, 6, 0.12 * Math.PI, 0.88 * Math.PI); ctx.stroke();
-  ctx.beginPath(); ctx.arc(10, -10, 6, 0.12 * Math.PI, 0.88 * Math.PI); ctx.stroke();
-  /* 腮红 */
+  /* 惬意的脸 */
+  ctx.strokeStyle = '#2E4A1E'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(-8, -6, 5, 0.12 * Math.PI, 0.88 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(8, -5, 5, 0.12 * Math.PI, 0.88 * Math.PI); ctx.stroke();
   ctx.fillStyle = 'rgba(255,140,150,.45)';
-  ctx.beginPath(); ctx.ellipse(-18, -4, 6, 4, 0, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(20, -2, 6, 4, 0, 0, TAU); ctx.fill();
-  /* 微笑 */
+  ctx.beginPath(); ctx.ellipse(-17, 2, 5, 3.2, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(17, 3, 5, 3.2, 0, 0, TAU); ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(-4, 6); ctx.quadraticCurveTo(3, 12 + sip * 2, 11, 6);
-  ctx.lineWidth = 2.6; ctx.stroke();
+  ctx.moveTo(-4, 7); ctx.quadraticCurveTo(2, 11 + sip * 2, 8, 7);
+  ctx.lineWidth = 2.4; ctx.stroke();
   ctx.restore();
 
-  /* ---------- 手里的茶杯 + 热气 ---------- */
-  const cupX = 34, cupY = 4 + breath;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.moveTo(cupX - 8, cupY - 6);
-  ctx.lineTo(cupX + 8, cupY - 6);
-  ctx.quadraticCurveTo(cupX + 6, cupY + 8, cupX, cupY + 8);
-  ctx.quadraticCurveTo(cupX - 6, cupY + 8, cupX - 8, cupY - 6);
-  ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
-  /* 茶汤 */
-  ctx.fillStyle = '#C9A227';
-  ctx.beginPath(); ctx.ellipse(cupX, cupY - 5, 7.4, 2.4, 0, 0, TAU); ctx.fill();
-  /* 杯柄 */
-  ctx.beginPath(); ctx.arc(cupX + 10, cupY - 1, 5, -1.1, 1.1);
-  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
-  /* 热气 */
+  /* ---------- 手里的蒲扇（正在扇风） ---------- */
+  const fanX = 30, fanY = 2 + breath;
+  ctx.save();
+  ctx.translate(fanX, fanY);
+  ctx.rotate(-0.5 + breeze * 0.32);
+  /* 扇柄 */
+  ctx.strokeStyle = '#B98B52'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -10); ctx.stroke();
+  ctx.lineWidth = 1.4; ctx.strokeStyle = '#6B4A2A';
+  ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -10); ctx.stroke();
+  /* 扇面 */
+  ctx.beginPath(); ctx.ellipse(0, -22, 14, 12, 0, 0, TAU);
+  const fg = ctx.createRadialGradient(-4, -26, 2, 0, -22, 16);
+  fg.addColorStop(0, '#FBF0CC'); fg.addColorStop(1, '#E3CE94');
+  ctx.fillStyle = fg; ctx.fill();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+  /* 竹骨 */
+  ctx.strokeStyle = 'rgba(138,106,18,.55)'; ctx.lineWidth = 1.2;
+  [-8, -4, 0, 4, 8].forEach(function (dx) {
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(dx, -33); ctx.stroke();
+  });
+  ctx.restore();
+
+  /* ---------- 风：几道弧线飘出去 ---------- */
   for (let i = 0; i < 3; i++) {
-    const t = (p * 1.1 + i * 0.33) % 1;
-    ctx.globalAlpha = (1 - t) * 0.75;
-    ctx.strokeStyle = '#BFD8C0'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    const t = (p * 1.4 + i * 0.33) % 1;
+    ctx.globalAlpha = (1 - t) * 0.7;
+    ctx.strokeStyle = '#9FD4E8'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    const wx = fanX + 16 + t * 26, wy = fanY - 18 - i * 7 + breeze * 3;
     ctx.beginPath();
-    ctx.moveTo(cupX - 4 + i * 5, cupY - 10 - t * 20);
-    ctx.quadraticCurveTo(cupX + Math.sin(t * 6 + i) * 5, cupY - 18 - t * 20, cupX - 4 + i * 5, cupY - 26 - t * 20);
+    ctx.moveTo(wx, wy);
+    ctx.quadraticCurveTo(wx + 10, wy - 7, wx + 20, wy);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
 
-  /* ---------- 「拒绝焦虑」牌子（插在地上） ---------- */
+  /* ---------- 「拒绝焦虑」牌子 ---------- */
   const TEXT = '拒绝焦虑';
-  const FS = 14;
+  const FS = 12;
   ctx.font = '900 ' + FS + 'px "Microsoft YaHei","SimHei",sans-serif';
   const tw = ctx.measureText(TEXT).width;
-  const halfW = tw / 2 + 9, halfH = FS * 0.62 + 7;
-  const boardY = 40 - s1 * 0.5;
-  /* 牌子杆 */
-  ctx.strokeStyle = '#8A6236'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(52, boardY + halfH); ctx.lineTo(52, 58); ctx.stroke();
+  const halfW = tw / 2 + 8, halfH = FS * 0.62 + 6;
+  const boardY = 34 - s1 * 0.5;
+  ctx.strokeStyle = '#8A6236'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(40, boardY + halfH); ctx.lineTo(40, 50); ctx.stroke();
   ctx.save();
-  ctx.translate(52, boardY);
+  ctx.translate(40, boardY);
   ctx.beginPath();
   const R = 4, W = halfW, H = halfH;
   ctx.moveTo(-W + R, -H);
@@ -1805,7 +1803,7 @@ function drawBanana(ctx, q, p, kind) {
   const sg2 = ctx.createLinearGradient(0, -H, 0, H);
   sg2.addColorStop(0, '#FFFFFF'); sg2.addColorStop(1, '#E4EFD8');
   ctx.fillStyle = sg2; ctx.fill();
-  ctx.lineWidth = 2.4; ctx.strokeStyle = '#2E4A1E'; ctx.stroke();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = '#2E4A1E'; ctx.stroke();
   ctx.fillStyle = '#3E7B27';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(TEXT, 0, 0.5);

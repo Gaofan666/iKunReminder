@@ -2,12 +2,12 @@
   "name": "拒绝焦虑",
   "author": "",
   "frame": {
-    "w": 194,
+    "w": 181,
     "h": 140
   },
   "fps": 10,
   "sheet": "sheet.png",
-  "bottomGap": 5,
+  "bottomGap": 4,
   "animations": {
     "idle": {
       "row": 0,

@@ -377,7 +377,14 @@
       const t = now / 1000;
       const mood = this.mood;
       const energy = mood === 'dance' ? 1 : mood === 'cheer' ? 0.9 : 0.3;
-      const s = Math.min(w / this.fit, h / this.fit);
+      /* 手绘角色用统一的 fit；皮肤要按帧的实际宽高比算，
+         否则宽幅皮肤（树 + 躺椅那种）横向会超出画布被裁掉。 */
+      let s = Math.min(w / this.fit, h / this.fit);
+      if (skinState.ready && skinState.meta) {
+        const fh2 = skinState.meta.frame.h;
+        const drawW = skinState.meta.frame.w * (310 / fh2);   // 帧在本地坐标下的宽度
+        s = Math.min(w / Math.max(this.fit, drawW), h / this.fit);
+      }
 
       ctx.save();
       /* 主界面：放在画布 94% 高度处（底部留一点，视觉上居中）。
