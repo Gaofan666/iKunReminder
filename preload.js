@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onWinVisible: (cb) => ipcRenderer.on('win-visible', (e, vis) => cb(vis)),
 
   /* 皮肤：列出可选皮肤 / 载入某个皮肤的精灵图（主进程读文件，页面不碰磁盘） */
-  skinsList: () => ipcRenderer.invoke('skins-list'),
+  onSetSkin: (cb) => ipcRenderer.on('set-skin', (e, id) => cb(id)),  skinChanged: (id) => ipcRenderer.send('skin-changed', id),  skinsList: () => ipcRenderer.invoke('skins-list'),
   skinLoad: (id) => ipcRenderer.invoke('skin-load', id),
 
   /* 页面 → 主进程：同步运行状态与提醒列表，用于刷新托盘菜单 */

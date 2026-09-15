@@ -294,6 +294,27 @@ function intervalSubmenu(it) {
   };
 }
 
+let currentSkin = '__default';       // 当前宠物形象，右键菜单要拿它打勾
+
+ipcMain.on('skin-changed', (e, id) => { if (typeof id === 'string') currentSkin = id; });
+
+/* 右键菜单里的形象列表：内置的 + skins/ 里的 */
+function skinSubmenu() {
+  const list = [{ id: '__default', name: '篮球男孩' }].concat(
+    scanSkins().map(function (s) { return { id: s.id, name: s.name }; }));
+  return list.map(function (s) {
+    return {
+      label: s.name,
+      type: 'radio',
+      checked: currentSkin === s.id,
+      click: function () {
+        currentSkin = s.id;
+        send('set-skin', s.id);       // 交给渲染进程去真正换
+      }
+    };
+  });
+}
+
 ipcMain.handle('pet-menu', () => {
   if (!win) return false;
   const tpl = [
@@ -312,6 +333,7 @@ ipcMain.handle('pet-menu', () => {
     });
   }
 
+  tpl.push({ label: '宠物形象', submenu: skinSubmenu() });
   tpl.push({
     label: '宠物大小',
     submenu: Object.keys(PET_SIZES).map(k => ({

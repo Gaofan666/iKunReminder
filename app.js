@@ -1932,6 +1932,7 @@
         saveSettings();
         Sound.click();
         loadSkin(settings.skin);
+        if (native && native.skinChanged) native.skinChanged(settings.skin);
       });
     }
 
@@ -2007,7 +2008,7 @@
     document.addEventListener('pointerdown', unlock);
 
     /* 窗口可见性：主进程显式通知 + 网页自身的 visibilitychange 双保险 */
-    if (native && native.onWinVisible) native.onWinVisible(applyVisibility);
+    if (native && native.onWinVisible) native.onWinVisible(applyVisibility);    /* 宠物模式右键菜单里换形象 */    if (native && native.onSetSkin) {      native.onSetSkin(function (id) {        settings.skin = id || '__default';        saveSettings();        if (el.skinSel) el.skinSel.value = settings.skin;        loadSkin(settings.skin);      });    }
     document.addEventListener('visibilitychange', function () {
       applyVisibility(!document.hidden);
     });
