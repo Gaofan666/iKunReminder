@@ -1,0 +1,24 @@
+{
+  "name": "海盗狗",
+  "author": "自带",
+  "frame": {
+    "w": 120,
+    "h": 140
+  },
+  "fps": 10,
+  "sheet": "sheet.png",
+  "animations": {
+    "idle": {
+      "row": 0,
+      "count": 4
+    },
+    "dance": {
+      "row": 1,
+      "count": 6
+    },
+    "cheer": {
+      "row": 2,
+      "count": 6
+    }
+  }
+}
