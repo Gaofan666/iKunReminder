@@ -1,0 +1,28 @@
+{
+  "name": "大眼黑猫",
+  "author": "",
+  "frame": {
+    "w": 326,
+    "h": 520
+  },
+  "fps": 10,
+  "sheet": "sheet.png",
+  "bottomGap": 7,
+  "animations": {
+    "idle": {
+      "row": 0,
+      "count": 8,
+      "fps": 6
+    },
+    "dance": {
+      "row": 1,
+      "count": 6,
+      "fps": 12
+    },
+    "cheer": {
+      "row": 2,
+      "count": 6,
+      "fps": 10
+    }
+  }
+}

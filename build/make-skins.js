@@ -1813,8 +1813,139 @@ function drawBanana(ctx, q, p, kind) {
   ctx.restore();
 }
 
+/* ============================================================ ⑬ 大眼黑猫 */
+/* 照参考图 1:1 矢量重绘。三种动作：摇尾巴（连续）、眨眼（待机中段两帧）、
+   动耳朵（待机末两帧）。帧数按 kind 写死，方便用帧序号精确控制眨眼时机。 */
+function drawCat(ctx, q, p, kind) {
+  const FUR = '#2A1A14';
+  const FUR_L = '#3D2820';
+  const CREAM = '#F7EFC9';
+  const CREAM_D = '#DFD3A4';
+  const INNER = '#A9C79B';
+  const PUPIL = '#140D0A';
+
+  const n = kind === 'idle' ? 8 : 6;          // 各行的帧数（与下面 SKINS 配置一致）
+  const idx = Math.round(p * n) % n;
+  const t = p * TAU;
+
+  /* --- 眨眼：待机第 4、5 帧 --- */
+  let blink = 0;
+  if (kind === 'idle' && (idx === 4 || idx === 5)) blink = idx === 5 ? 0.75 : 1;
+  const eyeOpen = 1 - blink;
+
+  /* --- 动耳朵：待机第 6、7 帧 --- */
+  let earTw = 0;
+  if (kind === 'idle' && idx === 6) earTw = 0.16;
+  if (kind === 'idle' && idx === 7) earTw = -0.13;
+  if (kind === 'cheer') earTw = 0.1;
+
+  /* --- 摇尾巴：一直摆，跳舞时更快 --- */
+  const wag = Math.sin(t * (kind === 'idle' ? 2 : 4)) * (kind === 'idle' ? 0.5 : 0.95);
+  const bob = Math.sin(t) * 1.2 + (kind === 'dance' ? -3 : 0);
+
+  shadow(ctx, 52, 26);
+
+  /* ---------- 尾巴（在身后） ---------- */
+  ctx.save();
+  ctx.translate(-18, 34);
+  ctx.rotate(wag * 0.5);
+  ctx.strokeStyle = FUR; ctx.lineWidth = 11; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(6, 0);
+  ctx.quadraticCurveTo(-14, 4, -22, -8 - wag * 8);
+  ctx.stroke();
+  ctx.strokeStyle = FUR_L; ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(4, -1);
+  ctx.quadraticCurveTo(-13, 3, -20, -8 - wag * 8);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(0, bob);
+
+  /* ---------- 身体（坐姿） ---------- */
+  ctx.fillStyle = FUR;
+  ctx.beginPath();
+  ctx.moveTo(0, 6);
+  ctx.bezierCurveTo(22, 6, 26, 24, 24, 38);
+  ctx.bezierCurveTo(22, 48, -22, 48, -24, 38);
+  ctx.bezierCurveTo(-26, 24, -22, 6, 0, 6);
+  ctx.closePath(); ctx.fill();
+  /* 前腿 */
+  ctx.fillStyle = FUR_L;
+  ctx.beginPath(); ctx.ellipse(-9, 40, 7, 9, 0.1, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(9, 40, 7, 9, -0.1, 0, TAU); ctx.fill();
+
+  /* ---------- 耳朵（先画，压在头下面） ---------- */
+  [-1, 1].forEach(function (sg) {
+    ctx.save();
+    ctx.translate(sg * 23, -40);
+    ctx.rotate(sg * earTw);
+    ctx.fillStyle = FUR;
+    ctx.beginPath();
+    ctx.moveTo(-11, 12);
+    ctx.quadraticCurveTo(-9, -14, 4, -16);
+    ctx.quadraticCurveTo(13, -8, 12, 12);
+    ctx.closePath(); ctx.fill();
+    /* 内侧灰绿 */
+    ctx.fillStyle = INNER;
+    ctx.beginPath();
+    ctx.moveTo(-5, 8);
+    ctx.quadraticCurveTo(-4, -7, 3, -9);
+    ctx.quadraticCurveTo(8, -3, 7, 8);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  });
+
+  /* ---------- 头：宽圆 ---------- */
+  ctx.fillStyle = FUR;
+  ctx.beginPath();
+  ctx.moveTo(0, -50);
+  ctx.bezierCurveTo(26, -50, 36, -36, 36, -18);
+  ctx.bezierCurveTo(36, 2, 24, 12, 0, 12);
+  ctx.bezierCurveTo(-24, 12, -36, 2, -36, -18);
+  ctx.bezierCurveTo(-36, -36, -26, -50, 0, -50);
+  ctx.closePath(); ctx.fill();
+  /* 头顶一点亮面，避免整块死黑 */
+  ctx.fillStyle = 'rgba(255,255,255,.05)';
+  ctx.beginPath(); ctx.ellipse(-10, -38, 20, 9, -0.15, 0, TAU); ctx.fill();
+
+  /* ---------- 眼睛：米黄大眼圈 + 大黑瞳孔 ---------- */
+  [-1, 1].forEach(function (sg) {
+    const ex = sg * 14, ey = -18;
+    const rx = 11.5, ry = 15.5 * eyeOpen;
+    if (ry < 1.6) {
+      /* 眨到底：画一条闭合的线 */
+      ctx.strokeStyle = CREAM; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(ex - rx, ey); ctx.lineTo(ex + rx, ey); ctx.stroke();
+      return;
+    }
+    /* 眼圈 */
+    ctx.fillStyle = CREAM;
+    ctx.beginPath(); ctx.ellipse(ex, ey, rx, ry, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = CREAM_D;
+    ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.62, rx * 0.92, ry * 0.3, 0, 0, TAU); ctx.fill();
+    /* 瞳孔：占满大半个眼圈 */
+    ctx.fillStyle = PUPIL;
+    ctx.beginPath(); ctx.ellipse(ex, ey, rx * 0.66, ry * 0.72, 0, 0, TAU); ctx.fill();
+    /* 高光 */
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.ellipse(ex - rx * 0.24, ey - ry * 0.3, rx * 0.16, ry * 0.14, -0.3, 0, TAU); ctx.fill();
+  });
+
+  /* ---------- 鼻子（很小一点） ---------- */
+  ctx.fillStyle = '#6B4A3E';
+  ctx.beginPath();
+  ctx.moveTo(-3.4, -2); ctx.lineTo(3.4, -2); ctx.lineTo(0, 2.2);
+  ctx.closePath(); ctx.fill();
+
+  ctx.restore();
+}
+
 /* ============================================================ 出图 */
 const SKINS = [
+  { id: 'cat', name: '大眼黑猫', author: '', draw: drawCat },
   { id: 'caishen', name: '财神爷', author: '', draw: drawCaishen },
   { id: 'banana', name: '拒绝焦虑', author: '', draw: drawBanana },
   { id: 'penguin', name: '学术企鹅', author: '抽象', draw: drawPenguin },
@@ -1832,8 +1963,8 @@ const SKINS = [
 function pageJS() {
   return `var TAU=Math.PI*2;
 ${shadow}${circle}${oval}${rrect}${eye}${limb}${mouthOpen}${teeth}${poseFor}
-${drawDog}${drawDragon}${drawPanda}${drawSponge}${drawStar}${drawPenguin}${drawCaishen}${drawBanana}${drawHuaji}${drawDoge}${drawPepe}${drawPsyduck}
-var DRAWS={dog:drawDog,dragon:drawDragon,panda:drawPanda,sponge:drawSponge,star:drawStar,penguin:drawPenguin,caishen:drawCaishen,banana:drawBanana,huaji:drawHuaji,doge:drawDoge,pepe:drawPepe,psyduck:drawPsyduck};
+${drawDog}${drawDragon}${drawPanda}${drawSponge}${drawStar}${drawPenguin}${drawCat}${drawCaishen}${drawBanana}${drawHuaji}${drawDoge}${drawPepe}${drawPsyduck}
+var DRAWS={dog:drawDog,dragon:drawDragon,panda:drawPanda,sponge:drawSponge,star:drawStar,penguin:drawPenguin,cat:drawCat,caishen:drawCaishen,banana:drawBanana,huaji:drawHuaji,doge:drawDoge,pepe:drawPepe,psyduck:drawPsyduck};
 window.CELLW=${PROBE}; window.CELLH=${PROBE};
 window.SCALE=0.8; window.OFFX=0; window.OFFY=0;
 window.render=function(id){
@@ -1953,7 +2084,7 @@ app.whenReady().then(async () => {
         frame: { w: fw, h: FH }, fps: 10, sheet: 'sheet.png',        /* 脚底到格子底边的真实余量(px)，程序据此刻精确贴底 */        bottomGap: bottomGap,
         animations: {
           /* 待机放慢：帧率太高会一直在抖，看久了很烦 */
-          idle: { row: 0, count: 4, fps: 3.5 },
+          idle: { row: 0, count: s.id === 'cat' ? 8 : 4, fps: s.id === 'cat' ? 6 : 3.5 },
           dance: { row: 1, count: 6, fps: 12 },
           cheer: { row: 2, count: 6, fps: 10 }
         }
