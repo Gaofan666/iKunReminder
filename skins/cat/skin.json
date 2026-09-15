@@ -11,8 +11,8 @@
   "animations": {
     "idle": {
       "row": 0,
-      "count": 8,
-      "fps": 6
+      "count": 6,
+      "fps": 4
     },
     "dance": {
       "row": 1,

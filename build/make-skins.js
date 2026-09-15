@@ -1828,19 +1828,19 @@ function drawCat(ctx, q, p, kind) {
   const INNER = '#A9C79B';
   const PUPIL = '#120C09';
 
-  const n = kind === 'idle' ? 8 : 6;
+  const n = kind === 'idle' ? 6 : 6;
   const idx = Math.round(p * n) % n;
   const t = p * TAU;
 
   /* 眨眼 */
   let blink = 0;
-  if (kind === 'idle' && (idx === 4 || idx === 5)) blink = idx === 5 ? 0.72 : 1;
+  if (kind === 'idle' && (idx === 3 || idx === 4)) blink = idx === 4 ? 0.72 : 1;
   const eyeOpen = 1 - blink;
 
   /* 动耳朵 */
   let earTw = 0;
-  if (kind === 'idle' && idx === 6) earTw = 0.17;
-  if (kind === 'idle' && idx === 7) earTw = -0.14;
+  if (kind === 'idle' && idx === 5) earTw = 0.17;
+  if (kind === 'idle' && idx === 0) earTw = -0.12;
   if (kind === 'cheer') earTw = 0.11;
 
   /* 摇尾巴 */
@@ -2018,7 +2018,7 @@ app.whenReady().then(async () => {
     for (const s of SKINS) {
       /* ---- 第一遍：在等大的格子里量出「运动包络」 ---- */
       await w.webContents.executeJavaScript(
-        "window.IDLEN=" + (s.id === 'cat' ? 8 : 4) + ";" +
+        "window.IDLEN=" + (s.id === 'cat' ? 6 : 4) + ";" +
         "window.CELLW=" + PROBE + ";window.CELLH=" + PROBE +
         ";window.SCALE=0.8;window.OFFX=0;window.OFFY=0;window.render('" + s.id + "')");
       await sleep(240);
@@ -2058,7 +2058,7 @@ app.whenReady().then(async () => {
       await sleep(260);
       /* 直接导出 canvas：不再截图，FH 开多大都不会被屏幕尺寸裁掉 */
       const dataUrl = await w.webContents.executeJavaScript(
-        "(function(){window.IDLEN=" + (s.id === 'cat' ? 8 : 4) + ";" +
+        "(function(){window.IDLEN=" + (s.id === 'cat' ? 6 : 4) + ";" +
         "window.CELLW=" + fw + ";window.CELLH=" + FH +
         ";window.SCALE=" + scale.toFixed(4) + ";window.OFFX=" + offX.toFixed(2) +
         ";window.OFFY=" + offY.toFixed(2) + ";window.render('" + s.id + "');" +
@@ -2094,7 +2094,7 @@ app.whenReady().then(async () => {
         frame: { w: fw, h: FH }, fps: 10, sheet: 'sheet.png',        /* 脚底到格子底边的真实余量(px)，程序据此刻精确贴底 */        bottomGap: bottomGap,
         animations: {
           /* 待机放慢：帧率太高会一直在抖，看久了很烦 */
-          idle: { row: 0, count: s.id === 'cat' ? 8 : 4, fps: s.id === 'cat' ? 6 : 3.5 },
+          idle: { row: 0, count: s.id === 'cat' ? 6 : 4, fps: s.id === 'cat' ? 4 : 3.5 },
           dance: { row: 1, count: 6, fps: 12 },
           cheer: { row: 2, count: 6, fps: 10 }
         }
