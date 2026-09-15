@@ -473,30 +473,30 @@ function drawPanda(ctx, q, p, kind) {
 
   /* ---- 烟：从嘴里斜插出去，正好被手指捏住 ---- */
   /* 烟朝下斜插：原来朝上，末端正好落在举起的右拳位置，看着像被烟头挡住了手 */
-  const cigAng = 0.72;
+  const cigAng = 1.0;
   const cx0 = 9, cy0 = -19;
   const cx1 = 26, cy1 = -6;
   ctx.save();
   ctx.translate(cx0, cy0);
   ctx.rotate(cigAng);
   ctx.fillStyle = '#F7F2E6';
-  ctx.beginPath(); ctx.rect(0, -2.6, 24, 5.2);
+  ctx.beginPath(); ctx.rect(0, -2.6, 20, 5.2);
   ctx.fill();
   ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
   ctx.fillStyle = '#E2574C';
-  ctx.beginPath(); ctx.rect(19, -2.6, 5, 5.2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(15, -2.6, 5, 5.2); ctx.fill(); ctx.stroke();
   /* 烟头火星 */
   ctx.fillStyle = 'rgba(255,120,60,' + (0.55 + 0.45 * Math.abs(Math.sin(p * TAU * 3))) + ')';
-  ctx.beginPath(); ctx.arc(24.5, 0, 3.2, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(20.5, 0, 3.2, 0, TAU); ctx.fill();
   ctx.restore();
 
   /* ---- 两条胳膊对称举起，双手比中指 ----
        位置固定在身体轮廓之外（x = ±48），保证看得见。 ---- */
   const rise = q.arm * 5;
   [-1, 1].forEach(function (sg) {
-    const shX = sg * 29, shY = -18;
-    const elX = sg * 46, elY = -26 - rise * 0.4;
-    const hx = sg * 48, hy = -42 - rise;
+    const shX = sg * 31, shY = -6;
+    const elX = sg * 47, elY = 6 + rise * 0.3;
+    const hx = sg * 50, hy = 18 - rise;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     /* 上臂 + 前臂（先描粗边再填色，保持梗图的粗描边） */
     [[shX, shY, elX, elY, 15], [elX, elY, hx, hy, 13]].forEach(function (a) {
@@ -515,19 +515,20 @@ function drawPanda(ctx, q, p, kind) {
       ctx.fillStyle = '#111111'; ctx.fill();
       ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
     });
-    /* 中指：从拳头上方竖起来 */
+    /* 中指：朝下伸（手垂在身侧、中指指地，比举起来更松弛更拽） */
+    const fx = hx + sg * 2.5;
     ctx.beginPath();
-    ctx.moveTo(hx - 3.4, hy - 2);
-    ctx.lineTo(hx - 3.4, hy - 15);
-    ctx.quadraticCurveTo(hx, hy - 20, hx + 3.4, hy - 15);
-    ctx.lineTo(hx + 3.4, hy - 2);
+    ctx.moveTo(hx - 3.4, hy + 2);
+    ctx.lineTo(fx - 3.4, hy + 16);
+    ctx.quadraticCurveTo(fx, hy + 22, fx + 3.4, hy + 16);
+    ctx.lineTo(hx + 3.4, hy + 2);
     ctx.closePath();
     ctx.fillStyle = '#111111'; ctx.fill();
     ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
     /* 指节纹路，让它一眼是根手指 */
     ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(hx - 2.6, hy - 6); ctx.lineTo(hx + 2.6, hy - 6); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(hx - 2.6, hy - 10); ctx.lineTo(hx + 2.6, hy - 10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 2.2, hy + 7); ctx.lineTo(hx + 2.2 + sg * 1, hy + 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 1.6, hy + 11); ctx.lineTo(hx + 1.8 + sg * 1.6, hy + 11); ctx.stroke();
   });
 
   /* ---- 烟圈（待机时最明显） ---- */
@@ -536,7 +537,7 @@ function drawPanda(ctx, q, p, kind) {
     ctx.globalAlpha = (1 - t) * (kind === 'idle' ? 0.8 : 0.45);
     ctx.strokeStyle = '#8A8A8A'; ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.arc(cx1 + 6 + t * 16, cy1 - 16 - t * 30, 3 + t * 6.5, 0, TAU);
+    ctx.arc(cx1 + 6 + t * 26, cy1 - 14 - t * 34, 3 + t * 6.5, 0, TAU);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
