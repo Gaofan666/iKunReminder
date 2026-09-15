@@ -33,15 +33,20 @@
 
 ## 一、怎么用
 
-### 📥 直接下载打包好的成品（百度网盘）
+### 📥 直接下载打包好的成品
 
-仓库里**只有源码**（`node_modules` 和打包产物没有提交，GitHub 单文件上限 100MB），
-成品安装包放在百度网盘：
+**方式一：GitHub Releases（推荐）**
+
+> **v2.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v2.0.0
+> 直接下载：[`iKunReminder-setup.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v2.0.0/iKunReminder-setup.exe)（约 101 MB，安装版）
+
+**方式二：百度网盘**
 
 > **链接**：https://pan.baidu.com/s/1DAoUozmgbhaPD9pjpZKfvA
 > **提取码**：`gvkp`
 
-想自己从源码打包，看下面的「自己重新打包」。
+仓库里**只有源码** —— `node_modules` 和打包产物没有提交（GitHub 单文件上限 100MB，
+安装包 101MB 超了，所以走 Releases）。想自己从源码打包，看下面的「自己重新打包」。
 
 ---
 
