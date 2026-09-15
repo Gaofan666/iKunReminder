@@ -1590,7 +1590,7 @@ app.whenReady().then(async () => {
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, 'sheet.png'), img.toPNG());
       fs.writeFileSync(path.join(dir, 'skin.json'), JSON.stringify({
-        name: s.name, author: s.author,
+        name: s.name, author: '',
         frame: { w: fw, h: FH }, fps: 10, sheet: 'sheet.png',
         animations: {
           /* 待机放慢：帧率太高会一直在抖，看久了很烦 */

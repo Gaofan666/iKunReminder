@@ -566,7 +566,7 @@ function scanSkins() {
 }
 
 ipcMain.handle('skins-list', () => {
-  const list = [{ id: '__default', name: '默认（代码手绘）', author: '', builtin: true }];
+  const list = [{ id: '__default', name: '篮球男孩', author: '', builtin: true }];
   scanSkins().forEach(function (s) {
     list.push({ id: s.id, name: s.name, author: s.author, builtin: false });
   });

@@ -509,7 +509,7 @@
       (list || []).forEach(function (s) {
         const o = document.createElement('option');
         o.value = s.id;
-        o.textContent = s.author ? (s.name + ' — ' + s.author) : s.name;
+        o.textContent = s.name;                 // 只显示名字，不带作者后缀
         el.skinSel.appendChild(o);
       });
       /* 存的皮肤没了就退回默认 */
