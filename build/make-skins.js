@@ -504,7 +504,7 @@ function drawPanda(ctx, q, p, kind) {
       ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.stroke();
     });
     /* 拳头 */
-    /* 整只手：白填充 + 黑描边（原来是实心黑，和黑胳膊糊在一起） */
+    /* ---- 手：白填充 + 黑描边 ---- */
     ctx.beginPath(); ctx.ellipse(hx, hy, 9, 8.5, 0, 0, TAU);
     ctx.fillStyle = '#FFFFFF'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
@@ -513,6 +513,106 @@ function drawPanda(ctx, q, p, kind) {
       ctx.fillStyle = '#FFFFFF'; ctx.fill();
       ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
     });
+
+    if (sg < 0) {
+      /* ---- 左手抱啤酒瓶 ---- */
+      ctx.save();
+      ctx.translate(hx - 1, hy - 4);
+      ctx.rotate(-0.06);
+      /* 瓶身 */
+      ctx.beginPath();
+      ctx.moveTo(-11, 12);
+      ctx.lineTo(-11, -12);
+      ctx.quadraticCurveTo(-11, -21, -4.5, -25);
+      ctx.lineTo(-4.5, -40);
+      ctx.lineTo(4.5, -40);
+      ctx.lineTo(4.5, -25);
+      ctx.quadraticCurveTo(11, -21, 11, -12);
+      ctx.lineTo(11, 12);
+      ctx.quadraticCurveTo(11, 20, 0, 20);
+      ctx.quadraticCurveTo(-11, 20, -11, 12);
+      ctx.closePath();
+      const bg = ctx.createLinearGradient(-11, 0, 11, 0);
+      bg.addColorStop(0, '#1B5E20'); bg.addColorStop(0.35, '#43A047');
+      bg.addColorStop(0.55, '#66BB6A'); bg.addColorStop(1, '#14501A');
+      ctx.fillStyle = bg; ctx.fill();
+      ctx.lineWidth = 2.6; ctx.strokeStyle = '#0D3A12'; ctx.stroke();
+      /* 玻璃高光 */
+      ctx.fillStyle = 'rgba(255,255,255,.5)';
+      ctx.beginPath(); ctx.ellipse(-6, -4, 2, 12, 0.05, 0, TAU); ctx.fill();
+      /* 标签 */
+      ctx.fillStyle = '#F7F3E8';
+      ctx.beginPath(); ctx.rect(-10.5, -6, 21, 15); ctx.fill();
+      ctx.lineWidth = 1.8; ctx.strokeStyle = '#B9A97A'; ctx.stroke();
+      ctx.fillStyle = '#C8102E';
+      ctx.beginPath(); ctx.rect(-10.5, -6, 21, 4.5); ctx.fill();
+      ctx.fillStyle = '#8A6A12';
+      ctx.font = 'bold 7px "Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('啤 酒', 0, 3.5);
+      /* 瓶盖 */
+      ctx.fillStyle = '#F0C43A';
+      ctx.beginPath(); ctx.rect(-5.4, -44, 10.8, 5); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+      ctx.fillStyle = '#FFF2B0';
+      ctx.beginPath(); ctx.rect(-4.6, -43.2, 9.2, 1.6); ctx.fill();
+      /* 泡沫 */
+      ctx.fillStyle = 'rgba(255,255,255,.9)';
+      [[-3, -47], [1.5, -48.5], [4, -46.6]].forEach(function (b) {
+        ctx.beginPath(); ctx.arc(b[0], b[1], 2.6, 0, TAU); ctx.fill();
+      });
+      ctx.restore();
+      /* 抓着瓶子的手指，压在瓶身前 */
+      ctx.strokeStyle = '#111111'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      [0, 6].forEach(function (dy) {
+        ctx.beginPath();
+        ctx.moveTo(hx - 9, hy + dy - 2);
+        ctx.lineTo(hx + 9, hy + dy - 2);
+        ctx.stroke();
+      });
+    } else {
+      /* ---- 右手抱一沓钞票 ---- */
+      ctx.save();
+      ctx.translate(hx + 1, hy - 2);
+      ctx.rotate(0.07);
+      /* 错叠的钞票 */
+      for (let i = 3; i >= 0; i--) {
+        const ox = (i - 1.5) * 1.1, oy = (i - 1.5) * 1.6;
+        ctx.beginPath();
+        ctx.rect(-17 + ox, -10 + oy, 34, 16);
+        const cg = ctx.createLinearGradient(-17 + ox, 0, 17 + ox, 0);
+        cg.addColorStop(0, i % 2 ? '#D9455F' : '#C8102E');
+        cg.addColorStop(0.5, i % 2 ? '#F0738A' : '#E0435F');
+        cg.addColorStop(1, i % 2 ? '#B22B45' : '#9E0C24');
+        ctx.fillStyle = cg; ctx.fill();
+        ctx.lineWidth = 1.8; ctx.strokeStyle = '#7A0A1C'; ctx.stroke();
+      }
+      /* 顶面那张的细节 */
+      ctx.fillStyle = '#FFE9B0';
+      ctx.beginPath(); ctx.arc(6 + 1.1, 0 + 2.4, 4.4, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#8A6A12'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = '#8A6A12';
+      ctx.font = 'bold 7px "Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('¥', 6 + 1.1, 0 + 2.6);
+      ctx.fillStyle = 'rgba(255,255,255,.55)';
+      ctx.beginPath(); ctx.rect(-15 + 1.1, -8 + 2.4, 10, 3); ctx.fill();
+      /* 金色捆扎带 */
+      ctx.fillStyle = '#F0C43A';
+      ctx.beginPath(); ctx.rect(-17 + 1.1, -4 + 2.4, 34, 5.4); ctx.fill();
+      ctx.lineWidth = 1.8; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+      ctx.fillStyle = '#FFF2B0';
+      ctx.beginPath(); ctx.rect(-16 + 1.1, -3.4 + 2.4, 32, 1.4); ctx.fill();
+      ctx.restore();
+      /* 抓着钞票的手指 */
+      ctx.strokeStyle = '#111111'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      [0, 6].forEach(function (dy) {
+        ctx.beginPath();
+        ctx.moveTo(hx - 9, hy + dy - 2);
+        ctx.lineTo(hx + 9, hy + dy - 2);
+        ctx.stroke();
+      });
+    }
     /* 中指：又长又粗还往外撇 —— 太细太短的话缩到桌面上就只剩个小凸起，
        根本看不出在比中指。让中指长度接近拳头直径的两倍。 */
     const out = sg * 5;
