@@ -1977,12 +1977,14 @@ function drawCat(ctx, q, p, kind) {
       ctx.beginPath(); ctx.moveTo(ex - rx + 1, ey); ctx.lineTo(ex + rx - 1, ey); ctx.stroke();
       return;
     }
-    /* 米黄眼圈 */
+    /* 米黄眼圈 + 外圈褐描边 */
     ctx.fillStyle = CREAM;
     ctx.beginPath(); ctx.ellipse(ex, ey, rx, ry, 0, 0, TAU); ctx.fill();
-    /* 大黑瞳孔 */
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.6; ctx.stroke();
+    /* 大黑瞳孔 + 内圈褐描边 */
     ctx.fillStyle = PUPIL;
     ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.04, rx * 0.72, ry * 0.8, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.4; ctx.stroke();
   });
 
   /* ---------- 鼻子：很小一点 ---------- */
