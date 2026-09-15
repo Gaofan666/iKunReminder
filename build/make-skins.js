@@ -1876,19 +1876,29 @@ function drawCat(ctx, q, p, kind) {
   ctx.bezierCurveTo(22, 36, -22, 36, -23, 26);
   ctx.bezierCurveTo(-24, 14, -20, 0, 0, 0);
   ctx.closePath(); ctx.fill();
-  /* 胸口一点亮面 */
-  ctx.fillStyle = 'rgba(255,255,255,.045)';
-  ctx.beginPath(); ctx.ellipse(-6, 14, 11, 9, 0.1, 0, TAU); ctx.fill();
 
-  /* 两只前爪：收拢并排、圆润地搭在地上（后脚在身体后面看不到） */
+  /* 前腿：从胸口向下垂到地面的两条深褐色弯管（趴姿能看见前腿） */
   [-1, 1].forEach(function (sg) {
+    /* 裤管本体 */
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 9.5; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sg * 7, 9);
+    ctx.quadraticCurveTo(sg * 12, 20, sg * 9.5, 30);
+    ctx.stroke();
+    /* 左侧一道浅高光，做出圆柱的转折 */
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sg * 5.5, 11);
+    ctx.quadraticCurveTo(sg * 9.5, 20, sg * 7.5, 29);
+    ctx.stroke();
+    /* 落在地上的爪子 */
     ctx.fillStyle = FUR_L;
     ctx.beginPath();
-    ctx.ellipse(sg * 8, 32, 8.6, 7, 0, 0, TAU); ctx.fill();
+    ctx.ellipse(sg * 9.5, 32.5, 8.2, 6.4, sg * 0.05, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    ctx.beginPath();
+    ctx.ellipse(sg * 9.5 - sg * 1.5, 30.5, 4.6, 2.4, 0, 0, TAU); ctx.fill();
   });
-  /* 两爪之间一道浅缝 */
-  ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(0, 27); ctx.lineTo(0, 37); ctx.stroke();
 
   /* ---------- 耳朵（先画，压在头下） ---------- */
   [-1, 1].forEach(function (sg) {
