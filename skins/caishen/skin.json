@@ -2,8 +2,8 @@
   "name": "财神爷",
   "author": "",
   "frame": {
-    "w": 110,
-    "h": 140
+    "w": 130,
+    "h": 236
   },
   "fps": 10,
   "sheet": "sheet.png",

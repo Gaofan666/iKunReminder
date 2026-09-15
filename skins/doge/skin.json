@@ -2,8 +2,8 @@
   "name": "狗头",
   "author": "",
   "frame": {
-    "w": 108,
-    "h": 140
+    "w": 109,
+    "h": 236
   },
   "fps": 10,
   "sheet": "sheet.png",

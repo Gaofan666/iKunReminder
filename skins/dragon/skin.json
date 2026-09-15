@@ -2,8 +2,8 @@
   "name": "小黄龙",
   "author": "",
   "frame": {
-    "w": 125,
-    "h": 140
+    "w": 137,
+    "h": 236
   },
   "fps": 10,
   "sheet": "sheet.png",

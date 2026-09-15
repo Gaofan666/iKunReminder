@@ -2,8 +2,8 @@
   "name": "海盗狗",
   "author": "",
   "frame": {
-    "w": 136,
-    "h": 140
+    "w": 149,
+    "h": 236
   },
   "fps": 10,
   "sheet": "sheet.png",

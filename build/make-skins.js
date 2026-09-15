@@ -17,7 +17,7 @@ const fs = require('fs');
 const root = path.join(__dirname, '..');
 const TAU = Math.PI * 2;
 const PROBE = 240;
-const FH = 140;                  // 成品单帧高度（固定）
+const FH = 236;                  // 成品单帧高度（固定）
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 app.on('window-all-closed', () => { });
 
