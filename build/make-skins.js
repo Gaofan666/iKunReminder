@@ -495,7 +495,7 @@ function drawPanda(ctx, q, p, kind) {
   [-1, 1].forEach(function (sg) {
     const shX = sg * 38, shY = -4;
     const elX = sg * 52, elY = 14 + rise * 0.3;
-    const hx = sg * 52, hy = 30 - rise;
+    const hx = sg * 52, hy = 24 - rise;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     [[shX, shY, elX, elY, 16], [elX, elY, hx, hy, 14]].forEach(function (a) {
       ctx.strokeStyle = LINE; ctx.lineWidth = a[4] + 3;
@@ -507,26 +507,27 @@ function drawPanda(ctx, q, p, kind) {
     ctx.beginPath(); ctx.ellipse(hx, hy, 10, 9.5, 0, 0, TAU);
     ctx.fillStyle = '#111111'; ctx.fill();
     ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
-    [[-7, -5.5], [7, -5.5]].forEach(function (k) {
+    [[-7, -2.5], [7, -2.5]].forEach(function (k) {
       ctx.beginPath(); ctx.arc(hx + k[0], hy + k[1], 4.4, 0, TAU);
       ctx.fillStyle = '#111111'; ctx.fill();
       ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
     });
-    /* 中指：朝下且加长，比之前更醒目 */
-    const fx = hx + sg * 3;
+    /* 中指：从拳头顶端竖起来朝上（手背朝外的那种比法） */
+    const fx = hx + sg * 2.5;
     ctx.beginPath();
-    ctx.moveTo(hx - 3.8, hy + 2);
-    ctx.lineTo(fx - 3.8, hy + 22);
-    ctx.quadraticCurveTo(fx, hy + 28, fx + 3.8, hy + 22);
-    ctx.lineTo(hx + 3.8, hy + 2);
+    ctx.moveTo(hx - 3.8, hy - 3);
+    ctx.lineTo(fx - 3.8, hy - 24);
+    ctx.quadraticCurveTo(fx, hy - 30, fx + 3.8, hy - 24);
+    ctx.lineTo(hx + 3.8, hy - 3);
     ctx.closePath();
     ctx.fillStyle = '#111111'; ctx.fill();
     ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.moveTo(hx - 2.4, hy + 8); ctx.lineTo(hx + 2.4 + sg * 1.2, hy + 8); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(hx - 1.6, hy + 14); ctx.lineTo(hx + 1.8 + sg * 2, hy + 14); ctx.stroke();
-    /* 金戒指 */
-    ctx.beginPath(); ctx.ellipse(hx + sg * 1, hy + 16, 5.2, 2.6, sg * 0.15, 0, TAU);
+    ctx.beginPath(); ctx.moveTo(hx - 2.4, hy - 9); ctx.lineTo(hx + 2.4 + sg * 1.2, hy - 9); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 1.8, hy - 15); ctx.lineTo(hx + 1.8 + sg * 1.8, hy - 15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 1.2, hy - 20); ctx.lineTo(hx + 1.2 + sg * 2.2, hy - 20); ctx.stroke();
+    /* 金戒指：套在中指根部 */
+    ctx.beginPath(); ctx.ellipse(hx + sg * 0.6, hy - 7, 5.2, 2.6, sg * 0.15, 0, TAU);
     const rg = ctx.createLinearGradient(hx - 5, hy + 14, hx + 5, hy + 19);
     rg.addColorStop(0, '#FFF2B0'); rg.addColorStop(0.5, '#F0C43A'); rg.addColorStop(1, '#A87508');
     ctx.fillStyle = rg; ctx.fill();
