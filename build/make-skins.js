@@ -969,6 +969,35 @@ function drawHuaji(ctx, q, p, kind) {
   ctx.fillStyle = 'rgba(255,120,110,.45)';
   ctx.beginPath(); ctx.ellipse(-27, -4, 8, 5.5, 0, 0, TAU); ctx.fill();
   ctx.beginPath(); ctx.ellipse(27, -4, 8, 5.5, 0, 0, TAU); ctx.fill();
+
+  /* 装饰：墨镜推到额头上 */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.ellipse(sg * 16, -44, 12, 7.6, sg * 0.16, 0, TAU);
+    const lg = ctx.createLinearGradient(sg * 4, -50, sg * 28, -38);
+    lg.addColorStop(0, '#3A3A46'); lg.addColorStop(1, '#0A0A0F');
+    ctx.fillStyle = lg; ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = '#F2F2F8'; ctx.stroke();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 8, -36); ctx.lineTo(sg * 22, -52); ctx.stroke();
+    ctx.restore();
+  });
+  ctx.strokeStyle = '#F2F2F8'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(-5, -45); ctx.lineTo(5, -45); ctx.stroke();
+  ctx.strokeStyle = 'rgba(17,17,17,.45)'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(-28, -42); ctx.lineTo(-39, -46); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(28, -42); ctx.lineTo(39, -46); ctx.stroke();
+  /* 装饰：金链子 */
+  ctx.strokeStyle = '#8A6A10'; ctx.lineWidth = 5.5;
+  ctx.beginPath(); ctx.moveTo(-30, 22); ctx.quadraticCurveTo(0, 46, 30, 22); ctx.stroke();
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8, bx = -30 + t * 60, by = 22 + Math.sin(t * Math.PI) * 24;
+    ctx.beginPath(); ctx.arc(bx, by, 3.4, 0, TAU);
+    const cg = ctx.createRadialGradient(bx - 1, by - 1.2, 0.3, bx, by, 3.8);
+    cg.addColorStop(0, '#FFF6C0'); cg.addColorStop(0.5, '#F5C542'); cg.addColorStop(1, '#A87508');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.lineWidth = 1.1; ctx.strokeStyle = '#6B4A06'; ctx.stroke();
+  }
 }
 
 /* ============================================================ ⑦ 狗头 */
@@ -1021,6 +1050,43 @@ function drawDoge(ctx, q, p, kind) {
   ctx.fillStyle = '#FF8AA0';
   ctx.beginPath(); ctx.ellipse(0, 26 + wow * 4, 6, 5 + wow * 3, 0, 0, TAU); ctx.fill();
   ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* 装饰：墨镜（压在眼上，露出一点点眼神） */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath();
+    ctx.moveTo(sg * 24, -22);
+    ctx.quadraticCurveTo(sg * 13, -28, sg * 4, -23);
+    ctx.quadraticCurveTo(sg * 3, -10, sg * 13, -6);
+    ctx.quadraticCurveTo(sg * 23, -5, sg * 25, -14);
+    ctx.closePath();
+    const lg = ctx.createLinearGradient(sg * 4, -26, sg * 25, -6);
+    lg.addColorStop(0, '#3A3A46'); lg.addColorStop(0.45, '#15151C'); lg.addColorStop(1, '#08080C');
+    ctx.fillStyle = lg; ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = '#F2F2F8'; ctx.stroke();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 5, -5); ctx.lineTo(sg * 20, -28); ctx.stroke();
+    ctx.restore();
+  });
+  ctx.fillStyle = '#15151C';
+  ctx.beginPath(); ctx.rect(-4.5, -24, 9, 4); ctx.fill();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = '#F2F2F8'; ctx.stroke();
+  ctx.strokeStyle = '#F2F2F8'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(-24, -18); ctx.lineTo(-35, -24); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(24, -18); ctx.lineTo(35, -24); ctx.stroke();
+  /* 装饰：嘴里叼根骨头 */
+  ctx.save();
+  ctx.translate(16, 14); ctx.rotate(0.45);
+  ctx.fillStyle = '#F5EEDC';
+  ctx.beginPath(); ctx.rect(0, -3.4, 22, 6.8); ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.arc(0, sg * 4.4, 4.2, 0, TAU); ctx.fill();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.beginPath(); ctx.arc(22, sg * 4.4, 4.2, 0, TAU); ctx.fill();
+    ctx.stroke();
+  });
+  ctx.restore();
 }
 
 /* ============================================================ ⑧ 悲伤蛙 */
@@ -1061,6 +1127,46 @@ function drawPepe(ctx, q, p, kind) {
   ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
   ctx.strokeStyle = LINE; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(-24, 6); ctx.quadraticCurveTo(0, 16 - sad * 8, 24, 6); ctx.stroke();
+
+  /* 装饰：小丑帽（呼应「小丑竟是我自己」） */
+  ctx.save();
+  ctx.translate(0, -46);
+  ctx.beginPath();
+  ctx.moveTo(-24, 4);
+  ctx.quadraticCurveTo(0, -4, 24, 4);
+  ctx.quadraticCurveTo(0, 12, -24, 4);
+  ctx.closePath();
+  ctx.fillStyle = '#3E7BD6'; ctx.fill();
+  ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    const k = (i - 1) * 0.55;
+    ctx.moveTo(k * 16, 0);
+    ctx.quadraticCurveTo(k * 26, -30, k * 40, -46);
+    ctx.lineWidth = 11 - i * 1.4; ctx.lineCap = 'round';
+    ctx.strokeStyle = i % 2 ? '#F5F0E6' : '#E2564E'; ctx.stroke();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.beginPath(); ctx.arc(k * 40, -46, 5.6 - i, 0, TAU);
+    ctx.fillStyle = ['#F5F0E6', '#E2564E', '#F5F0E6'][i]; ctx.fill();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
+  }
+  ctx.restore();
+  /* 装饰：叼烟 + 烟圈 */
+  ctx.save();
+  ctx.translate(22, 2); ctx.rotate(-0.35);
+  ctx.fillStyle = '#F7F2E6';
+  ctx.beginPath(); ctx.rect(0, -2.6, 19, 5.2); ctx.fill();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.fillStyle = '#E2574C';
+  ctx.beginPath(); ctx.rect(14.5, -2.6, 4.5, 5.2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  for (let i = 0; i < 3; i++) {
+    const t = (p * 2 + i * 0.33) % 1;
+    ctx.globalAlpha = (1 - t) * 0.6;
+    ctx.strokeStyle = '#9A9A9A'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(40 + t * 14, -4 - t * 26, 3 + t * 5, 0, TAU); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 }
 
 /* ============================================================ ⑨ 可达鸭 */
@@ -1123,10 +1229,191 @@ function drawPsyduck(ctx, q, p, kind) {
       ctx.stroke();
     }
   });
+
+  /* 装饰：头顶冒问号（越慌问号越多） */
+  const qn = kind === 'idle' ? 2 : 3;
+  for (let i = 0; i < qn; i++) {
+    const t = (p * 1.2 + i * 0.33) % 1;
+    const qx = 34 + i * 11 + t * 5, qy = -50 - i * 13 - t * 8;
+    ctx.globalAlpha = Math.min(1, (1 - t) * 1.6);
+    ctx.fillStyle = '#F5C518';
+    ctx.font = 'bold ' + (16 + i * 3) + 'px "Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = LINE;
+    ctx.strokeText('?', qx, qy);
+    ctx.fillText('?', qx, qy);
+  }
+  ctx.globalAlpha = 1;
+  /* 装饰：汗滴 */
+  const sweat = (p * 1.6) % 1;
+  ctx.globalAlpha = 1 - sweat;
+  ctx.fillStyle = '#8FD0EC';
+  ctx.beginPath();
+  ctx.moveTo(-40, -26 + sweat * 14);
+  ctx.quadraticCurveTo(-44, -18 + sweat * 14, -40, -14 + sweat * 14);
+  ctx.quadraticCurveTo(-36, -18 + sweat * 14, -40, -26 + sweat * 14);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 1.8; ctx.strokeStyle = '#4E9CC4'; ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/* ============================================================ ⑩ 学术企鹅 */
+function drawPenguin(ctx, q, p, kind) {
+  const LINE = '#111111';
+  const s1 = Math.sin(p * TAU);
+  const cheer = kind === 'cheer' ? 1 : kind === 'dance' ? 0.6 : 0.25;
+  shadow(ctx, 50, 28);
+
+  /* 橙脚 */
+  [-1, 1].forEach(function (sg) {
+    ctx.fillStyle = '#F2A81B';
+    ctx.beginPath(); ctx.ellipse(sg * 14, 48, 13, 7, 0, 0, TAU); ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+  });
+
+  /* 身体：黑背 */
+  const bg = ctx.createLinearGradient(0, -36, 0, 42);
+  bg.addColorStop(0, '#2A2A33'); bg.addColorStop(1, '#141419');
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.moveTo(0, -36);
+  ctx.bezierCurveTo(26, -36, 32, -10, 30, 16);
+  ctx.bezierCurveTo(28, 40, -28, 40, -30, 16);
+  ctx.bezierCurveTo(-32, -10, -26, -36, 0, -36);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* 白肚子 */
+  ctx.fillStyle = '#FAFAFA';
+  ctx.beginPath(); ctx.ellipse(0, 6, 20, 25, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(17,17,17,.35)'; ctx.stroke();
+
+  /* 圆框眼镜（学术感） */
+  ctx.strokeStyle = '#C9A227'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.arc(-12, -18, 10, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.arc(12, -18, 10, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-2, -19); ctx.lineTo(2, -19); ctx.stroke();
+
+  /* 眼睛：熬夜学术眼 */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.arc(-12, -18, 8, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(12, -18, 8, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(-12 + s1 * 1.4, -17, 3.4, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(12 + s1 * 1.4, -17, 3.4, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.arc(-13 + s1 * 1.4, -18.4, 1.2, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(11 + s1 * 1.4, -18.4, 1.2, 0, TAU); ctx.fill();
+  /* 黑眼圈（熬夜赶稿） */
+  ctx.strokeStyle = 'rgba(120,110,140,.55)'; ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.arc(-12, -14, 7.4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(12, -14, 7.4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+  /* 橙嘴 */
+  ctx.fillStyle = '#F2A81B';
+  ctx.beginPath();
+  ctx.moveTo(-8, -6); ctx.lineTo(8, -6); ctx.lineTo(0, 4);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* 博士帽 */
+  ctx.fillStyle = '#1B1B22';
+  ctx.beginPath();                       // 帽筒
+  ctx.moveTo(-14, -40); ctx.lineTo(14, -40);
+  ctx.lineTo(11, -52); ctx.lineTo(-11, -52);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.beginPath();                       // 方板
+  ctx.moveTo(0, -66); ctx.lineTo(32, -54);
+  ctx.lineTo(0, -44); ctx.lineTo(-32, -54);
+  ctx.closePath();
+  const mg = ctx.createLinearGradient(0, -66, 0, -44);
+  mg.addColorStop(0, '#33333D'); mg.addColorStop(1, '#16161B');
+  ctx.fillStyle = mg; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(-24, -55); ctx.lineTo(0, -62); ctx.stroke();
+  /* 流苏 */
+  ctx.strokeStyle = '#E5B93C'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(30, -54);
+  ctx.quadraticCurveTo(38 + s1 * 3, -46, 34 + s1 * 4, -32);
+  ctx.stroke();
+  ctx.fillStyle = '#F0C43A';
+  ctx.beginPath(); ctx.arc(34 + s1 * 4, -30, 4.4, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+
+  /* 左翅：垂着 */
+  ctx.fillStyle = '#1B1B22';
+  ctx.beginPath(); ctx.ellipse(-30, 10, 8, 17, -0.2, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* 右翅：举起牌子（越兴奋举越高） */
+  const lift = q.arm * 10;
+  ctx.save();
+  ctx.translate(26, 4 - lift);
+  ctx.rotate(-0.5 - q.arm * 0.15);
+  ctx.fillStyle = '#1B1B22';
+  ctx.beginPath(); ctx.ellipse(0, 0, 8, 15, 0.3, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 牌杆 */
+  ctx.strokeStyle = '#B98B52'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(2, -6); ctx.lineTo(12, -46); ctx.stroke();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#6B4A2A';
+  ctx.beginPath(); ctx.moveTo(2, -6); ctx.lineTo(12, -46); ctx.stroke();
+  ctx.restore();
+
+  /* ---- 大牌子 ---- */
+  ctx.save();
+  ctx.translate(38, -56 - lift * 0.5);
+  ctx.rotate(-0.06);
+  const BW = 34, BH = 15;                 // 半宽 / 半高
+  ctx.beginPath();
+  ctx.moveTo(-BW + 3, -BH);
+  ctx.lineTo(BW - 3, -BH); ctx.quadraticCurveTo(BW, -BH, BW, -BH + 3);
+  ctx.lineTo(BW, BH - 3); ctx.quadraticCurveTo(BW, BH, BW - 3, BH);
+  ctx.lineTo(-BW + 3, BH); ctx.quadraticCurveTo(-BW, BH, -BW, BH - 3);
+  ctx.lineTo(-BW, -BH + 3); ctx.quadraticCurveTo(-BW, -BH, -BW + 3, -BH);
+  ctx.closePath();
+  const sg2 = ctx.createLinearGradient(0, -BH, 0, BH);
+  sg2.addColorStop(0, '#FFFFFF'); sg2.addColorStop(1, '#EFEFE6');
+  ctx.fillStyle = sg2; ctx.fill();
+  ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 牌子四角的小图钉 */
+  ctx.fillStyle = '#C9A227';
+  [[-BW + 5, -BH + 5], [BW - 5, -BH + 5], [-BW + 5, BH - 5], [BW - 5, BH - 5]].forEach(function (k) {
+    ctx.beginPath(); ctx.arc(k[0], k[1], 1.8, 0, TAU); ctx.fill();
+  });
+  /* accepted 字样 */
+  ctx.fillStyle = '#159C4B';
+  ctx.font = 'bold 19px "Arial Black","Segoe UI",Arial,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('accepted', 0, 0.5);
+  /* 底下一道绿色下划线，像批注 */
+  ctx.strokeStyle = '#159C4B'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-26, 8.5); ctx.lineTo(26, 8.5); ctx.stroke();
+  ctx.restore();
+
+  /* 欢呼时头顶撒几片纸屑 */
+  if (kind !== 'idle') {
+    const rnd = [0.15, 0.45, 0.75];
+    rnd.forEach(function (t0, i) {
+      const t = (p * 1.5 + t0) % 1;
+      ctx.globalAlpha = 1 - t;
+      ctx.fillStyle = ['#E2564E', '#F0C43A', '#3E7BD6'][i];
+      ctx.save();
+      ctx.translate(-30 + i * 12 - t * 8, -60 + t * 40);
+      ctx.rotate(t * 6 + i);
+      ctx.fillRect(-3.4, -2, 6.8, 4);
+      ctx.restore();
+    });
+    ctx.globalAlpha = 1;
+  }
 }
 
 /* ============================================================ 出图 */
 const SKINS = [
+  { id: 'penguin', name: '学术企鹅', author: '抽象', draw: drawPenguin },
   { id: 'huaji', name: '滑稽', author: '抽象', draw: drawHuaji },
   { id: 'doge', name: '狗头', author: '抽象', draw: drawDoge },
   { id: 'pepe', name: '悲伤蛙', author: '抽象', draw: drawPepe },
@@ -1141,8 +1428,8 @@ const SKINS = [
 function pageJS() {
   return `var TAU=Math.PI*2;
 ${shadow}${circle}${oval}${rrect}${eye}${limb}${mouthOpen}${teeth}${poseFor}
-${drawDog}${drawDragon}${drawPanda}${drawSponge}${drawStar}${drawHuaji}${drawDoge}${drawPepe}${drawPsyduck}
-var DRAWS={dog:drawDog,dragon:drawDragon,panda:drawPanda,sponge:drawSponge,star:drawStar,huaji:drawHuaji,doge:drawDoge,pepe:drawPepe,psyduck:drawPsyduck};
+${drawDog}${drawDragon}${drawPanda}${drawSponge}${drawStar}${drawPenguin}${drawHuaji}${drawDoge}${drawPepe}${drawPsyduck}
+var DRAWS={dog:drawDog,dragon:drawDragon,panda:drawPanda,sponge:drawSponge,star:drawStar,penguin:drawPenguin,huaji:drawHuaji,doge:drawDoge,pepe:drawPepe,psyduck:drawPsyduck};
 window.CELLW=${PROBE}; window.CELLH=${PROBE};
 window.SCALE=0.8; window.OFFX=0; window.OFFY=0;
 window.render=function(id){
