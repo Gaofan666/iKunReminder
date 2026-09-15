@@ -1814,130 +1814,143 @@ function drawBanana(ctx, q, p, kind) {
 }
 
 /* ============================================================ ⑬ 大眼黑猫 */
-/* 照参考图 1:1 矢量重绘。三种动作：摇尾巴（连续）、眨眼（待机中段两帧）、
-   动耳朵（待机末两帧）。帧数按 kind 写死，方便用帧序号精确控制眨眼时机。 */
+/* 照参考图 1:1 复刻。按图重新量了比例：
+   头很宽（宽高比约 1.3）、占整体高度约 58%；
+   眼睛极大（每只约占头宽 25%、高约头高的 70%，细长椭圆，瞳孔塞满大半个）；
+   身体短、是蹲着的，底部两只前脚并排。
+   三种动作：摇尾巴（连续）、眨眼（待机中段两帧）、动耳朵（待机末两帧）。 */
 function drawCat(ctx, q, p, kind) {
   const FUR = '#2A1A14';
   const FUR_L = '#3D2820';
+  const FUR_D = '#1B100C';
   const CREAM = '#F7EFC9';
-  const CREAM_D = '#DFD3A4';
+  const CREAM_D = '#DCCF9E';
   const INNER = '#A9C79B';
-  const PUPIL = '#140D0A';
+  const PUPIL = '#120C09';
 
-  const n = kind === 'idle' ? 8 : 6;          // 各行的帧数（与下面 SKINS 配置一致）
+  const n = kind === 'idle' ? 8 : 6;
   const idx = Math.round(p * n) % n;
   const t = p * TAU;
 
-  /* --- 眨眼：待机第 4、5 帧 --- */
+  /* 眨眼 */
   let blink = 0;
-  if (kind === 'idle' && (idx === 4 || idx === 5)) blink = idx === 5 ? 0.75 : 1;
+  if (kind === 'idle' && (idx === 4 || idx === 5)) blink = idx === 5 ? 0.72 : 1;
   const eyeOpen = 1 - blink;
 
-  /* --- 动耳朵：待机第 6、7 帧 --- */
+  /* 动耳朵 */
   let earTw = 0;
-  if (kind === 'idle' && idx === 6) earTw = 0.16;
-  if (kind === 'idle' && idx === 7) earTw = -0.13;
-  if (kind === 'cheer') earTw = 0.1;
+  if (kind === 'idle' && idx === 6) earTw = 0.17;
+  if (kind === 'idle' && idx === 7) earTw = -0.14;
+  if (kind === 'cheer') earTw = 0.11;
 
-  /* --- 摇尾巴：一直摆，跳舞时更快 --- */
-  const wag = Math.sin(t * (kind === 'idle' ? 2 : 4)) * (kind === 'idle' ? 0.5 : 0.95);
-  const bob = Math.sin(t) * 1.2 + (kind === 'dance' ? -3 : 0);
+  /* 摇尾巴 */
+  const wag = Math.sin(t * (kind === 'idle' ? 2 : 4)) * (kind === 'idle' ? 0.55 : 0.95);
+  const bob = Math.sin(t) * 1 + (kind === 'dance' ? -2.5 : 0);
 
-  shadow(ctx, 52, 26);
+  shadow(ctx, 46, 24);
 
-  /* ---------- 尾巴（在身后） ---------- */
+  /* ---------- 尾巴（身后，向左下弯出去） ---------- */
   ctx.save();
-  ctx.translate(-18, 34);
-  ctx.rotate(wag * 0.5);
-  ctx.strokeStyle = FUR; ctx.lineWidth = 11; ctx.lineCap = 'round';
+  ctx.translate(-20, 26);
+  ctx.rotate(wag * 0.55);
+  ctx.strokeStyle = FUR; ctx.lineWidth = 12; ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(6, 0);
-  ctx.quadraticCurveTo(-14, 4, -22, -8 - wag * 8);
+  ctx.moveTo(8, 4);
+  ctx.quadraticCurveTo(-8, 12, -16, 2 - wag * 10);
   ctx.stroke();
   ctx.strokeStyle = FUR_L; ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(4, -1);
-  ctx.quadraticCurveTo(-13, 3, -20, -8 - wag * 8);
+  ctx.moveTo(6, 3);
+  ctx.quadraticCurveTo(-7, 11, -14, 2 - wag * 10);
   ctx.stroke();
   ctx.restore();
 
   ctx.save();
   ctx.translate(0, bob);
 
-  /* ---------- 身体（坐姿） ---------- */
+  /* ---------- 身体：短，蹲着 ---------- */
   ctx.fillStyle = FUR;
   ctx.beginPath();
-  ctx.moveTo(0, 6);
-  ctx.bezierCurveTo(22, 6, 26, 24, 24, 38);
-  ctx.bezierCurveTo(22, 48, -22, 48, -24, 38);
-  ctx.bezierCurveTo(-26, 24, -22, 6, 0, 6);
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(20, 0, 24, 14, 23, 26);
+  ctx.bezierCurveTo(22, 36, -22, 36, -23, 26);
+  ctx.bezierCurveTo(-24, 14, -20, 0, 0, 0);
   ctx.closePath(); ctx.fill();
-  /* 前腿 */
-  ctx.fillStyle = FUR_L;
-  ctx.beginPath(); ctx.ellipse(-9, 40, 7, 9, 0.1, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(9, 40, 7, 9, -0.1, 0, TAU); ctx.fill();
+  /* 胸口一点亮面 */
+  ctx.fillStyle = 'rgba(255,255,255,.045)';
+  ctx.beginPath(); ctx.ellipse(-6, 14, 11, 9, 0.1, 0, TAU); ctx.fill();
 
-  /* ---------- 耳朵（先画，压在头下面） ---------- */
+  /* 两只前脚：并排蹲在身前 */
+  [-1, 1].forEach(function (sg) {
+    ctx.fillStyle = FUR_L;
+    ctx.beginPath();
+    ctx.ellipse(sg * 9.5, 33, 8, 6.6, sg * 0.06, 0, TAU); ctx.fill();
+    /* 脚趾缝 */
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sg * 9.5 - 2.2, 29); ctx.lineTo(sg * 9.5 - 2.2, 36);
+    ctx.moveTo(sg * 9.5 + 2.2, 29); ctx.lineTo(sg * 9.5 + 2.2, 36);
+    ctx.stroke();
+  });
+
+  /* ---------- 耳朵（先画，压在头下） ---------- */
   [-1, 1].forEach(function (sg) {
     ctx.save();
-    ctx.translate(sg * 23, -40);
+    ctx.translate(sg * 25, -40);
     ctx.rotate(sg * earTw);
     ctx.fillStyle = FUR;
     ctx.beginPath();
-    ctx.moveTo(-11, 12);
-    ctx.quadraticCurveTo(-9, -14, 4, -16);
-    ctx.quadraticCurveTo(13, -8, 12, 12);
+    ctx.moveTo(-12, 14);
+    ctx.quadraticCurveTo(-10, -14, 3, -17);
+    ctx.quadraticCurveTo(14, -9, 13, 14);
     ctx.closePath(); ctx.fill();
-    /* 内侧灰绿 */
     ctx.fillStyle = INNER;
     ctx.beginPath();
-    ctx.moveTo(-5, 8);
-    ctx.quadraticCurveTo(-4, -7, 3, -9);
-    ctx.quadraticCurveTo(8, -3, 7, 8);
+    ctx.moveTo(-5.5, 10);
+    ctx.quadraticCurveTo(-4, -7, 3, -10);
+    ctx.quadraticCurveTo(9, -3, 8, 10);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   });
 
-  /* ---------- 头：宽圆 ---------- */
+  /* ---------- 头：很宽（宽高比约 1.3） ---------- */
   ctx.fillStyle = FUR;
   ctx.beginPath();
-  ctx.moveTo(0, -50);
-  ctx.bezierCurveTo(26, -50, 36, -36, 36, -18);
-  ctx.bezierCurveTo(36, 2, 24, 12, 0, 12);
-  ctx.bezierCurveTo(-24, 12, -36, 2, -36, -18);
-  ctx.bezierCurveTo(-36, -36, -26, -50, 0, -50);
+  ctx.moveTo(0, -48);
+  ctx.bezierCurveTo(28, -48, 34, -36, 34, -22);
+  ctx.bezierCurveTo(34, -6, 26, 4, 0, 4);
+  ctx.bezierCurveTo(-26, 4, -34, -6, -34, -22);
+  ctx.bezierCurveTo(-34, -36, -28, -48, 0, -48);
   ctx.closePath(); ctx.fill();
-  /* 头顶一点亮面，避免整块死黑 */
   ctx.fillStyle = 'rgba(255,255,255,.05)';
-  ctx.beginPath(); ctx.ellipse(-10, -38, 20, 9, -0.15, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-9, -38, 18, 7, -0.12, 0, TAU); ctx.fill();
 
-  /* ---------- 眼睛：米黄大眼圈 + 大黑瞳孔 ---------- */
+  /* ---------- 眼睛：极大、细长，瞳孔塞满大半个 ---------- */
   [-1, 1].forEach(function (sg) {
-    const ex = sg * 14, ey = -18;
-    const rx = 11.5, ry = 15.5 * eyeOpen;
+    const ex = sg * 13, ey = -22;
+    const rx = 9.5, ry = 17.5 * eyeOpen;
     if (ry < 1.6) {
-      /* 眨到底：画一条闭合的线 */
-      ctx.strokeStyle = CREAM; ctx.lineWidth = 3; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(ex - rx, ey); ctx.lineTo(ex + rx, ey); ctx.stroke();
+      ctx.strokeStyle = CREAM; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(ex - rx + 1, ey); ctx.lineTo(ex + rx - 1, ey); ctx.stroke();
       return;
     }
-    /* 眼圈 */
+    /* 米黄眼圈 */
     ctx.fillStyle = CREAM;
     ctx.beginPath(); ctx.ellipse(ex, ey, rx, ry, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = CREAM_D;
-    ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.62, rx * 0.92, ry * 0.3, 0, 0, TAU); ctx.fill();
-    /* 瞳孔：占满大半个眼圈 */
+    ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.66, rx * 0.9, ry * 0.28, 0, 0, TAU); ctx.fill();
+    /* 大黑瞳孔 */
     ctx.fillStyle = PUPIL;
-    ctx.beginPath(); ctx.ellipse(ex, ey, rx * 0.66, ry * 0.72, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.04, rx * 0.72, ry * 0.8, 0, 0, TAU); ctx.fill();
     /* 高光 */
-    ctx.fillStyle = 'rgba(255,255,255,.85)';
-    ctx.beginPath(); ctx.ellipse(ex - rx * 0.24, ey - ry * 0.3, rx * 0.16, ry * 0.14, -0.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.ellipse(ex - rx * 0.26, ey - ry * 0.32, rx * 0.17, ry * 0.13, -0.3, 0, TAU); ctx.fill();
   });
 
-  /* ---------- 鼻子（很小一点） ---------- */
+  /* ---------- 鼻子：很小一点 ---------- */
   ctx.fillStyle = '#6B4A3E';
   ctx.beginPath();
-  ctx.moveTo(-3.4, -2); ctx.lineTo(3.4, -2); ctx.lineTo(0, 2.2);
+  ctx.moveTo(-3.6, -6); ctx.lineTo(3.6, -6); ctx.lineTo(0, -1.8);
   ctx.closePath(); ctx.fill();
 
   ctx.restore();
