@@ -88,6 +88,13 @@ function createWindow() {
   });
 
   win.on('closed', () => { win = null; });
+
+  /* 显示 / 隐藏要让渲染进程知道：隐藏时它会把动画和 DOM 刷新全停掉。
+     之前收进托盘还占着近两个核心，就是因为隐藏时啥都没停。 */
+  win.on('show', () => send('win-visible', true));
+  win.on('hide', () => send('win-visible', false));
+  win.on('minimize', () => send('win-visible', false));
+  win.on('restore', () => send('win-visible', true));
 }
 
 /* ------------------------------------------------- 到点：抢到最前面 */

@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    电子坤坤 · 喝水休息提醒器  样式表
    风格：赛博霓虹 / 全息舞台 / CRT 扫描线
    ========================================================= */
@@ -27,10 +27,16 @@ body{
     radial-gradient(1100px 640px at 50% -12%, #D6ECFA 0%, transparent 62%),
     radial-gradient(880px 620px at 104% 108%, #E6F5E0 0%, transparent 58%),
     linear-gradient(180deg,var(--bg-1) 0%, var(--bg-0) 100%);
-  background-attachment:fixed;
+  /* 千万别写 background-attachment:fixed —— 页面本来就是整页等比缩放、不滚动，
+     fixed 没有任何视觉收益，却让合成器每帧重栅格化整个视口的背景，成本极高。 */
   overflow-x:hidden;
   -webkit-font-smoothing:antialiased;
 }
+
+/* 窗口隐藏（收进托盘）时暂停所有 CSS 动画，别让合成器空转 */
+body.anim-off *,
+body.anim-off *::before,
+body.anim-off *::after{animation-play-state:paused !important}
 
 /* ---------- 背景：透视网格地面 ---------- */
 .grid-floor{

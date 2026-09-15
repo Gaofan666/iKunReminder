@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onShowShichen: (cb) => ipcRenderer.on('show-shichen', () => cb()),
   onAddItem: (cb) => ipcRenderer.on('add-item', () => cb()),
   onPower: (cb) => ipcRenderer.on('power', (e, kind) => cb(kind)),
+  onWinVisible: (cb) => ipcRenderer.on('win-visible', (e, vis) => cb(vis)),
 
   /* 页面 → 主进程：同步运行状态与提醒列表，用于刷新托盘菜单 */
   syncState: (state) => ipcRenderer.send('state', state)

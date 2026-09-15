@@ -444,6 +444,25 @@
      桌面上只要角色本体，其余全部透明。 */
   let PLAIN = false;
 
+  /* 渐变缓存：脸和头发那几个渐变每帧重建，但坐标和颜色根本不变，
+     重建纯属浪费（每个 CanvasGradient 都要重新分配 + 上传给合成器）。
+     按 canvas 上下文分组缓存，画出来的东西一模一样。 */
+  const gradCache = new WeakMap();
+  function linGrad(ctx, x0, y0, x1, y1, stops) {
+    let m = gradCache.get(ctx);
+    if (!m) { m = new Map(); gradCache.set(ctx, m); }
+    const key = x0 + ',' + y0 + ',' + x1 + ',' + y1 + '|' + stops.map(function (s) {
+      return s[0] + ':' + s[1];
+    }).join(';');
+    let g = m.get(key);
+    if (!g) {
+      g = ctx.createLinearGradient(x0, y0, x1, y1);
+      stops.forEach(function (s) { g.addColorStop(s[0], s[1]); });
+      m.set(key, g);
+    }
+    return g;
+  }
+
   /* 绘制角色（本地坐标：脚底为原点，向上为负 y）
      造型照着参考图来：黄色小鸡 + 银灰中分乱发 + 半眯大眼 + 橙鸭嘴 + 红脸蛋
      + 黑卫衣（拉链 + 浅色背带）+ 浅灰背带裤 + 黑鞋，篮球拿在画面左手边 */
@@ -598,10 +617,7 @@
     const TILT = -0.06;                                // 脑袋天生歪一点
 
     // ---- 脸：不对称的歪蛋 ----
-    const g = ctx.createLinearGradient(0, -70, 0, 66);
-    g.addColorStop(0, C.chickL);
-    g.addColorStop(0.5, C.chick);
-    g.addColorStop(1, C.chickD);
+    const g = linGrad(ctx, 0, -70, 0, 66, [[0, C.chickL], [0.5, C.chick], [1, C.chickD]]);
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.moveTo(-70, -8);
@@ -618,10 +634,7 @@
     // ---- 银灰中分乱发：又大又乱，一撮一撮 ----
     ctx.save();
     ctx.rotate(lag2);
-    const hg = ctx.createLinearGradient(0, -96, 0, 24);
-    hg.addColorStop(0, C.hairL);
-    hg.addColorStop(0.55, C.hair);
-    hg.addColorStop(1, C.hairD);
+    const hg = linGrad(ctx, 0, -96, 0, 24, [[0, C.hairL], [0.55, C.hair], [1, C.hairD]]);
     ctx.fillStyle = hg;
     ctx.beginPath();
     ctx.moveTo(-92, 18);
@@ -1559,13 +1572,67 @@
       }
     }
     if (almanacDate !== todayKey()) renderAlmanac();   // 跨天刷新黄历
-    render();
+    /* 窗口看不见的时候不碰 DOM：倒计时照常算、到点照样弹提醒，
+       但没必要每 250ms 去改一堆元素的文本和宽度。 */
+    if (animRunning) render();
   }
 
+  /* ------------------------------------------------- 空闲时把开销压到最低
+     收进托盘后实测仍占近两个核心，原因就是隐藏时动画和 DOM 刷新全在跑。
+     这里在窗口不可见时：停掉画布 rAF、把计时器降到 1 秒、暂停 CSS 动画。
+     倒计时用 Date.now() 差值推进，所以降频不影响准点，最多晚 1 秒。 */
+  let rafId = 0;
+  let animRunning = false;      // 初始为 false，交给 startAnim() 真正拉起来
+  let tickTimer = 0;
+  let tickMs = 250;
+
+  /* 限帧：rAF 每秒 60 次会让合成器每帧都给这扇（透明、1181×881 的）窗口做一次
+     完整合成 —— 实测 GPU 进程因此长期吃满 140%，而画面本身根本没变。
+     这个角色动画是慢速呼吸/摇摆，30fps 肉眼分辨不出，成本却直接砍半。
+     注意用的是 rAF 的时间戳推进动画，所以动画速度不受限帧影响。 */
+  const FRAME_MS = 1000 / 30;
+  let lastFrameAt = 0;
+
   function loop(now) {
+    if (!animRunning) return;
+    rafId = requestAnimationFrame(loop);
+    if (now - lastFrameAt < FRAME_MS - 1) return;   // 这一帧跳过
+    lastFrameAt = now;
     stage.frame(now);
     if (!el.overlay.hidden) alertStage.frame(now);
-    requestAnimationFrame(loop);
+  }
+
+  function startAnim() {
+    if (animRunning) return;
+    animRunning = true;
+    lastFrameAt = 0;
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function stopAnim() {
+    animRunning = false;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  }
+
+  function setTickRate(ms) {
+    if (tickMs === ms && tickTimer) return;
+    tickMs = ms;
+    if (tickTimer) clearInterval(tickTimer);
+    tickTimer = setInterval(tick, ms);
+  }
+
+  function applyVisibility(visible) {
+    document.body.classList.toggle('anim-off', !visible);
+    if (visible === animRunning) return;
+    if (visible) {
+      last = Date.now();
+      setTickRate(250);
+      startAnim();
+      render();
+    } else {
+      setTickRate(1000);
+      stopAnim();
+    }
   }
 
   /* ---------------------------------------------------------- 事件绑定 */
@@ -1847,8 +1914,10 @@
     const unlock = function () { Sound.ensure(); document.removeEventListener('pointerdown', unlock); };
     document.addEventListener('pointerdown', unlock);
 
+    /* 窗口可见性：主进程显式通知 + 网页自身的 visibilitychange 双保险 */
+    if (native && native.onWinVisible) native.onWinVisible(applyVisibility);
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { last = Date.now(); render(); }
+      applyVisibility(!document.hidden);
     });
   }
 
@@ -1873,10 +1942,11 @@
     setTimeout(capPanelList, 140);   // 等字体和布局稳定后再量一次
 
     last = Date.now();
-    setInterval(tick, 250);
-    requestAnimationFrame(loop);
+    setTickRate(250);
+    startAnim();
     renderAlmanac();
     setCaption('待机中 · 到点会提醒你');
+    applyVisibility(!document.hidden);   // 启动时按当前可见性定档
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
