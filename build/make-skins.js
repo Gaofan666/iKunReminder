@@ -1863,9 +1863,9 @@ function drawCat(ctx, q, p, kind) {
     };
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     tailPath();
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 15; ctx.stroke();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 13; ctx.stroke();
     tailPath();
-    ctx.strokeStyle = FUR; ctx.lineWidth = 11.6; ctx.stroke();
+    ctx.strokeStyle = FUR; ctx.lineWidth = 9.6; ctx.stroke();
     /* 尾身上一道浅高光 */
     ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 3;
     ctx.beginPath();
@@ -1914,20 +1914,23 @@ function drawCat(ctx, q, p, kind) {
     /* 基础内倾：左耳逆时针(sg=-1)、右耳顺时针(sg=+1)，
        把外根部的那个角转进头的轮廓里，接缝就不会突出去 */
     ctx.rotate(sg * (0.22 + earTw));
-    /* 耳朵整体放大，根部依然埋深 */
+    /* 外轮廓回到上一版的大小，但绿区比那一版更大 */
     ctx.fillStyle = FUR;
     ctx.beginPath();
-    ctx.moveTo(-17, 26);
-    ctx.quadraticCurveTo(-14, -20, 2, -24);
-    ctx.quadraticCurveTo(16, -14, 16, 26);
+    ctx.moveTo(-15, 24);
+    ctx.quadraticCurveTo(-12, -16, 2, -19);
+    ctx.quadraticCurveTo(14, -11, 14, 24);
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
-    /* 内耳绿只占【外侧一半】：左耳在左半、右耳在右半（sg<0 取左，sg>0 取右） */
+    /* 内耳绿：占外侧一半，面积比上一版大（从外沿一直铺到过中线一点）
+       sg<0 取左半、sg>0 取右半 */
+    const gi = sg * 1.5;            // 内侧边界（略过中线）
+    const go = sg * 12.5;           // 外侧边界（贴着耳沿）
     ctx.fillStyle = INNER;
     ctx.beginPath();
-    ctx.moveTo(sg * 2 - sg * 6, 10);
-    ctx.quadraticCurveTo(sg * 2 - sg * 3.5, -9, sg * 5, -17);
-    ctx.quadraticCurveTo(sg * 2 + sg * 4, -7, sg * 2 + sg * 6, 10);
+    ctx.moveTo(gi, 12);
+    ctx.quadraticCurveTo((gi + go) / 2 - sg * 2, -10, sg * 4, -15);
+    ctx.quadraticCurveTo(go - sg * 1.5, -3, go, 12);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   });
