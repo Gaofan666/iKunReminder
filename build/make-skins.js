@@ -16,7 +16,7 @@ const fs = require('fs');
 
 const root = path.join(__dirname, '..');
 const TAU = Math.PI * 2;
-const PROBE = 240;               // 探测格尺寸
+const PROBE = 240;
 const FH = 140;                  // 成品单帧高度（固定）
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 app.on('window-all-closed', () => { });
@@ -1259,150 +1259,214 @@ function drawPsyduck(ctx, q, p, kind) {
 
 /* ============================================================ ⑩ 学术企鹅 */
 function drawPenguin(ctx, q, p, kind) {
-  const LINE = '#111111';
+  const INK = '#0E0E12';
   const s1 = Math.sin(p * TAU);
-  const cheer = kind === 'cheer' ? 1 : kind === 'dance' ? 0.6 : 0.25;
-  shadow(ctx, 50, 28);
+  const lift = q.arm * 12;
+  shadow(ctx, 54, 32);
 
-  /* 橙脚 */
+  /* ---- 橙脚（带渐变，别是纯色块） ---- */
   [-1, 1].forEach(function (sg) {
-    ctx.fillStyle = '#F2A81B';
-    ctx.beginPath(); ctx.ellipse(sg * 14, 48, 13, 7, 0, 0, TAU); ctx.fill();
-    ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+    const fg = ctx.createLinearGradient(0, 42, 0, 56);
+    fg.addColorStop(0, '#F7B733'); fg.addColorStop(1, '#C97F12');
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.ellipse(sg * 15, 48, 15, 8, sg * 0.1, 0, TAU); ctx.fill();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(90,55,5,.55)'; ctx.stroke();
   });
 
-  /* 身体：黑背 */
-  const bg = ctx.createLinearGradient(0, -36, 0, 42);
-  bg.addColorStop(0, '#2A2A33'); bg.addColorStop(1, '#141419');
+  /* ---- 身体：黑背。用多段渐变做出体积，而不是一块死黑 ---- */
+  const bg = ctx.createLinearGradient(-30, -40, 30, 46);
+  bg.addColorStop(0, '#4A4A57');
+  bg.addColorStop(0.28, '#26262F');
+  bg.addColorStop(0.62, '#141419');
+  bg.addColorStop(1, '#08080B');
   ctx.fillStyle = bg;
   ctx.beginPath();
-  ctx.moveTo(0, -36);
-  ctx.bezierCurveTo(26, -36, 32, -10, 30, 16);
-  ctx.bezierCurveTo(28, 40, -28, 40, -30, 16);
-  ctx.bezierCurveTo(-32, -10, -26, -36, 0, -36);
+  ctx.moveTo(0, -40);
+  ctx.bezierCurveTo(28, -40, 35, -12, 33, 16);
+  ctx.bezierCurveTo(31, 42, -31, 42, -33, 16);
+  ctx.bezierCurveTo(-35, -12, -28, -40, 0, -40);
   ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* 白肚子 */
-  ctx.fillStyle = '#FAFAFA';
-  ctx.beginPath(); ctx.ellipse(0, 6, 20, 25, 0, 0, TAU); ctx.fill();
-  ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(17,17,17,.35)'; ctx.stroke();
+  /* 背部高光 */
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#8A8A9C';
+  ctx.beginPath(); ctx.ellipse(-17, -14, 7, 22, 0.18, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1;
 
-  /* 圆框眼镜（学术感） */
-  ctx.strokeStyle = '#C9A227'; ctx.lineWidth = 2.6;
-  ctx.beginPath(); ctx.arc(-12, -18, 10, 0, TAU); ctx.stroke();
-  ctx.beginPath(); ctx.arc(12, -18, 10, 0, TAU); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-2, -19); ctx.lineTo(2, -19); ctx.stroke();
+  /* ---- 白肚子：边缘压暗，中间提亮 ---- */
+  const wg = ctx.createRadialGradient(-6, -4, 3, 0, 8, 34);
+  wg.addColorStop(0, '#FFFFFF');
+  wg.addColorStop(0.62, '#F2F2F6');
+  wg.addColorStop(1, '#C9C9D4');
+  ctx.fillStyle = wg;
+  ctx.beginPath(); ctx.ellipse(0, 7, 21, 27, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(60,60,75,.35)'; ctx.stroke();
 
-  /* 眼睛：熬夜学术眼 */
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath(); ctx.arc(-12, -18, 8, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.arc(12, -18, 8, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.arc(-12 + s1 * 1.4, -17, 3.4, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.arc(12 + s1 * 1.4, -17, 3.4, 0, TAU); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.9)';
-  ctx.beginPath(); ctx.arc(-13 + s1 * 1.4, -18.4, 1.2, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.arc(11 + s1 * 1.4, -18.4, 1.2, 0, TAU); ctx.fill();
-  /* 黑眼圈（熬夜赶稿） */
-  ctx.strokeStyle = 'rgba(120,110,140,.55)'; ctx.lineWidth = 2.4;
-  ctx.beginPath(); ctx.arc(-12, -14, 7.4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
-  ctx.beginPath(); ctx.arc(12, -14, 7.4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
-
-  /* 橙嘴 */
-  ctx.fillStyle = '#F2A81B';
-  ctx.beginPath();
-  ctx.moveTo(-8, -6); ctx.lineTo(8, -6); ctx.lineTo(0, 4);
+  /* ---- 黑领带 ---- */
+  const tg = ctx.createLinearGradient(-6, -6, 6, 26);
+  tg.addColorStop(0, '#4A4A57'); tg.addColorStop(0.5, '#1A1A22'); tg.addColorStop(1, '#08080B');
+  ctx.fillStyle = tg;
+  ctx.beginPath();                       // 结
+  ctx.moveTo(0, -10);
+  ctx.lineTo(-6.5, -5); ctx.lineTo(0, 1); ctx.lineTo(6.5, -5);
   ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
-
-  /* 博士帽 */
-  ctx.fillStyle = '#1B1B22';
-  ctx.beginPath();                       // 帽筒
-  ctx.moveTo(-14, -40); ctx.lineTo(14, -40);
-  ctx.lineTo(11, -52); ctx.lineTo(-11, -52);
+  ctx.beginPath();                       // 带
+  ctx.moveTo(-5, 1); ctx.lineTo(5, 1);
+  ctx.lineTo(7.5, 22); ctx.lineTo(0, 29); ctx.lineTo(-7.5, 22);
   ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
-  ctx.beginPath();                       // 方板
-  ctx.moveTo(0, -66); ctx.lineTo(32, -54);
-  ctx.lineTo(0, -44); ctx.lineTo(-32, -54);
-  ctx.closePath();
-  const mg = ctx.createLinearGradient(0, -66, 0, -44);
-  mg.addColorStop(0, '#33333D'); mg.addColorStop(1, '#16161B');
-  ctx.fillStyle = mg; ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.moveTo(-24, -55); ctx.lineTo(0, -62); ctx.stroke();
-  /* 流苏 */
-  ctx.strokeStyle = '#E5B93C'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,0,0,.5)';
+  ctx.beginPath(); ctx.moveTo(-6, -5); ctx.lineTo(6, -5); ctx.stroke();
+
+  /* ---- 左翅：贴着身侧下压 ---- */
+  const lg = ctx.createLinearGradient(-38, -10, -22, 26);
+  lg.addColorStop(0, '#33333D'); lg.addColorStop(1, '#0B0B0F');
+  ctx.fillStyle = lg;
   ctx.beginPath();
-  ctx.moveTo(30, -54);
-  ctx.quadraticCurveTo(38 + s1 * 3, -46, 34 + s1 * 4, -32);
-  ctx.stroke();
-  ctx.fillStyle = '#F0C43A';
-  ctx.beginPath(); ctx.arc(34 + s1 * 4, -30, 4.4, 0, TAU); ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+  ctx.moveTo(-27, -18);
+  ctx.quadraticCurveTo(-40, 2, -33, 26);
+  ctx.quadraticCurveTo(-26, 30, -23, 18);
+  ctx.quadraticCurveTo(-24, -2, -20, -16);
+  ctx.closePath(); ctx.fill();
 
-  /* 左翅：垂着 */
-  ctx.fillStyle = '#1B1B22';
-  ctx.beginPath(); ctx.ellipse(-30, 10, 8, 17, -0.2, 0, TAU); ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-
-  /* 右翅：举起牌子（越兴奋举越高） */
-  const lift = q.arm * 10;
-  ctx.save();
-  ctx.translate(26, 4 - lift);
-  ctx.rotate(-0.5 - q.arm * 0.15);
-  ctx.fillStyle = '#1B1B22';
-  ctx.beginPath(); ctx.ellipse(0, 0, 8, 15, 0.3, 0, TAU); ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-  /* 牌杆 */
-  ctx.strokeStyle = '#B98B52'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(2, -6); ctx.lineTo(12, -46); ctx.stroke();
-  ctx.lineWidth = 2; ctx.strokeStyle = '#6B4A2A';
-  ctx.beginPath(); ctx.moveTo(2, -6); ctx.lineTo(12, -46); ctx.stroke();
-  ctx.restore();
-
-  /* ---- 大牌子 ---- */
-  ctx.save();
-  ctx.translate(38, -56 - lift * 0.5);
-  ctx.rotate(-0.06);
-  const BW = 34, BH = 15;                 // 半宽 / 半高
+  /* ---- 嘴：橙色，上下两片 ---- */
+  const bkg = ctx.createLinearGradient(0, -16, 0, 4);
+  bkg.addColorStop(0, '#FBC24A'); bkg.addColorStop(1, '#D98A12');
+  ctx.fillStyle = bkg;
   ctx.beginPath();
-  ctx.moveTo(-BW + 3, -BH);
-  ctx.lineTo(BW - 3, -BH); ctx.quadraticCurveTo(BW, -BH, BW, -BH + 3);
-  ctx.lineTo(BW, BH - 3); ctx.quadraticCurveTo(BW, BH, BW - 3, BH);
-  ctx.lineTo(-BW + 3, BH); ctx.quadraticCurveTo(-BW, BH, -BW, BH - 3);
-  ctx.lineTo(-BW, -BH + 3); ctx.quadraticCurveTo(-BW, -BH, -BW + 3, -BH);
-  ctx.closePath();
-  const sg2 = ctx.createLinearGradient(0, -BH, 0, BH);
-  sg2.addColorStop(0, '#FFFFFF'); sg2.addColorStop(1, '#EFEFE6');
-  ctx.fillStyle = sg2; ctx.fill();
-  ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
-  /* 牌子四角的小图钉 */
-  ctx.fillStyle = '#C9A227';
-  [[-BW + 5, -BH + 5], [BW - 5, -BH + 5], [-BW + 5, BH - 5], [BW - 5, BH - 5]].forEach(function (k) {
-    ctx.beginPath(); ctx.arc(k[0], k[1], 1.8, 0, TAU); ctx.fill();
+  ctx.moveTo(-11, -10);
+  ctx.quadraticCurveTo(0, -16, 11, -10);
+  ctx.quadraticCurveTo(0, 4, -11, -10);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(120,70,5,.6)'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-9, -8.5); ctx.lineTo(9, -8.5);
+  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(120,70,5,.5)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  ctx.beginPath(); ctx.ellipse(-4, -11.5, 3.4, 1.4, -0.2, 0, TAU); ctx.fill();
+
+  /* ---- 大墨镜：镜片近黑，靠两道强反光撑住 ---- */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath();
+    ctx.moveTo(sg * 27, -31);
+    ctx.quadraticCurveTo(sg * 14, -38, sg * 4, -31);
+    ctx.quadraticCurveTo(sg * 3, -16, sg * 14, -12);
+    ctx.quadraticCurveTo(sg * 26, -11, sg * 28, -22);
+    ctx.closePath();
+    const lg2 = ctx.createLinearGradient(sg * 4, -36, sg * 28, -12);
+    lg2.addColorStop(0, '#4E4E5C'); lg2.addColorStop(0.4, '#141420'); lg2.addColorStop(1, '#05050A');
+    ctx.fillStyle = lg2; ctx.fill();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = '#0A0A0F'; ctx.stroke();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineWidth = 4.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 5, -12); ctx.lineTo(sg * 22, -37); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(sg * 14, -10); ctx.lineTo(sg * 28, -30); ctx.stroke();
+    ctx.restore();
   });
-  /* accepted 字样 */
-  ctx.fillStyle = '#159C4B';
-  ctx.font = 'bold 19px "Arial Black","Segoe UI",Arial,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('accepted', 0, 0.5);
-  /* 底下一道绿色下划线，像批注 */
-  ctx.strokeStyle = '#159C4B'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-26, 8.5); ctx.lineTo(26, 8.5); ctx.stroke();
+  /* 鼻梁 + 镜腿 */
+  ctx.fillStyle = '#0A0A0F';
+  ctx.beginPath(); ctx.rect(-5, -32, 10, 3.6); ctx.fill();
+  ctx.strokeStyle = '#0A0A0F'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(-27, -26); ctx.lineTo(-36, -31); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(27, -26); ctx.lineTo(36, -31); ctx.stroke();
+
+  /* ---- 黑礼帽：帽檐 + 帽冠 + 帽带 ---- */
+  ctx.save();
+  ctx.translate(1 + s1 * 0.6, -1);
+  /* 帽檐 */
+  ctx.beginPath();
+  ctx.ellipse(0, -42, 36, 9.5, 0, 0, TAU);
+  const brg = ctx.createLinearGradient(0, -52, 0, -33);
+  brg.addColorStop(0, '#3E3E4A'); brg.addColorStop(1, '#0A0A0F');
+  ctx.fillStyle = brg; ctx.fill();
+  ctx.lineWidth = 1.8; ctx.strokeStyle = '#05050A'; ctx.stroke();
+  /* 帽冠 */
+  ctx.beginPath();
+  ctx.moveTo(-22, -43);
+  ctx.quadraticCurveTo(-24, -62, -12, -68);
+  ctx.quadraticCurveTo(0, -71, 12, -68);
+  ctx.quadraticCurveTo(24, -62, 22, -43);
+  ctx.closePath();
+  const crg = ctx.createLinearGradient(-22, -70, 22, -43);
+  crg.addColorStop(0, '#4E4E5C'); crg.addColorStop(0.45, '#22222B'); crg.addColorStop(1, '#0A0A0F');
+  ctx.fillStyle = crg; ctx.fill();
+  ctx.lineWidth = 1.8; ctx.strokeStyle = '#05050A'; ctx.stroke();
+  /* 帽冠上的凹痕 */
+  ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(-9, -66); ctx.quadraticCurveTo(0, -60, 9, -66); ctx.stroke();
+  /* 帽带 */
+  ctx.fillStyle = '#141419';
+  ctx.beginPath();
+  ctx.moveTo(-22.5, -50);
+  ctx.quadraticCurveTo(0, -44, 22.5, -50);
+  ctx.lineTo(22.5, -44);
+  ctx.quadraticCurveTo(0, -38, -22.5, -44);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#C9A227';
+  ctx.beginPath(); ctx.rect(-6, -49.5, 12, 4.6); ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
   ctx.restore();
 
-  /* 欢呼时头顶撒几片纸屑 */
+  /* ---- 右翅：举牌子 ---- */
+  ctx.save();
+  ctx.translate(25, 0 - lift * 0.5);
+  ctx.rotate(-0.42 - q.arm * 0.12);
+  const rg = ctx.createLinearGradient(0, -14, 0, 26);
+  rg.addColorStop(0, '#33333D'); rg.addColorStop(1, '#0B0B0F');
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.moveTo(-3, -16);
+  ctx.quadraticCurveTo(14, -2, 8, 26);
+  ctx.quadraticCurveTo(0, 30, -4, 18);
+  ctx.quadraticCurveTo(-6, 0, -8, -14);
+  ctx.closePath(); ctx.fill();
+  /* 牌杆 */
+  ctx.strokeStyle = '#8A6236'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(12, -52); ctx.stroke();
+  ctx.strokeStyle = '#C79A5E'; ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.moveTo(-1, -13); ctx.lineTo(11, -53); ctx.stroke();
+  ctx.restore();
+
+  /* ---- 大牌子：尺寸由文字实测宽度反推，保证字在牌里 ---- */
+  const TEXT = 'accepted';
+  const FS = 16;
+  ctx.font = '700 ' + FS + 'px "Arial Black","Segoe UI",Arial,sans-serif';
+  const tw = ctx.measureText(TEXT).width;
+  const halfW = tw / 2 + 11;              // 左右内边距收窄，避免整体过宽
+  const halfH = FS * 0.62 + 8;
+
+  ctx.save();
+  ctx.translate(halfW - 2, -46 - lift * 0.4);   // 牌子贴着企鹅右上，不伸太远
+  ctx.rotate(-0.05);
+  /* 牌面 */
+  ctx.beginPath();
+  const R = 6, W = halfW, H = halfH;
+  ctx.moveTo(-W + R, -H);
+  ctx.lineTo(W - R, -H); ctx.quadraticCurveTo(W, -H, W, -H + R);
+  ctx.lineTo(W, H - R); ctx.quadraticCurveTo(W, H, W - R, H);
+  ctx.lineTo(-W + R, H); ctx.quadraticCurveTo(-W, H, -W, H - R);
+  ctx.lineTo(-W, -H + R); ctx.quadraticCurveTo(-W, -H, -W + R, -H);
+  ctx.closePath();
+  const sg3 = ctx.createLinearGradient(0, -H, 0, H);
+  sg3.addColorStop(0, '#FFFFFF'); sg3.addColorStop(0.55, '#FBFBF4'); sg3.addColorStop(1, '#E4E4DA');
+  ctx.fillStyle = sg3; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = '#2A2A33'; ctx.stroke();
+  /* 内侧一道细边，像打印的边框 */
+  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(42,42,51,.35)';
+  ctx.beginPath(); ctx.rect(-W + 5, -H + 5, W * 2 - 10, H * 2 - 10); ctx.stroke();
+  /* 文字：居中，一定在牌内 */
+  ctx.fillStyle = '#12874A';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(TEXT, 0, 1);
+  ctx.restore();
+
+  /* 跳舞/欢呼：撒一点纸屑 */
   if (kind !== 'idle') {
-    const rnd = [0.15, 0.45, 0.75];
-    rnd.forEach(function (t0, i) {
+    [0.15, 0.45, 0.75].forEach(function (t0, i) {
       const t = (p * 1.5 + t0) % 1;
       ctx.globalAlpha = 1 - t;
       ctx.fillStyle = ['#E2564E', '#F0C43A', '#3E7BD6'][i];
       ctx.save();
-      ctx.translate(-30 + i * 12 - t * 8, -60 + t * 40);
+      ctx.translate(-34 + i * 14 - t * 8, -66 + t * 44);
       ctx.rotate(t * 6 + i);
       ctx.fillRect(-3.4, -2, 6.8, 4);
       ctx.restore();
