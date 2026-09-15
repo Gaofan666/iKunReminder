@@ -2,8 +2,8 @@
   "name": "邪恶方块",
   "author": "",
   "frame": {
-    "w": 146,
-    "h": 236
+    "w": 145,
+    "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",

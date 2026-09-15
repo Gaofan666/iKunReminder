@@ -2,8 +2,8 @@
   "name": "悲伤蛙",
   "author": "",
   "frame": {
-    "w": 124,
-    "h": 236
+    "w": 122,
+    "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",

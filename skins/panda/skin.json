@@ -2,8 +2,8 @@
   "name": "熊猫人",
   "author": "",
   "frame": {
-    "w": 165,
-    "h": 236
+    "w": 164,
+    "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",

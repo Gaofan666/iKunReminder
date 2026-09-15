@@ -2,8 +2,8 @@
   "name": "往脑袋中间使劲",
   "author": "",
   "frame": {
-    "w": 136,
-    "h": 236
+    "w": 135,
+    "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",

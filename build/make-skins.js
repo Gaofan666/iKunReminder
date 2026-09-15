@@ -17,7 +17,7 @@ const fs = require('fs');
 const root = path.join(__dirname, '..');
 const TAU = Math.PI * 2;
 const PROBE = 240;
-const FH = 236;                  // 成品单帧高度（固定）
+const FH = 520;                  // 成品单帧高度（固定）
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 app.on('window-all-closed', () => { });
 
@@ -1882,25 +1882,19 @@ app.whenReady().then(async () => {
         "window.CELLW=" + PROBE + ";window.CELLH=" + PROBE +
         ";window.SCALE=0.8;window.OFFX=0;window.OFFY=0;window.render('" + s.id + "')");
       await sleep(240);
-      const probeShot = await w.webContents.capturePage();
-      /* 截图带屏幕缩放，先归一化回 CSS 像素再量，否则坐标全错位 */
-      const probe = probeShot.resize({ width: PROBE * 6, height: PROBE * 3, quality: 'best' });
-      const pb = probe.toBitmap(), ps = probe.getSize();
-      const PA = (xx, yy) => pb[(yy * ps.width + xx) * 4 + 3];
-      let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-      for (let r = 0; r < 3; r++) {
-        for (let c = 0; c < 6; c++) {
-          for (let yy = 0; yy < PROBE; yy++) {
-            for (let xx = 0; xx < PROBE; xx++) {
-              if (PA(c * PROBE + xx, r * PROBE + yy) > 8) {
-                const dx = xx - PROBE / 2, dy = yy - PROBE / 2;
-                if (dx < minX) minX = dx; if (dx > maxX) maxX = dx;
-                if (dy < minY) minY = dy; if (dy > maxY) maxY = dy;
-              }
-            }
-          }
-        }
-      }
+      /* 在页面里直接量包围盒：不用截图，免得受窗口尺寸和屏幕缩放影响 */
+      const env = await w.webContents.executeJavaScript(
+        "(function(){window.CELLW=" + PROBE + ";window.CELLH=" + PROBE +
+        ";window.SCALE=0.8;window.OFFX=0;window.OFFY=0;window.render('" + s.id + "');" +
+        "var c=document.getElementById('c'),x=c.getContext('2d');" +
+        "var d=x.getImageData(0,0,c.width,c.height).data;" +
+        "var minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;" +
+        "for(var r=0;r<3;r++)for(var cc=0;cc<6;cc++)for(var yy=0;yy<" + PROBE + ";yy++)for(var xx=0;xx<" + PROBE + ";xx++){" +
+        "if(d[((r*" + PROBE + "+yy)*c.width+(cc*" + PROBE + "+xx))*4+3]>8){" +
+        "var dx=xx-" + PROBE + "/2,dy=yy-" + PROBE + "/2;" +
+        "if(dx<minX)minX=dx;if(dx>maxX)maxX=dx;if(dy<minY)minY=dy;if(dy>maxY)maxY=dy;}}" +
+        "return {minX:minX,maxX:maxX,minY:minY,maxY:maxY};})()");
+      const minX = env.minX, maxX = env.maxX, minY = env.minY, maxY = env.maxY;
       if (maxX < minX) { minX = -40; maxX = 40; minY = -50; maxY = 50; }
       const envW = maxX - minX, envH = maxY - minY;
 
@@ -1922,20 +1916,17 @@ app.whenReady().then(async () => {
         ";window.SCALE=" + scale.toFixed(4) + ";window.OFFX=" + offX.toFixed(2) +
         ";window.OFFY=" + offY.toFixed(2) + ";window.render('" + s.id + "')");
       await sleep(260);
-      const shot = await w.webContents.capturePage();
-      /* 截图带屏幕缩放（比如 1.5 倍），要先按比例换算裁切区域再缩回来 */
-      const shotSize = shot.getSize();
-      const dpi = shotSize.width / (PROBE * 6);
-      const img = shot.crop({
-        x: 0, y: 0,
-        width: Math.round(fw * 6 * dpi),
-        height: Math.round(FH * 3 * dpi)
-      }).resize({ width: fw * 6, height: FH * 3, quality: 'best' });
+      /* 直接导出 canvas：不再截图，FH 开多大都不会被屏幕尺寸裁掉 */
+      const dataUrl = await w.webContents.executeJavaScript(
+        "(function(){window.CELLW=" + fw + ";window.CELLH=" + FH +
+        ";window.SCALE=" + scale.toFixed(4) + ";window.OFFX=" + offX.toFixed(2) +
+        ";window.OFFY=" + offY.toFixed(2) + ";window.render('" + s.id + "');" +
+        "return document.getElementById('c').toDataURL('image/png');})()");
 
       const dir = path.join(root, 'skins', s.id);
       /* 量一次「脚底到格子底边的余量」：宠物模式下要按它把宠物精确贴到窗口底边 */
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'sheet.png'), img.toPNG());
+      fs.writeFileSync(path.join(dir, 'sheet.png'), Buffer.from(dataUrl.split(',')[1], 'base64'));
       /* 先量底部余量：扫所有帧，取内容最低点到格子底边的距离 */
       let bottomGap = 0;
       {

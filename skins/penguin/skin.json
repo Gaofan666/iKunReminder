@@ -2,8 +2,8 @@
   "name": "学术企鹅",
   "author": "",
   "frame": {
-    "w": 157,
-    "h": 236
+    "w": 155,
+    "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",

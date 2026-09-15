@@ -2,8 +2,8 @@
   "name": "滑稽",
   "author": "",
   "frame": {
-    "w": 116,
-    "h": 236
+    "w": 114,
+    "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",

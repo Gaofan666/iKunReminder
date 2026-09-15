@@ -2,8 +2,8 @@
   "name": "拒绝焦虑",
   "author": "",
   "frame": {
-    "w": 176,
-    "h": 236
+    "w": 175,
+    "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",
