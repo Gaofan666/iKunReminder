@@ -303,130 +303,189 @@ function drawDragon(ctx, q, p, kind) {
 }
 
 /* ============================================================ ③ 熊猫人 */
-/* 抽象版熊猫人：直接照「熊猫头」梗图的画法 —— 黑白两色、粗线条、
-   白脸膛 + 黑耳朵 + 黑眼罩，里面塞一张手绘的「三分讥笑」脸，还叼根烟。 */
+/* 夸张版熊猫头：嘴里叼烟、手抬起来掐着烟、脖挂大金链子
+   画风沿用梗图那套：纯黑白 + 粗线条，金链子是全图唯一的高饱和色，
+   故意做得又粗又亮，形成「黑白画面里一条大金链子」的冲击感。 */
 function drawPanda(ctx, q, p, kind) {
   const LINE = '#111111';
   const look = Math.sin(p * TAU) * 2.4;
   const smug = kind === 'cheer' ? 1 : kind === 'dance' ? 0.6 : 0.3;
-  const smoke = (p * 2) % 1;                       // 吐烟的节奏
-  shadow(ctx, 56, 24);
+  const smoke = (p * 2) % 1;
+  shadow(ctx, 58, 28);
 
-  /* 黑腿 */
+  /* ---- 黑腿 ---- */
   [-1, 1].forEach(function (sg) {
-    ctx.beginPath(); ctx.ellipse(sg * 18, 46, 14, 10, 0, 0, TAU);
+    ctx.beginPath(); ctx.ellipse(sg * 20, 48, 15, 11, 0, 0, TAU);
     ctx.fillStyle = '#111111'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
   });
 
-  /* 白身子 + 黑肚子 */
+  /* ---- 白身子（比上一版更宽，撑得起大链子） ---- */
   ctx.beginPath();
-  ctx.moveTo(0, -20);
-  ctx.bezierCurveTo(32, -20, 38, 14, 33, 36);
-  ctx.bezierCurveTo(28, 52, -28, 52, -33, 36);
-  ctx.bezierCurveTo(-38, 14, -32, -20, 0, -20);
-  ctx.closePath();
-  ctx.fillStyle = '#FFFFFF'; ctx.fill();
-  ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(0, 20, 19, 16, 0, 0, TAU);
-  ctx.fillStyle = '#111111'; ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-
-  /* 黑手臂 */
-  const a = -0.3 - q.arm * 2.0;
-  [-1, 1].forEach(function (sg) {
-    const ex = sg * (30 + Math.cos(a) * 17), ey = 0 + Math.sin(a) * 17;
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(sg * 28, 0); ctx.lineTo(ex, ey);
-    ctx.lineWidth = 13; ctx.strokeStyle = '#111111'; ctx.stroke();
-    ctx.beginPath(); ctx.arc(ex, ey, 7, 0, TAU);
-    ctx.fillStyle = '#111111'; ctx.fill();
-    ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-  });
-
-  /* 大黑耳朵（先在头后面画） */
-  [-1, 1].forEach(function (sg) {
-    ctx.beginPath(); ctx.arc(sg * 25, -56, 12, 0, TAU);
-    ctx.fillStyle = '#111111'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
-  });
-
-  /* 白脸膛 */
-  ctx.beginPath();
-  ctx.moveTo(0, -62);
-  ctx.bezierCurveTo(28, -62, 33, -42, 31, -26);
-  ctx.bezierCurveTo(29, -10, -29, -10, -31, -26);
-  ctx.bezierCurveTo(-33, -42, -28, -62, 0, -62);
+  ctx.moveTo(0, -22);
+  ctx.bezierCurveTo(36, -22, 42, 14, 36, 38);
+  ctx.bezierCurveTo(30, 56, -30, 56, -36, 38);
+  ctx.bezierCurveTo(-42, 14, -36, -22, 0, -22);
   ctx.closePath();
   ctx.fillStyle = '#FFFFFF'; ctx.fill();
   ctx.lineWidth = 3.4; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 黑肚兜 */
+  ctx.beginPath(); ctx.ellipse(0, 26, 21, 17, 0, 0, TAU);
+  ctx.fillStyle = '#111111'; ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* 黑眼罩（斜着，就是熊猫头那两个黑块） */
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(-13, -38, 12, 14, -0.34, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(13, -38, 12, 14, 0.34, 0, TAU); ctx.fill();
-
-  /* 懒散半眯的眼睛：眼白压成一条缝，眼神往下斜 */
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath(); ctx.ellipse(-13, -37, 7.5, 5, -0.34, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(13, -37, 7.5, 5, 0.34, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.arc(-13 + look * 0.6, -36.5 + smug * 1.6, 2.6, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.arc(13 + look * 0.6, -36.5 + smug * 1.6, 2.6, 0, TAU); ctx.fill();
-  /* 上眼皮（盖住上半边 = 不屑） */
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(-13, -42, 8.6, 4.4, -0.34, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(13, -42, 8.6, 4.4, 0.34, 0, TAU); ctx.fill();
-
-  /* 粗斜眉 */
+  /* ---- 右臂：垂着插手 ---- */
+  const ra = -0.15 - q.arm * 1.1;
+  const rex = 34 + Math.cos(ra) * 12, rey = 8 + Math.sin(ra) * 22;
   ctx.lineCap = 'round';
-  ctx.strokeStyle = '#111111'; ctx.lineWidth = 3.4;
-  ctx.beginPath(); ctx.moveTo(-23, -50); ctx.lineTo(-6, -46); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(23, -50); ctx.lineTo(6, -46); ctx.stroke();
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 14;
+  ctx.beginPath(); ctx.moveTo(30, 2); ctx.lineTo(rex, rey); ctx.stroke();
+  ctx.beginPath(); ctx.arc(rex, rey, 7.5, 0, TAU);
+  ctx.fillStyle = '#111111'; ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* 鼻子 */
+  /* ---- 大金链子：一圈金珠子 + 一块金牌 ---- */
+  const chainY = -12, chainR = 27;
+  ctx.strokeStyle = '#8A6410'; ctx.lineWidth = 6.5;
+  ctx.beginPath();
+  ctx.moveTo(-27, chainY - 4);
+  ctx.quadraticCurveTo(0, chainY + 22, 27, chainY - 4);
+  ctx.stroke();
+  /* 链珠 */
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    const bx = -27 + t * 54;
+    const by = chainY - 4 + Math.sin(t * Math.PI) * 26;
+    ctx.beginPath(); ctx.arc(bx, by, 3.6, 0, TAU);
+    const cg = ctx.createRadialGradient(bx - 1.2, by - 1.4, 0.4, bx, by, 4);
+    cg.addColorStop(0, '#FFF2B0'); cg.addColorStop(0.5, '#F5C542'); cg.addColorStop(1, '#B8860B');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.lineWidth = 1.1; ctx.strokeStyle = '#7A5608'; ctx.stroke();
+  }
+  /* 金牌（夸张的大，压着肚兜） */
+  const mx = 0, my = chainY + 26;
+  ctx.beginPath();
+  ctx.moveTo(mx - 15, my - 11);
+  ctx.quadraticCurveTo(mx, my - 17, mx + 15, my - 11);
+  ctx.quadraticCurveTo(mx + 13, my + 12, mx, my + 17);
+  ctx.quadraticCurveTo(mx - 13, my + 12, mx - 15, my - 11);
+  ctx.closePath();
+  const mg = ctx.createLinearGradient(mx - 15, my - 15, mx + 15, my + 15);
+  mg.addColorStop(0, '#FFF4B8'); mg.addColorStop(0.45, '#F7C948'); mg.addColorStop(1, '#B0830A');
+  ctx.fillStyle = mg; ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = '#7A5608'; ctx.stroke();
+  ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,250,210,.85)';
+  ctx.beginPath();
+  ctx.moveTo(mx - 10, my - 8);
+  ctx.quadraticCurveTo(mx, my - 13, mx + 10, my - 8);
+  ctx.stroke();
+  /* 牌面上的「發」 */
+  ctx.fillStyle = '#6B4A06';
+  ctx.font = 'bold 17px "Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('發', mx, my + 2);
+
+  /* ---- 左手：抬到嘴边掐着烟 ---- */
+  const ha = -1.45 - q.arm * 0.35;
+  const hx = 26 + Math.cos(ha) * 22, hy = -6 + Math.sin(ha) * 22;
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 14; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(26, -2); ctx.lineTo(hx, hy); ctx.stroke();
+  /* 捏烟的两根手指 */
   ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(0, -25, 6, 4.2, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx, hy, 7.2, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* 歪嘴：一边嘴角翘起来，就是那个「三分讥笑」 */
-  const mOpen = kind === 'cheer' ? 9 : kind === 'dance' ? 5 : 0;
+  /* ---- 大黑耳朵 ---- */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.arc(sg * 28, -58, 13.5, 0, TAU);
+    ctx.fillStyle = '#111111'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+  });
+
+  /* ---- 白脸膛（加大，夸张） ---- */
+  ctx.beginPath();
+  ctx.moveTo(0, -66);
+  ctx.bezierCurveTo(31, -66, 37, -44, 35, -26);
+  ctx.bezierCurveTo(33, -8, -33, -8, -35, -26);
+  ctx.bezierCurveTo(-37, -44, -31, -66, 0, -66);
+  ctx.closePath();
+  ctx.fillStyle = '#FFFFFF'; ctx.fill();
+  ctx.lineWidth = 3.6; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* ---- 黑眼罩 ---- */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(-14, -40, 13, 15, -0.34, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, -40, 13, 15, 0.34, 0, TAU); ctx.fill();
+
+  /* ---- 懒散半眯眼 ---- */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.ellipse(-14, -39, 8, 5.2, -0.34, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, -39, 8, 5.2, 0.34, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(-14 + look * 0.6, -38.5 + smug * 1.7, 2.8, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(14 + look * 0.6, -38.5 + smug * 1.7, 2.8, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(-14, -44, 9.2, 4.6, -0.34, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, -44, 9.2, 4.6, 0.34, 0, TAU); ctx.fill();
+
+  /* ---- 粗斜眉 ---- */
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-25, -53); ctx.lineTo(-6, -48); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(25, -53); ctx.lineTo(6, -48); ctx.stroke();
+
+  /* ---- 鼻子 ---- */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(0, -26, 6.4, 4.4, 0, 0, TAU); ctx.fill();
+
+  /* ---- 嘴：叼着烟的那边被烟顶着，歪着嘴 ---- */
+  const mOpen = kind === 'cheer' ? 10 : kind === 'dance' ? 5.5 : 0;
   ctx.strokeStyle = '#111111'; ctx.lineWidth = 3; ctx.lineCap = 'round';
   if (mOpen) {
     ctx.beginPath();
-    ctx.moveTo(-11, -18);
-    ctx.quadraticCurveTo(0, -18 + mOpen * 2.2, 14, -21);
-    ctx.quadraticCurveTo(2, -13, -11, -18);
+    ctx.moveTo(-12, -19);
+    ctx.quadraticCurveTo(0, -19 + mOpen * 2.3, 15, -22);
+    ctx.quadraticCurveTo(2, -13, -12, -19);
     ctx.closePath();
-    ctx.fillStyle = '#3A1A1A'; ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = '#3A1A1A'; ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(-5, -19.5, 5, 5);
-    ctx.fillRect(2, -20.5, 4.6, 4.6);
+    ctx.fillRect(-5, -21, 5.4, 5.4);
+    ctx.fillRect(2.5, -22, 5, 5);
   } else {
     ctx.beginPath();
-    ctx.moveTo(-11, -17);
-    ctx.quadraticCurveTo(1, -13, 14, -20);
+    ctx.moveTo(-12, -18);
+    ctx.quadraticCurveTo(1, -13, 15, -21);
     ctx.stroke();
   }
 
-  /* 叼着的烟 */
-  ctx.strokeStyle = LINE; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
-  ctx.fillStyle = '#F5F0E6';
+  /* ---- 烟：从嘴里斜插出去，正好被手指捏住 ---- */
+  const cigAng = -0.38;
+  const cx0 = 9, cy0 = -19;
+  const cx1 = hx + Math.cos(cigAng) * 2, cy1 = hy + 12;
   ctx.save();
-  ctx.translate(16, -19);
-  ctx.rotate(-0.34);
-  ctx.beginPath(); ctx.rect(0, -2, 15, 4);
-  ctx.fill(); ctx.stroke();
+  ctx.translate(cx0, cy0);
+  ctx.rotate(cigAng);
+  ctx.fillStyle = '#F7F2E6';
+  ctx.beginPath(); ctx.rect(0, -2.6, 30, 5.2);
+  ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
   ctx.fillStyle = '#E2574C';
-  ctx.beginPath(); ctx.rect(12, -2, 3.5, 4); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(25, -2.6, 5, 5.2); ctx.fill(); ctx.stroke();
+  /* 烟头火星 */
+  ctx.fillStyle = 'rgba(255,120,60,' + (0.55 + 0.45 * Math.abs(Math.sin(p * TAU * 3))) + ')';
+  ctx.beginPath(); ctx.arc(31, 0, 3.2, 0, TAU); ctx.fill();
   ctx.restore();
-  /* 烟圈（待机时更明显） */
-  for (let i = 0; i < 3; i++) {
-    const t = (smoke + i * 0.33) % 1;
-    ctx.globalAlpha = (1 - t) * (kind === 'idle' ? 0.85 : 0.5);
-    ctx.strokeStyle = '#8A8A8A'; ctx.lineWidth = 2;
+  /* 捏烟的手指（盖在烟上，形成「掐着」的感觉） */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(hx + 1, hy + 1, 5.4, 4.2, cigAng, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* ---- 烟圈（待机时最明显） ---- */
+  for (let i = 0; i < 4; i++) {
+    const t = (smoke + i * 0.25) % 1;
+    ctx.globalAlpha = (1 - t) * (kind === 'idle' ? 0.8 : 0.45);
+    ctx.strokeStyle = '#8A8A8A'; ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.arc(30 + t * 12, -24 - t * 26, 3 + t * 5, 0, TAU);
+    ctx.arc(cx1 + 6 + t * 16, cy1 - 16 - t * 30, 3 + t * 6.5, 0, TAU);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
