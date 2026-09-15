@@ -1877,45 +1877,39 @@ function drawCat(ctx, q, p, kind) {
   ctx.bezierCurveTo(-24, 14, -20, 0, 0, 0);
   ctx.closePath(); ctx.fill();
 
-  /* 前腿：从胸口向下垂到地面的两条深褐色弯管（趴姿能看见前腿） */
+  /* 前腿：从胸口直直垂到地上的两条管子。
+     末端用圆头封口（lineCap round），圆头本身就是爪子，不再另画椭圆。 */
   [-1, 1].forEach(function (sg) {
-    /* 裤管本体 */
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 9.5; ctx.lineCap = 'round';
+    ctx.strokeStyle = FUR_L; ctx.lineWidth = 11; ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(sg * 7, 9);
-    ctx.quadraticCurveTo(sg * 12, 20, sg * 9.5, 30);
+    ctx.moveTo(sg * 9, 6);
+    ctx.lineTo(sg * 9, 31);
     ctx.stroke();
-    /* 左侧一道浅高光，做出圆柱的转折 */
+    /* 管身左侧一道浅高光，做出圆柱的转折 */
     ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(sg * 5.5, 11);
-    ctx.quadraticCurveTo(sg * 9.5, 20, sg * 7.5, 29);
+    ctx.moveTo(sg * 6.5, 9);
+    ctx.lineTo(sg * 6.5, 30);
     ctx.stroke();
-    /* 落在地上的爪子 */
-    ctx.fillStyle = FUR_L;
-    ctx.beginPath();
-    ctx.ellipse(sg * 9.5, 32.5, 8.2, 6.4, sg * 0.05, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.05)';
-    ctx.beginPath();
-    ctx.ellipse(sg * 9.5 - sg * 1.5, 30.5, 4.6, 2.4, 0, 0, TAU); ctx.fill();
   });
 
   /* ---------- 耳朵（先画，压在头下） ---------- */
   [-1, 1].forEach(function (sg) {
     ctx.save();
-    ctx.translate(sg * 25, -40);
+    ctx.translate(sg * 20, -40);
     ctx.rotate(sg * earTw);
+    /* 耳朵整体往里收，外沿不超过脸的半宽（34），否则会支棱出脸外显得断开 */
     ctx.fillStyle = FUR;
     ctx.beginPath();
-    ctx.moveTo(-12, 14);
-    ctx.quadraticCurveTo(-10, -14, 3, -17);
-    ctx.quadraticCurveTo(14, -9, 13, 14);
+    ctx.moveTo(-11, 15);
+    ctx.quadraticCurveTo(-9, -12, 2, -15);
+    ctx.quadraticCurveTo(11, -7, 11, 15);
     ctx.closePath(); ctx.fill();
     ctx.fillStyle = INNER;
     ctx.beginPath();
-    ctx.moveTo(-5.5, 10);
-    ctx.quadraticCurveTo(-4, -7, 3, -10);
-    ctx.quadraticCurveTo(9, -3, 8, 10);
+    ctx.moveTo(-5, 11);
+    ctx.quadraticCurveTo(-3.5, -6, 2, -8.5);
+    ctx.quadraticCurveTo(7, -2, 6.5, 11);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   });
