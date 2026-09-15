@@ -1317,129 +1317,56 @@ function drawPenguin(ctx, q, p, kind) {
   ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,0,0,.5)';
   ctx.beginPath(); ctx.moveTo(-6, -5); ctx.lineTo(6, -5); ctx.stroke();
 
-  /* ---- 左翅：贴着身侧下压 ---- */
-  const lg = ctx.createLinearGradient(-38, -10, -22, 26);
-  lg.addColorStop(0, '#33333D'); lg.addColorStop(1, '#0B0B0F');
-  ctx.fillStyle = lg;
-  ctx.beginPath();
-  ctx.moveTo(-27, -18);
-  ctx.quadraticCurveTo(-40, 2, -33, 26);
-  ctx.quadraticCurveTo(-26, 30, -23, 18);
-  ctx.quadraticCurveTo(-24, -2, -20, -16);
-  ctx.closePath(); ctx.fill();
-
-  /* ---- 嘴：橙色，上下两片 ---- */
-  const bkg = ctx.createLinearGradient(0, -16, 0, 4);
-  bkg.addColorStop(0, '#FBC24A'); bkg.addColorStop(1, '#D98A12');
-  ctx.fillStyle = bkg;
-  ctx.beginPath();
-  ctx.moveTo(-11, -10);
-  ctx.quadraticCurveTo(0, -16, 11, -10);
-  ctx.quadraticCurveTo(0, 4, -11, -10);
-  ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(120,70,5,.6)'; ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-9, -8.5); ctx.lineTo(9, -8.5);
-  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(120,70,5,.5)'; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.45)';
-  ctx.beginPath(); ctx.ellipse(-4, -11.5, 3.4, 1.4, -0.2, 0, TAU); ctx.fill();
-
-  /* ---- 大墨镜：镜片近黑，靠两道强反光撑住 ---- */
-  [-1, 1].forEach(function (sg) {
-    ctx.beginPath();
-    ctx.moveTo(sg * 27, -31);
-    ctx.quadraticCurveTo(sg * 14, -38, sg * 4, -31);
-    ctx.quadraticCurveTo(sg * 3, -16, sg * 14, -12);
-    ctx.quadraticCurveTo(sg * 26, -11, sg * 28, -22);
-    ctx.closePath();
-    const lg2 = ctx.createLinearGradient(sg * 4, -36, sg * 28, -12);
-    lg2.addColorStop(0, '#4E4E5C'); lg2.addColorStop(0.4, '#141420'); lg2.addColorStop(1, '#05050A');
-    ctx.fillStyle = lg2; ctx.fill();
-    ctx.lineWidth = 2.2; ctx.strokeStyle = '#0A0A0F'; ctx.stroke();
-    ctx.save(); ctx.clip();
-    ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineWidth = 4.4; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(sg * 5, -12); ctx.lineTo(sg * 22, -37); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2.2;
-    ctx.beginPath(); ctx.moveTo(sg * 14, -10); ctx.lineTo(sg * 28, -30); ctx.stroke();
-    ctx.restore();
-  });
-  /* 鼻梁 + 镜腿 */
-  ctx.fillStyle = '#0A0A0F';
-  ctx.beginPath(); ctx.rect(-5, -32, 10, 3.6); ctx.fill();
-  ctx.strokeStyle = '#0A0A0F'; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.moveTo(-27, -26); ctx.lineTo(-36, -31); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(27, -26); ctx.lineTo(36, -31); ctx.stroke();
-
-  /* ---- 黑礼帽：帽檐 + 帽冠 + 帽带 ---- */
-  ctx.save();
-  ctx.translate(1 + s1 * 0.6, -1);
-  /* 帽檐 */
-  ctx.beginPath();
-  ctx.ellipse(0, -42, 36, 9.5, 0, 0, TAU);
-  const brg = ctx.createLinearGradient(0, -52, 0, -33);
-  brg.addColorStop(0, '#3E3E4A'); brg.addColorStop(1, '#0A0A0F');
-  ctx.fillStyle = brg; ctx.fill();
-  ctx.lineWidth = 1.8; ctx.strokeStyle = '#05050A'; ctx.stroke();
-  /* 帽冠 */
-  ctx.beginPath();
-  ctx.moveTo(-22, -43);
-  ctx.quadraticCurveTo(-24, -62, -12, -68);
-  ctx.quadraticCurveTo(0, -71, 12, -68);
-  ctx.quadraticCurveTo(24, -62, 22, -43);
-  ctx.closePath();
-  const crg = ctx.createLinearGradient(-22, -70, 22, -43);
-  crg.addColorStop(0, '#4E4E5C'); crg.addColorStop(0.45, '#22222B'); crg.addColorStop(1, '#0A0A0F');
-  ctx.fillStyle = crg; ctx.fill();
-  ctx.lineWidth = 1.8; ctx.strokeStyle = '#05050A'; ctx.stroke();
-  /* 帽冠上的凹痕 */
-  ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 2.6;
-  ctx.beginPath(); ctx.moveTo(-9, -66); ctx.quadraticCurveTo(0, -60, 9, -66); ctx.stroke();
-  /* 帽带 */
-  ctx.fillStyle = '#141419';
-  ctx.beginPath();
-  ctx.moveTo(-22.5, -50);
-  ctx.quadraticCurveTo(0, -44, 22.5, -50);
-  ctx.lineTo(22.5, -44);
-  ctx.quadraticCurveTo(0, -38, -22.5, -44);
-  ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#C9A227';
-  ctx.beginPath(); ctx.rect(-6, -49.5, 12, 4.6); ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
-  ctx.restore();
-
-  /* ---- 右翅：举牌子 ---- */
-  ctx.save();
-  ctx.translate(25, 0 - lift * 0.5);
-  ctx.rotate(-0.42 - q.arm * 0.12);
-  const rg = ctx.createLinearGradient(0, -14, 0, 26);
+  /* ---- 右翅（观众右侧）：贴着身侧下压 ---- */
+  const rg = ctx.createLinearGradient(28, -10, 40, 26);
   rg.addColorStop(0, '#33333D'); rg.addColorStop(1, '#0B0B0F');
   ctx.fillStyle = rg;
   ctx.beginPath();
-  ctx.moveTo(-3, -16);
-  ctx.quadraticCurveTo(14, -2, 8, 26);
-  ctx.quadraticCurveTo(0, 30, -4, 18);
-  ctx.quadraticCurveTo(-6, 0, -8, -14);
+  ctx.moveTo(27, -18);
+  ctx.quadraticCurveTo(40, 2, 33, 26);
+  ctx.quadraticCurveTo(26, 30, 23, 18);
+  ctx.quadraticCurveTo(24, -2, 20, -16);
   ctx.closePath(); ctx.fill();
-  /* 牌杆 */
-  ctx.strokeStyle = '#8A6236'; ctx.lineWidth = 6; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(12, -52); ctx.stroke();
-  ctx.strokeStyle = '#C79A5E'; ctx.lineWidth = 2.4;
-  ctx.beginPath(); ctx.moveTo(-1, -13); ctx.lineTo(11, -53); ctx.stroke();
-  ctx.restore();
 
-  /* ---- 大牌子：尺寸由文字实测宽度反推，保证字在牌里 ---- */
+  /* ---- 左翅（观众左侧）：举起来抓牌杆 ---- */
+  const handX = -29, handY = -14 - lift * 0.7;
+  const lg = ctx.createLinearGradient(-42, -26, -20, 12);
+  lg.addColorStop(0, '#3A3A46'); lg.addColorStop(1, '#0B0B0F');
+  ctx.fillStyle = lg;
+  ctx.beginPath();
+  ctx.moveTo(-23, -12);
+  ctx.quadraticCurveTo(-41, -16 - lift * 0.6, handX - 5, handY - 4);
+  ctx.quadraticCurveTo(handX + 7, handY + 12, -21, 4);
+  ctx.closePath(); ctx.fill();
+
+  /* ---- 牌子：尺寸由文字实测宽度反推 ---- */
   const TEXT = 'accepted';
-  const FS = 16;
+  const FS = 13;
   ctx.font = '700 ' + FS + 'px "Arial Black","Segoe UI",Arial,sans-serif';
   const tw = ctx.measureText(TEXT).width;
-  const halfW = tw / 2 + 11;              // 左右内边距收窄，避免整体过宽
-  const halfH = FS * 0.62 + 8;
+  const halfW = tw / 2 + 10;
+  const halfH = FS * 0.62 + 7;
 
+  /* 牌杆与牌子共用一套坐标：杆从手心竖直往上，正好顶到牌子底边 */
+  const boardCX = handX - 2;
+  const boardBottom = -76;                 // 高过头顶（礼帽顶大约 -70）
+  const boardCY = boardBottom - halfH;
+
+  ctx.strokeStyle = '#6B4A2A'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(handX, handY + 1); ctx.lineTo(boardCX, boardBottom + 3); ctx.stroke();
+  ctx.strokeStyle = '#B98B52'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(handX, handY + 1); ctx.lineTo(boardCX, boardBottom + 3); ctx.stroke();
+  /* 攥着杆的手 */
+  ctx.fillStyle = '#141419';
+  ctx.beginPath(); ctx.ellipse(handX + 1, handY + 3, 8, 6.4, -0.28, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1.4; ctx.stroke();
+
+  /* ---- 牌子本体 ---- */
   ctx.save();
-  ctx.translate(halfW - 2, -46 - lift * 0.4);   // 牌子贴着企鹅右上，不伸太远
-  ctx.rotate(-0.05);
-  /* 牌面 */
+  ctx.translate(boardCX, boardCY);
+  ctx.rotate(-0.03);
+  const R = 5, W = halfW, H = halfH;
   ctx.beginPath();
-  const R = 6, W = halfW, H = halfH;
   ctx.moveTo(-W + R, -H);
   ctx.lineTo(W - R, -H); ctx.quadraticCurveTo(W, -H, W, -H + R);
   ctx.lineTo(W, H - R); ctx.quadraticCurveTo(W, H, W - R, H);
@@ -1447,16 +1374,14 @@ function drawPenguin(ctx, q, p, kind) {
   ctx.lineTo(-W, -H + R); ctx.quadraticCurveTo(-W, -H, -W + R, -H);
   ctx.closePath();
   const sg3 = ctx.createLinearGradient(0, -H, 0, H);
-  sg3.addColorStop(0, '#FFFFFF'); sg3.addColorStop(0.55, '#FBFBF4'); sg3.addColorStop(1, '#E4E4DA');
+  sg3.addColorStop(0, '#FFFFFF'); sg3.addColorStop(0.55, '#FBFBF4'); sg3.addColorStop(1, '#E2E2D8');
   ctx.fillStyle = sg3; ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = '#2A2A33'; ctx.stroke();
-  /* 内侧一道细边，像打印的边框 */
-  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(42,42,51,.35)';
-  ctx.beginPath(); ctx.rect(-W + 5, -H + 5, W * 2 - 10, H * 2 - 10); ctx.stroke();
-  /* 文字：居中，一定在牌内 */
+  ctx.lineWidth = 2.8; ctx.strokeStyle = '#2A2A33'; ctx.stroke();
+  ctx.lineWidth = 1.1; ctx.strokeStyle = 'rgba(42,42,51,.35)';
+  ctx.beginPath(); ctx.rect(-W + 4, -H + 4, W * 2 - 8, H * 2 - 8); ctx.stroke();
   ctx.fillStyle = '#12874A';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(TEXT, 0, 1);
+  ctx.fillText(TEXT, 0, 0.5);
   ctx.restore();
 
   /* 跳舞/欢呼：撒一点纸屑 */
