@@ -1564,11 +1564,15 @@ app.whenReady().then(async () => {
 
       /* ---- 反算成品尺寸：高度固定 140、内容占 94%；宽度按内容比例给 ---- */
       const base = 0.8;
-      const scale = Math.min(1.0, base * (FH * 0.94) / envH);
+      const scale = Math.min(1.0, base * (FH * 0.90) / envH);
       const k = scale / base;
       const fw = Math.max(72, Math.ceil(envW * k + 22));
       const offX = -((minX + maxX) / 2) * k;
-      const offY = -((minY + maxY) / 2) * k;
+      /* 垂直方向千万不能居中：程序画皮肤时是把「整格底边」对齐到画布
+         底部的，格子里内容一旦居中，角色脚下就会多留一块空白，
+         拖动宠物时会先撞到那块空白、到不了桌面底边。
+         所以这里让内容底部贴住格子底部（留 3px 余量）。 */
+      const offY = (FH / 2 - 5) - maxY * k;
 
       /* ---- 第二遍：按成品尺寸重画（列宽 fw、行高 FH，两者不同） ---- */
       await w.webContents.executeJavaScript(
