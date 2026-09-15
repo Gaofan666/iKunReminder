@@ -1880,18 +1880,15 @@ function drawCat(ctx, q, p, kind) {
   ctx.fillStyle = 'rgba(255,255,255,.045)';
   ctx.beginPath(); ctx.ellipse(-6, 14, 11, 9, 0.1, 0, TAU); ctx.fill();
 
-  /* 两只前脚：并排蹲在身前 */
+  /* 两只前爪：收拢并排、圆润地搭在地上（后脚在身体后面看不到） */
   [-1, 1].forEach(function (sg) {
     ctx.fillStyle = FUR_L;
     ctx.beginPath();
-    ctx.ellipse(sg * 9.5, 33, 8, 6.6, sg * 0.06, 0, TAU); ctx.fill();
-    /* 脚趾缝 */
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(sg * 9.5 - 2.2, 29); ctx.lineTo(sg * 9.5 - 2.2, 36);
-    ctx.moveTo(sg * 9.5 + 2.2, 29); ctx.lineTo(sg * 9.5 + 2.2, 36);
-    ctx.stroke();
+    ctx.ellipse(sg * 8, 32, 8.6, 7, 0, 0, TAU); ctx.fill();
   });
+  /* 两爪之间一道浅缝 */
+  ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 27); ctx.lineTo(0, 37); ctx.stroke();
 
   /* ---------- 耳朵（先画，压在头下） ---------- */
   [-1, 1].forEach(function (sg) {
@@ -1937,8 +1934,6 @@ function drawCat(ctx, q, p, kind) {
     /* 米黄眼圈 */
     ctx.fillStyle = CREAM;
     ctx.beginPath(); ctx.ellipse(ex, ey, rx, ry, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = CREAM_D;
-    ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.66, rx * 0.9, ry * 0.28, 0, 0, TAU); ctx.fill();
     /* 大黑瞳孔 */
     ctx.fillStyle = PUPIL;
     ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.04, rx * 0.72, ry * 0.8, 0, 0, TAU); ctx.fill();
@@ -1988,7 +1983,7 @@ window.render=function(id){
   if(c.width!==W||c.height!==H){c.width=W;c.height=H;}
   var x=c.getContext('2d');
   x.clearRect(0,0,W,H);
-  var rows=[['idle',4],['dance',6],['cheer',6]];
+  var rows=[['idle',window.IDLEN||4],['dance',6],['cheer',6]];
   for(var r=0;r<3;r++){
     var kind=rows[r][0], n=rows[r][1];
     for(var i=0;i<n;i++){
@@ -2023,6 +2018,7 @@ app.whenReady().then(async () => {
     for (const s of SKINS) {
       /* ---- 第一遍：在等大的格子里量出「运动包络」 ---- */
       await w.webContents.executeJavaScript(
+        "window.IDLEN=" + (s.id === 'cat' ? 8 : 4) + ";" +
         "window.CELLW=" + PROBE + ";window.CELLH=" + PROBE +
         ";window.SCALE=0.8;window.OFFX=0;window.OFFY=0;window.render('" + s.id + "')");
       await sleep(240);
@@ -2062,7 +2058,8 @@ app.whenReady().then(async () => {
       await sleep(260);
       /* 直接导出 canvas：不再截图，FH 开多大都不会被屏幕尺寸裁掉 */
       const dataUrl = await w.webContents.executeJavaScript(
-        "(function(){window.CELLW=" + fw + ";window.CELLH=" + FH +
+        "(function(){window.IDLEN=" + (s.id === 'cat' ? 8 : 4) + ";" +
+        "window.CELLW=" + fw + ";window.CELLH=" + FH +
         ";window.SCALE=" + scale.toFixed(4) + ";window.OFFX=" + offX.toFixed(2) +
         ";window.OFFY=" + offY.toFixed(2) + ";window.render('" + s.id + "');" +
         "return document.getElementById('c').toDataURL('image/png');})()");
