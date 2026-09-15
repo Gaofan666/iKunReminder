@@ -934,20 +934,215 @@ function drawStar(ctx, q, p, kind) {
   ctx.globalAlpha = 1;
 }
 
+/* ============================================================ ⑥ 滑稽 */
+function drawHuaji(ctx, q, p, kind) {
+  const LINE = '#111111';
+  const s1 = Math.sin(p * TAU);
+  const grin = kind === 'cheer' ? 1.5 : kind === 'dance' ? 1 : 0.5;
+  shadow(ctx, 46, 24);
+  /* 圆脸 */
+  const g = ctx.createRadialGradient(-10, -16, 4, 0, -8, 52);
+  g.addColorStop(0, '#FFE97A'); g.addColorStop(1, '#F5C518');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(0, -8, 42, 0, TAU); ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 两只眼：一只正常一只眯着（贱的关键） */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.ellipse(-16, -22, 9, 10, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(-15 + s1 * 1.6, -20, 4.2, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(16, -22, 9, 10, 0, 0, TAU);
+  ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(17 + s1 * 1.6, -20, 4.2, 0, TAU); ctx.fill();
+  /* 一边眉挑起来 */
+  ctx.strokeStyle = LINE; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-25, -36); ctx.lineTo(-8, -31); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(25, -34); ctx.lineTo(9, -38); ctx.stroke();
+  /* 歪嘴笑：只往一边翘 */
+  ctx.beginPath();
+  ctx.moveTo(-14, 4);
+  ctx.quadraticCurveTo(4, 20 + grin * 6, 22 + grin * 2, -2);
+  ctx.lineWidth = 4.2; ctx.stroke();
+  /* 红晕 */
+  ctx.fillStyle = 'rgba(255,120,110,.45)';
+  ctx.beginPath(); ctx.ellipse(-27, -4, 8, 5.5, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(27, -4, 8, 5.5, 0, 0, TAU); ctx.fill();
+}
+
+/* ============================================================ ⑦ 狗头 */
+function drawDoge(ctx, q, p, kind) {
+  const LINE = '#111111';
+  const s1 = Math.sin(p * TAU);
+  const wow = kind === 'cheer' ? 1.4 : kind === 'dance' ? 1 : 0.5;
+  shadow(ctx, 46, 24);
+  /* 耳朵 */
+  ctx.fillStyle = '#D9A55E';
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath();
+    ctx.moveTo(sg * 12, -46);
+    ctx.quadraticCurveTo(sg * 30, -68, sg * 34, -40);
+    ctx.quadraticCurveTo(sg * 26, -34, sg * 12, -38);
+    ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 3.4; ctx.strokeStyle = LINE; ctx.stroke();
+  });
+  /* 头 */
+  ctx.fillStyle = '#F2C88A';
+  ctx.beginPath();
+  ctx.moveTo(0, -48);
+  ctx.bezierCurveTo(26, -48, 34, -30, 33, -10);
+  ctx.bezierCurveTo(32, 22, 18, 40, 0, 40);
+  ctx.bezierCurveTo(-18, 40, -32, 22, -33, -10);
+  ctx.bezierCurveTo(-34, -30, -26, -48, 0, -48);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 3.6; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 白色口鼻区 */
+  ctx.fillStyle = '#FFF6E6';
+  ctx.beginPath(); ctx.ellipse(0, 14, 20, 20, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 斜眼（狗头的灵魂：往一边瞟） */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.ellipse(-13, -16, 8.6, 8, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, -17, 8.6, 8, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE;
+  ctx.beginPath(); ctx.ellipse(-13, -16, 8.6, 8, 0, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(14, -17, 8.6, 8, 0, 0, TAU); ctx.stroke();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(-16.5 + s1 * 1.4, -15, 3.6, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(10.5 + s1 * 1.4, -16, 3.6, 0, TAU); ctx.fill();
+  /* 鼻子 */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(0, 4, 7.5, 5.6, 0, 0, TAU); ctx.fill();
+  /* 平直的嘴 + 吐舌 */
+  ctx.strokeStyle = LINE; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(0, 16); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-11, 18); ctx.quadraticCurveTo(0, 22, 11, 18); ctx.stroke();
+  ctx.fillStyle = '#FF8AA0';
+  ctx.beginPath(); ctx.ellipse(0, 26 + wow * 4, 6, 5 + wow * 3, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
+}
+
+/* ============================================================ ⑧ 悲伤蛙 */
+function drawPepe(ctx, q, p, kind) {
+  const LINE = '#111111';
+  const s1 = Math.sin(p * TAU);
+  const sad = kind === 'cheer' ? 0.2 : kind === 'dance' ? 0.6 : 1;
+  shadow(ctx, 46, 24);
+  /* 绿脑袋 */
+  const g = ctx.createLinearGradient(0, -44, 0, 40);
+  g.addColorStop(0, '#8CCB6A'); g.addColorStop(1, '#5FA83F');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.bezierCurveTo(30, -40, 40, -16, 38, 8);
+  ctx.bezierCurveTo(36, 32, 20, 42, 0, 42);
+  ctx.bezierCurveTo(-20, 42, -36, 32, -38, 8);
+  ctx.bezierCurveTo(-40, -16, -30, -40, 0, -40);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 3.6; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 两只鼓出来的大眼睛 */
+  [-1, 1].forEach(function (sg) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath(); ctx.ellipse(sg * 18, -34, 15, 14, 0, 0, TAU); ctx.fill();
+    ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.fillStyle = '#111111';
+    ctx.beginPath(); ctx.arc(sg * 18 + s1 * 1.6, -33, 5.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(sg * 18 - 1.6 + s1 * 1.6, -35, 1.6, 0, TAU); ctx.fill();
+  });
+  /* 红嘴唇 + 悲伤的嘴角 */
+  ctx.fillStyle = '#E2564E';
+  ctx.beginPath();
+  ctx.moveTo(-24, 6);
+  ctx.quadraticCurveTo(0, -2 - sad * 4, 24, 6);
+  ctx.quadraticCurveTo(0, 22 - sad * 6, -24, 6);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.strokeStyle = LINE; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-24, 6); ctx.quadraticCurveTo(0, 16 - sad * 8, 24, 6); ctx.stroke();
+}
+
+/* ============================================================ ⑨ 可达鸭 */
+function drawPsyduck(ctx, q, p, kind) {
+  const LINE = '#111111';
+  const s1 = Math.sin(p * TAU);
+  const pain = kind === 'cheer' ? 1.4 : kind === 'dance' ? 1 : 0.5;
+  shadow(ctx, 48, 24);
+  /* 头顶三根呆毛 */
+  ctx.strokeStyle = '#E8B32A'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+  [-1, 0, 1].forEach(function (i) {
+    ctx.beginPath();
+    ctx.moveTo(i * 9, -48);
+    ctx.quadraticCurveTo(i * 9 + s1 * 4, -62, i * 9 + 7 + s1 * 5, -68);
+    ctx.stroke();
+  });
+  /* 黄脑袋 */
+  const g = ctx.createLinearGradient(0, -50, 0, 42);
+  g.addColorStop(0, '#FFE066'); g.addColorStop(1, '#F2C21B');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(0, -50);
+  ctx.bezierCurveTo(32, -50, 42, -22, 40, 6);
+  ctx.bezierCurveTo(38, 34, 22, 46, 0, 46);
+  ctx.bezierCurveTo(-22, 46, -38, 34, -40, 6);
+  ctx.bezierCurveTo(-42, -22, -32, -50, 0, -50);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 3.8; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 扁嘴 */
+  ctx.fillStyle = '#F2A81B';
+  ctx.beginPath();
+  ctx.moveTo(-30, 8);
+  ctx.quadraticCurveTo(0, -4, 30, 8);
+  ctx.quadraticCurveTo(0, 26, -30, 8);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-26, 9); ctx.lineTo(26, 9);
+  ctx.lineWidth = 1.8; ctx.strokeStyle = 'rgba(17,17,17,.5)'; ctx.stroke();
+  /* 空茫的圆眼 */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.arc(-14, -18, 11, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(14, -18, 11, 0, TAU); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = LINE;
+  ctx.beginPath(); ctx.arc(-14, -18, 11, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.arc(14, -18, 11, 0, TAU); ctx.stroke();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(-14, -18 + pain, 3.2, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(14, -18 + pain, 3.2, 0, TAU); ctx.fill();
+  /* 两只手抱着脑袋（抱头 = 可达鸭的招牌） */
+  ctx.fillStyle = '#F2C21B';
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.ellipse(sg * 40, -8 - pain * 3, 11, 14, sg * 0.3, 0, TAU);
+    ctx.fill();
+    ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.strokeStyle = 'rgba(17,17,17,.45)'; ctx.lineWidth = 1.8;
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath();
+      ctx.moveTo(sg * 40 - 6, -8 - pain * 3 + k * 6);
+      ctx.lineTo(sg * 40 + 6, -8 - pain * 3 + k * 6);
+      ctx.stroke();
+    }
+  });
+}
+
 /* ============================================================ 出图 */
 const SKINS = [
+  { id: 'huaji', name: '滑稽', author: '抽象', draw: drawHuaji },
+  { id: 'doge', name: '狗头', author: '抽象', draw: drawDoge },
+  { id: 'pepe', name: '悲伤蛙', author: '抽象', draw: drawPepe },
+  { id: 'psyduck', name: '可达鸭', author: '抽象', draw: drawPsyduck },
   { id: 'dog', name: '海盗狗', author: '自带', draw: drawDog },
   { id: 'dragon', name: '小黄龙', author: '自带', draw: drawDragon },
   { id: 'panda', name: '熊猫人', author: '自带', draw: drawPanda },
-  { id: 'sponge', name: '方块海绵', author: '自带', draw: drawSponge },
-  { id: 'star', name: '粉海星', author: '自带', draw: drawStar }
+  { id: 'sponge', name: '邪恶方块', author: '自带', draw: drawSponge },
+  { id: 'star', name: '往脑袋中间使劲', author: '自带', draw: drawStar }
 ];
 
 function pageJS() {
   return `var TAU=Math.PI*2;
 ${shadow}${circle}${oval}${rrect}${eye}${limb}${mouthOpen}${teeth}${poseFor}
-${drawDog}${drawDragon}${drawPanda}${drawSponge}${drawStar}
-var DRAWS={dog:drawDog,dragon:drawDragon,panda:drawPanda,sponge:drawSponge,star:drawStar};
+${drawDog}${drawDragon}${drawPanda}${drawSponge}${drawStar}${drawHuaji}${drawDoge}${drawPepe}${drawPsyduck}
+var DRAWS={dog:drawDog,dragon:drawDragon,panda:drawPanda,sponge:drawSponge,star:drawStar,huaji:drawHuaji,doge:drawDoge,pepe:drawPepe,psyduck:drawPsyduck};
 window.CELLW=${PROBE}; window.CELLH=${PROBE};
 window.SCALE=0.8; window.OFFX=0; window.OFFY=0;
 window.render=function(id){
