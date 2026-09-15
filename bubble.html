@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
+<title>pet-bubble</title>
+<style>
+  /* 独立的透明小窗：里头只有气泡本体，四周留 10px 给小尾巴 */
+  html,body{
+    margin:0;width:100%;height:100%;overflow:hidden;background:transparent;
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;user-select:none;
+  }
+  #bubble{
+    position:absolute;left:10px;top:10px;right:10px;bottom:10px;
+    display:flex;flex-direction:column;gap:7px;
+    padding:12px 14px;box-sizing:border-box;overflow:hidden;
+    border-radius:16px;background:#ffffff;
+    border:1px solid rgba(70,95,110,.22);
+    box-shadow:0 10px 26px rgba(30,50,80,.16);
+    animation:bubbleIn .18s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes bubbleIn{ from{opacity:0;transform:translateY(6px) scale(.96)} to{opacity:1;transform:none} }
+
+  .pb-head{font-size:16.5px;font-weight:800;letter-spacing:1px;color:#0F2027}
+  .pb-mer{font-size:14px;font-weight:600;color:#1A6E80;letter-spacing:.5px}
+  .pb-tip{font-size:14px;line-height:1.75;color:#2B3A44;flex:1;overflow:hidden}
+  .pb-next{
+    font-size:13px;font-weight:600;color:#A6522C;letter-spacing:.3px;
+    padding-top:7px;border-top:1px solid rgba(74,120,150,.22);
+  }
+
+  /* 小尾巴：共用同一个方块，靠旋转角度指四个方向 */
+  #bubble::after{
+    content:"";position:absolute;width:16px;height:16px;background:#ffffff;
+    border-right:1px solid rgba(70,95,110,.22);
+    border-bottom:1px solid rgba(70,95,110,.22);
+    transform:rotate(45deg);
+  }
+  body.tail-bottom #bubble::after{bottom:-9px;left:var(--tail,36px)}
+  body.tail-top    #bubble::after{top:-9px;left:var(--tail,36px);transform:rotate(225deg)}
+  body.tail-left   #bubble::after{left:-9px;top:var(--tail,36px);transform:rotate(135deg)}
+  body.tail-right  #bubble::after{right:-9px;top:var(--tail,36px);transform:rotate(-45deg)}
+</style>
+</head>
+<body class="tail-bottom">
+  <div id="bubble">
+    <div class="pb-head" id="head"></div>
+    <div class="pb-mer" id="mer"></div>
+    <div class="pb-tip" id="tip"></div>
+    <div class="pb-next" id="next"></div>
+  </div>
+<script src="bubble.js"></script>
+</body>
+</html>

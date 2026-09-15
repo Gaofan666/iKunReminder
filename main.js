@@ -5,8 +5,9 @@
      · 系统托盘常驻（关闭/✕ = 收进右下角托盘，不退出）
      · 宠物模式：只剩动画的小窗、悬浮置顶，右键弹原生菜单
    ========================================================================= */
-const { app, BrowserWindow, ipcMain, Menu, screen, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen, Tray, nativeImage, powerMonitor } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let win = null;
 let tray = null;
@@ -28,10 +29,29 @@ const PET_SIZES = {
 };
 let petSize = 'max';
 
-const INTERVALS = {
-  water: [15, 30, 45, 60, 90],
-  rest: [20, 40, 60, 90, 120]
-};
+/* 提醒事项列表由渲染进程同步过来，菜单按它动态生成 */
+let menuItems = [
+  { id: 'water', name: '喝水', emoji: '💧', minutes: 45 },
+  { id: 'rest', name: '休息', emoji: '🛋️', minutes: 60 }
+];
+
+/* 「调整倒计时」里给的快捷档位 */
+const QUICK_MINUTES = [15, 30, 45, 60, 90, 120];
+
+/* 图标统一取 resources\icon.ico（多尺寸 ICO）。
+   Windows 的任务栏/窗口图标用 ICO 才清晰，PNG 在部分场景会退回默认图标。 */
+function iconPath() {
+  const packed = path.join(process.resourcesPath || '', 'icon.ico');
+  if (app.isPackaged && fs.existsSync(packed)) return packed;
+  const dev = path.join(__dirname, 'build', 'icon.ico');
+  return fs.existsSync(dev) ? dev : path.join(__dirname, 'icon.png');
+}
+
+/* Windows 靠 AppUserModelID 把窗口和快捷方式认成同一个程序；
+   不设的话任务栏有时会显示成 Electron 默认图标、也不会正确合并。 */
+if (process.platform === 'win32') {
+  try { app.setAppUserModelId('com.kunkun.reminder'); } catch (e) { }
+}
 
 /* ------------------------------------------------------------ 创建窗口 */
 function createWindow() {
@@ -44,7 +64,7 @@ function createWindow() {
     transparent: true,            // 宠物模式下窗口背景完全透明，只看得见坤坤
     backgroundColor: '#00000000',
     title: '电子坤坤提醒器',
-    icon: path.join(__dirname, 'icon.png'),
+    icon: iconPath(),
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
@@ -106,7 +126,9 @@ function bringToFront() {
 /* ------------------------------------------------------------ 托盘 */
 function buildTray() {
   try {
-    let img = nativeImage.createFromPath(path.join(__dirname, 'tray.png'));
+    /* 优先用多尺寸 ICO：系统会按 DPI 挑最合适的那一档，比单张 PNG 清楚 */
+    let img = nativeImage.createFromPath(iconPath());
+    if (img.isEmpty()) img = nativeImage.createFromPath(path.join(__dirname, 'tray.png'));
     if (img.isEmpty()) img = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
     tray = new Tray(img);
   } catch (err) {
@@ -120,21 +142,45 @@ function buildTray() {
 
 function refreshTrayMenu() {
   if (!tray) return;
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示坤坤', click: showWindow },
+  const tpl = [
+    { label: '显示主界面', click: showWindow },
     { label: '宠物模式（只剩动画）', type: 'checkbox', checked: petMode, click: (mi) => applyPetMode(mi.checked) },
     { type: 'separator' },
-    { label: '💧 立即提醒喝水', click: () => alertNow('water') },
-    { label: '🛋️ 立即提醒休息', click: () => alertNow('rest') },
-    { label: timersRunning ? '⏸ 暂停计时' : '▶ 继续计时', click: () => { if (win) win.webContents.send('tray-toggle'); } },
-    { type: 'separator' },
-    { label: '退出', click: quitApp }
-  ]));
+    { label: '🕰 十二时辰对照表', click: () => { showWindow(); send('show-shichen'); } },
+    { label: '＋ 添加提醒事项', click: () => { showWindow(); send('add-item'); } },
+    { type: 'separator' }
+  ];
+
+  /* 「立即提醒」按用户自己的提醒列表动态生成 */
+  if (menuItems.length) {
+    menuItems.forEach(it => {
+      tpl.push({
+        label: '立即提醒：' + (it.emoji || '') + ' ' + it.name,
+        click: () => alertNow(it.id)
+      });
+    });
+  } else {
+    tpl.push({ label: '（还没有提醒事项）', enabled: false });
+  }
+
+  tpl.push({ type: 'separator' });
+  tpl.push({
+    label: timersRunning ? '⏸ 暂停计时' : '▶ 继续计时',
+    click: () => send('tray-toggle')
+  });
+  tpl.push({ type: 'separator' });
+  tpl.push({ label: '退出', click: quitApp });
+
+  tray.setContextMenu(Menu.buildFromTemplate(tpl));
 }
 
-function alertNow(kind) {
+function send(channel, payload) {
+  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+function alertNow(id) {
   showWindow();
-  if (win) win.webContents.send('tray-alert', kind);
+  send('tray-alert', id);
 }
 
 function showWindow() {
@@ -152,6 +198,7 @@ function toggleWindow() {
 
 function hideToTray() {
   if (!win) return;
+  hideBubble();                 // 气泡是独立小窗，收托盘时要一起收掉
   win.hide();
   if (!balloonShown && tray && typeof tray.displayBalloon === 'function') {
     balloonShown = true;
@@ -166,13 +213,24 @@ function hideToTray() {
 
 function quitApp() {
   quitting = true;
+  if (bubbleWin && !bubbleWin.isDestroyed()) {
+    try { bubbleWin.destroy(); } catch (e) { }
+  }
   app.quit();
 }
 
 /* ------------------------------------------------------------ 宠物模式 */
+/* 宠物窗的「家」：进入宠物模式时钉死一次，说话结束后每次都回到这里。
+   不每次重存的话，Windows 在非 100% 缩放比下会把尺寸取整出 1px 偏差，
+   来回说话几十次宠物就会慢慢变大。 */
+let petHome = null;
+let talkOpen = false;
+
 function applyPetMode(on, silent) {
   if (!win) return false;
   petMode = !!on;
+  petHome = null;
+  hideBubble();                 // 切模式时把气泡收掉
   const area = screen.getPrimaryDisplay().workAreaSize;
 
   if (petMode) {
@@ -182,13 +240,20 @@ function applyPetMode(on, silent) {
     win.setAlwaysOnTop(true, 'floating');
     win.setSkipTaskbar(true);            // 宠物模式不进任务栏，只留托盘图标
     win.setMinimumSize(80, 80);          // 宠物窗可以很小
+    /* 关掉可缩放：不然鼠标蹭到窗口边缘就能把宠物窗拉大，
+       而宠物本身是按比例画的、看不出变化，等点开气泡时窗口会按那个
+       被拉大的尺寸铺开，一下子变得特别巨大。大小只该由「宠物大小」菜单决定。 */
+    win.setResizable(false);
     win.setBounds({
       x: area.width - sz.w - 28,
       y: area.height - sz.h - 28,
       width: sz.w,
       height: sz.h
     });
+    petHome = win.getBounds();           // 记下系统实际给的大小
+    ensureBubbleWin();                   // 提前把气泡窗建好，第一次点开才不会有延迟
   } else {
+    win.setResizable(true);              // 主界面恢复可缩放
     win.setAlwaysOnTop(false);
     win.setSkipTaskbar(false);           // 主界面恢复正常任务栏图标
     win.setMinimumSize(760, 560);
@@ -211,41 +276,47 @@ function setPetSize(name) {
 }
 
 /* --------------------------------------- 宠物模式 / 托盘 右键菜单 */
-function intervalSubmenu(kind, title) {
+function intervalSubmenu(it) {
   return {
-    label: title,
-    submenu: INTERVALS[kind].map(m => ({
+    label: (it.emoji || '') + ' ' + it.name + '（当前 ' + it.minutes + ' 分钟）',
+    submenu: QUICK_MINUTES.map(m => ({
       label: m + ' 分钟',
-      click: () => { if (win) win.webContents.send('set-interval', { kind, minutes: m }); }
+      click: () => send('set-interval', { id: it.id, minutes: m })
     }))
   };
 }
 
 ipcMain.handle('pet-menu', () => {
   if (!win) return false;
-  Menu.buildFromTemplate([
+  const tpl = [
     { label: '显示主界面', click: () => { applyPetMode(false); showWindow(); } },
     { label: '收进托盘', click: hideToTray },
     { type: 'separator' },
-    {
+    { label: '🕰 十二时辰对照表', click: () => { applyPetMode(false); showWindow(); send('show-shichen'); } },
+    { label: '＋ 添加提醒事项', click: () => { applyPetMode(false); showWindow(); send('add-item'); } }
+  ];
+
+  if (menuItems.length) {
+    tpl.push({ type: 'separator' });
+    tpl.push({
       label: '调整倒计时',
-      submenu: [
-        intervalSubmenu('water', '💧 喝水间隔'),
-        intervalSubmenu('rest', '🛋️ 休息间隔')
-      ]
-    },
-    {
-      label: '宠物大小',
-      submenu: Object.keys(PET_SIZES).map(k => ({
-        label: PET_SIZES[k].label,
-        type: 'radio',
-        checked: petSize === k,
-        click: () => setPetSize(k)
-      }))
-    },
-    { type: 'separator' },
-    { label: '退出坤坤', click: quitApp }
-  ]).popup({ window: win });
+      submenu: menuItems.map(intervalSubmenu)
+    });
+  }
+
+  tpl.push({
+    label: '宠物大小',
+    submenu: Object.keys(PET_SIZES).map(k => ({
+      label: PET_SIZES[k].label,
+      type: 'radio',
+      checked: petSize === k,
+      click: () => setPetSize(k)
+    }))
+  });
+  tpl.push({ type: 'separator' });
+  tpl.push({ label: '退出', click: quitApp });
+
+  Menu.buildFromTemplate(tpl).popup({ window: win });
   return true;
 });
 
@@ -275,6 +346,166 @@ ipcMain.handle('dismiss', () => {
 });
 
 ipcMain.handle('pet-mode', (e, on) => applyPetMode(on, false));
+
+/* ======================================================== 说话气泡
+   气泡用「独立的小透明窗」实现，不再和宠物挤在同一个窗口里。
+
+   为什么这么做：以前气泡是塞在宠物窗里的，说话时得把宠物窗移动+放大，
+   而「窗口几何」和「网页内容」分属主进程与渲染进程，两者永远有先后差 ——
+   那一瞬间就会看到宠物/气泡闪到别的位置。改成独立窗口后，
+   宠物窗在整个说话过程中尺寸位置一动不动，这类闪烁从根上就没有了。 */
+
+const BUBBLE_W = 340, BUBBLE_H = 176, BUBBLE_GAP = 10, BUBBLE_PAD = 10;
+let bubbleWin = null;
+
+function talkDisplay(px, py) {
+  try {
+    return screen.getDisplayNearestPoint({ x: Math.round(px), y: Math.round(py) });
+  } catch (e) {
+    return screen.getPrimaryDisplay();
+  }
+}
+
+/* 给气泡挑个位置。三条硬性要求：
+     1. 完整落在桌面可用区内（宠物贴哪条边都行）
+     2. 不和宠物重叠
+     3. 默认在宠物「上方」偏一侧（就是左上角 / 右上角），放不下才退成左 / 右
+   气泡比宠物宽，所以优先「并排」——并排时横向就不相交，纵向怎么放都压不到宠物。 */
+function placeBubble(petX, petY, petW, petH, preferSide, wa) {
+  const M = 8;
+  const limL = wa.x + M, limR = wa.x + wa.width - M;
+  const limT = wa.y + M, limB = wa.y + wa.height - M;
+
+  const rightX = petX + petW + BUBBLE_GAP;
+  const leftX = petX - BUBBLE_GAP - BUBBLE_W;
+  const fitsR = (rightX + BUBBLE_W) <= limR;
+  const fitsL = leftX >= limL;
+  const preferR = preferSide === 'right';
+
+  let bx;
+  if (preferR && fitsR) bx = rightX;
+  else if (!preferR && fitsL) bx = leftX;
+  else if (fitsL) bx = leftX;
+  else if (fitsR) bx = rightX;
+  else bx = Math.max(limL, Math.min(rightX, limR - BUBBLE_W));
+
+  /* 纵向默认在宠物上方；宠物贴顶时会被夹到屏幕顶部，自动变成「左边 / 右边」 */
+  let by = petY - BUBBLE_GAP - BUBBLE_H;
+  by = Math.max(limT, Math.min(by, limB - BUBBLE_H));
+
+  /* 并排时横向本来就不相交；万一夹取后压住了宠物，就整块挪到上方或下方 */
+  const overlapX = !(bx + BUBBLE_W <= petX || bx >= petX + petW);
+  if (overlapX) {
+    const above = petY - BUBBLE_GAP - BUBBLE_H;
+    const below = petY + petH + BUBBLE_GAP;
+    if (above >= limT) by = above;
+    else if (below + BUBBLE_H <= limB) by = below;
+    else by = Math.max(limT, Math.min(above, limB - BUBBLE_H));
+  }
+
+  /* 小尾巴朝哪边：始终指向宠物 */
+  const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+  let tail, tailPos;
+  if (bx >= petX + petW) {
+    tail = 'left';
+    tailPos = cl(petY + petH / 2 - by, 16, BUBBLE_H - 16);
+  } else if (bx + BUBBLE_W <= petX) {
+    tail = 'right';
+    tailPos = cl(petY + petH / 2 - by, 16, BUBBLE_H - 16);
+  } else if (by + BUBBLE_H <= petY) {
+    tail = 'bottom';
+    tailPos = cl(petX + petW / 2 - bx, 16, BUBBLE_W - 16);
+  } else {
+    tail = 'top';
+    tailPos = cl(petX + petW / 2 - bx, 16, BUBBLE_W - 16);
+  }
+
+  return { x: Math.round(bx), y: Math.round(by), tail: tail, tailPos: Math.round(tailPos) };
+}
+
+function ensureBubbleWin() {
+  if (bubbleWin && !bubbleWin.isDestroyed()) return bubbleWin;
+  bubbleWin = new BrowserWindow({
+    width: BUBBLE_W + BUBBLE_PAD * 2,
+    height: BUBBLE_H + BUBBLE_PAD * 2,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    focusable: false,          // 不抢焦点，点它也不会打断别处的操作
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'bubble-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false
+    }
+  });
+  bubbleWin.setAlwaysOnTop(true, 'floating');
+  bubbleWin.setIgnoreMouseEvents(true);      // 气泡纯展示，鼠标事件穿透过去
+  bubbleWin.loadFile(path.join(__dirname, 'bubble.html'));
+  bubbleWin.on('closed', () => { bubbleWin = null; });
+  return bubbleWin;
+}
+
+/* 显示气泡：主进程负责算位置，渲染进程只提供文字内容 */
+function showBubble(data) {
+  const b = petHome || (win && !win.isDestroyed() ? win.getBounds() : null);
+  if (!b) return false;
+
+  const bw = ensureBubbleWin();
+  const disp = talkDisplay(b.x + b.width / 2, b.y + b.height / 2);
+  const p = placeBubble(b.x, b.y, b.width, b.height,
+    data && data.side === 'left' ? 'left' : 'right', disp.workArea);
+
+  bw.setBounds({
+    x: p.x - BUBBLE_PAD,
+    y: p.y - BUBBLE_PAD,
+    width: BUBBLE_W + BUBBLE_PAD * 2,
+    height: BUBBLE_H + BUBBLE_PAD * 2
+  });
+
+  const payload = {
+    head: (data && data.head) || '',
+    mer: (data && data.mer) || '',
+    tip: (data && data.tip) || '',
+    next: (data && data.next) || '',
+    tail: p.tail,
+    tailPos: p.tailPos
+  };
+  const push = function () {
+    try { bw.webContents.send('bubble-data', payload); } catch (e) { /* 忽略 */ }
+  };
+  if (bw.webContents.isLoading()) bw.webContents.once('did-finish-load', push);
+  else push();
+
+  bw.showInactive();                          // 不激活、不抢焦点
+  talkOpen = true;
+  return true;
+}
+
+function hideBubble() {
+  talkOpen = false;
+  if (bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()) bubbleWin.hide();
+}
+
+/* 渲染进程把文字发过来，主进程只管摆位置和显示 */
+ipcMain.handle('pet-talk', (e, data) => {
+  if (!win || !petMode) return false;
+  return showBubble(data || {});
+});
+
+ipcMain.handle('pet-talk-end', () => {
+  hideBubble();
+  return true;
+});
 ipcMain.handle('set-pet-size', (e, name) => setPetSize(name));
 ipcMain.handle('get-pet-size', () => petSize);
 ipcMain.handle('minimize', () => { if (win) win.minimize(); });
@@ -306,6 +537,8 @@ ipcMain.on('drag-start', (e, pt) => {
   dragState = { x: pt.x, y: pt.y, bounds: win.getBounds() };
 });
 
+/* 拖动。注意：渲染进程在按下鼠标时就会先让气泡收掉（pet-talk-end），
+   所以拖动过程中窗口一定只有宠物那么大，这里不需要再考虑气泡。 */
 ipcMain.on('drag-move', (e, pt) => {
   if (!win || !dragState || !pt) return;
   const b = dragState.bounds;
@@ -327,16 +560,50 @@ ipcMain.on('drag-end', () => {
       win.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
     }
   }
+
+  /* 宠物被拖走了，「家」坐标也要跟着走。
+     不更新的话，下次点宠物说话时会按进宠物模式时的旧坐标铺开，
+     宠物就会自己跳回桌面右下角。 */
+  if (petMode && petHome && win && !win.isDestroyed()) {
+    const b = win.getBounds();
+    petHome = { x: b.x, y: b.y, width: petHome.width, height: petHome.height };
+  }
   dragState = null;
 });
 
 ipcMain.on('state', (e, s) => {
   if (!s) return;
-  const changed = (timersRunning !== !!s.running) || (petMode !== !!s.petMode);
+  let changed = (timersRunning !== !!s.running) || (petMode !== !!s.petMode);
   timersRunning = !!s.running;
   if (typeof s.petMode === 'boolean' && s.petMode !== petMode) petMode = s.petMode;
+
+  /* 提醒列表变了（用户加/删/改了事项），菜单要重建 */
+  if (Array.isArray(s.items)) {
+    const next = s.items
+      .filter(it => it && it.id && it.name)
+      .map(it => ({ id: it.id, name: it.name, emoji: it.emoji || '', minutes: +it.minutes || 30 }));
+    if (JSON.stringify(next) !== JSON.stringify(menuItems)) {
+      menuItems = next;
+      changed = true;
+    }
+  }
   if (changed) refreshTrayMenu();
 });
+
+/* --------------------------------------------------- 电源事件（睡眠 / 息屏） */
+function bindPowerEvents() {
+  const map = {
+    'suspend': 'suspend',
+    'resume': 'resume',
+    'lock-screen': 'lock',
+    'unlock-screen': 'unlock'
+  };
+  Object.keys(map).forEach(function (ev) {
+    try {
+      powerMonitor.on(ev, function () { send('power', map[ev]); });
+    } catch (e) { /* 个别平台不支持就跳过 */ }
+  });
+}
 
 /* ------------------------------------------------------------ 生命周期 */
 const gotLock = app.requestSingleInstanceLock();
@@ -344,8 +611,12 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', showWindow);
-  app.whenReady().then(() => { createWindow(); buildTray(); });
+  /* 重复启动 = 又点了一次桌面图标：叫出窗口并报告当前时辰 */
+  app.on('second-instance', () => {
+    showWindow();
+    send('show-shichen');
+  });
+  app.whenReady().then(() => { createWindow(); buildTray(); bindPowerEvents(); });
   app.on('before-quit', () => { quitting = true; });
   app.on('window-all-closed', () => { /* 有托盘常驻，不退出 */ });
   app.on('activate', () => { if (!win) createWindow(); else showWindow(); });

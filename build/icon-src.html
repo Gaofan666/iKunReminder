@@ -1,0 +1,68 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;width:256px;height:256px;overflow:hidden;background:transparent}</style></head>
+<body><canvas id="c" width="256" height="256"></canvas>
+<script>
+/* 图标：只有头像，其余全部透明（不加底色块、不加边框）
+   去白底用「从四边泛洪」而不是全局阈值 —— 否则白眼球会被一起删掉。 */
+var S = 256;
+var HEAD_RATIO = 0.92;          // 头像占画布的比例
+
+var x = document.getElementById('c').getContext('2d');
+var img = new Image();
+
+img.onload = function () {
+  var tmp = document.createElement('canvas');
+  tmp.width = S; tmp.height = S;
+  var tx = tmp.getContext('2d');
+  tx.drawImage(img, 0, 0, S, S);
+  var idata = tx.getImageData(0, 0, S, S);
+  var p = idata.data;
+
+  /* ---- 从四条边泛洪去白底 ---- */
+  var done = new Uint8Array(S * S);
+  var stack = [];
+  function push(i) { if (!done[i]) stack.push(i); }
+  for (var i = 0; i < S; i++) { push(i); push((S - 1) * S + i); push(i * S); push(i * S + S - 1); }
+
+  while (stack.length) {
+    var idx = stack.pop();
+    if (done[idx]) continue;
+    done[idx] = 1;
+    var i4 = idx * 4;
+    var w = Math.min(p[i4], p[i4 + 1], p[i4 + 2]);
+    if (w < 214) continue;
+    p[i4 + 3] = w >= 246 ? 0 : Math.round(255 * (246 - w) / 32);
+    var cx = idx % S, cy = (idx - cx) / S;
+    if (cx > 0) push(idx - 1);
+    if (cx < S - 1) push(idx + 1);
+    if (cy > 0) push(idx - S);
+    if (cy < S - 1) push(idx + S);
+  }
+  tx.putImageData(idata, 0, 0);
+
+  /* ---- 裁掉留白 ---- */
+  var minX = S, minY = S, maxX = -1, maxY = -1;
+  for (var y = 0; y < S; y++) {
+    for (var xx = 0; xx < S; xx++) {
+      if (p[(y * S + xx) * 4 + 3] > 12) {
+        if (xx < minX) minX = xx;
+        if (xx > maxX) maxX = xx;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) { minX = 0; minY = 0; maxX = S - 1; maxY = S - 1; }
+  var bw = maxX - minX + 1, bh = maxY - minY + 1;
+
+  /* ---- 透明底上放大绘制，不加任何背景 ---- */
+  x.clearRect(0, 0, S, S);
+  var target = S * HEAD_RATIO;
+  var k = Math.min(target / bw, target / bh);
+  var dw = bw * k, dh = bh * k;
+  x.drawImage(tmp, minX, minY, bw, bh, (S - dw) / 2, (S - dh) / 2, dw, dh);
+
+  document.title = 'ready';
+};
+img.src = '../build/avatar.png';
+</script></body></html>

@@ -1,20 +1,20 @@
-/* =========================================================
+﻿/* =========================================================
    电子坤坤 · 喝水休息提醒器  样式表
    风格：赛博霓虹 / 全息舞台 / CRT 扫描线
    ========================================================= */
 
 :root{
-  --bg-0:#05060f;
-  --bg-1:#0b0e24;
-  --pink:#ff2d95;
-  --cyan:#00e5ff;
-  --purple:#8a5cff;
-  --lime:#7dff8a;
-  --text:#e9edff;
-  --dim:#8b93b8;
-  --line:rgba(130,150,255,.22);
-  --panel:rgba(14,18,42,.78);
-  --shadow:0 18px 50px rgba(0,0,0,.55);
+  --bg-0:#E9F4FA;
+  --bg-1:#FCFEFE;
+  --clay:#D9A15F;
+  --lake:#3E9AA8;
+  --sky:#4A9BD4;
+  --leaf:#6FB56B;
+  --text:#24373F;
+  --dim:#4E6675;
+  --line:rgba(74,120,150,.28);
+  --panel:rgba(255,255,255,.94);
+  --shadow:0 10px 30px rgba(90,130,160,.16);
 }
 
 *{box-sizing:border-box}
@@ -24,8 +24,8 @@ body{
   font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
   color:var(--text);
   background:
-    radial-gradient(1100px 640px at 50% -12%, #1d1a52 0%, transparent 62%),
-    radial-gradient(880px 620px at 104% 108%, #340c46 0%, transparent 58%),
+    radial-gradient(1100px 640px at 50% -12%, #D6ECFA 0%, transparent 62%),
+    radial-gradient(880px 620px at 104% 108%, #E6F5E0 0%, transparent 58%),
     linear-gradient(180deg,var(--bg-1) 0%, var(--bg-0) 100%);
   background-attachment:fixed;
   overflow-x:hidden;
@@ -37,8 +37,8 @@ body{
   position:fixed;left:50%;bottom:-12vh;width:240vw;height:62vh;z-index:0;
   transform:translateX(-50%) perspective(430px) rotateX(70deg);
   background-image:
-    linear-gradient(rgba(0,229,255,.26) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,45,149,.20) 1px, transparent 1px);
+    linear-gradient(rgba(74,155,212,.20) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(111,181,107,.20) 1px, transparent 1px);
   background-size:64px 64px, 64px 64px;
   -webkit-mask-image:linear-gradient(to top, rgba(0,0,0,.95), transparent 88%);
   mask-image:linear-gradient(to top, rgba(0,0,0,.95), transparent 88%);
@@ -50,8 +50,8 @@ body{
 .aurora{
   position:fixed;inset:-20% -10% auto -10%;height:70vh;z-index:0;pointer-events:none;
   background:
-    radial-gradient(520px 300px at 18% 30%, rgba(255,45,149,.20), transparent 70%),
-    radial-gradient(560px 320px at 82% 22%, rgba(0,229,255,.18), transparent 70%);
+    radial-gradient(520px 300px at 18% 30%, rgba(111,181,107,.18), transparent 70%),
+    radial-gradient(560px 320px at 82% 22%, rgba(74,155,212,.18), transparent 70%);
   filter:blur(10px);
   animation:auroraFloat 14s ease-in-out infinite alternate;
 }
@@ -59,7 +59,7 @@ body{
 
 .scanlines{
   position:fixed;inset:0;z-index:60;pointer-events:none;
-  background:repeating-linear-gradient(180deg, rgba(255,255,255,.030) 0 1px, transparent 1px 3px);
+  background:repeating-linear-gradient(180deg, rgba(30,50,100,.025) 0 1px, transparent 1px 3px);
   mix-blend-mode:overlay;
 }
 
@@ -73,17 +73,17 @@ body{
 .logo{
   width:52px;height:52px;display:grid;place-items:center;font-size:26px;
   border-radius:16px;
-  background:linear-gradient(150deg, rgba(255,45,149,.28), rgba(0,229,255,.22));
+  background:linear-gradient(150deg, rgba(217,161,95,.15), rgba(62,154,168,.13));
   border:1px solid var(--line);
-  box-shadow:0 0 26px rgba(255,45,149,.35), inset 0 0 18px rgba(0,229,255,.15);
+  box-shadow:0 0 16px rgba(217,161,95,.16), inset 0 0 12px rgba(62,154,168,.10);
   animation:logoSpin 6s ease-in-out infinite;
 }
 @keyframes logoSpin{ 0%,100%{transform:rotate(-8deg)} 50%{transform:rotate(8deg) scale(1.05)} }
 .brand-text h1{
   margin:0;font-size:26px;letter-spacing:3px;font-weight:800;
-  background:linear-gradient(92deg,var(--cyan),#fff 40%,var(--pink));
+  background:linear-gradient(92deg,var(--lake),var(--sky) 42%,var(--leaf));
   -webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 14px rgba(0,229,255,.35));
+  filter:drop-shadow(0 0 10px rgba(62,154,168,.22));
 }
 .ver{font-size:11px;letter-spacing:1px;color:var(--dim);-webkit-text-fill-color:var(--dim)}
 .sub{margin:4px 0 0;color:var(--dim);font-size:12.5px;letter-spacing:.6px}
@@ -92,7 +92,7 @@ body{
 .digital{
   font-family:Consolas,"Courier New",monospace;
   font-size:34px;font-weight:700;letter-spacing:3px;line-height:1;
-  color:#fff;text-shadow:0 0 10px var(--cyan),0 0 28px rgba(0,229,255,.55);
+  color:#3B4740;text-shadow:0 0 12px rgba(62,154,168,.28);
 }
 
 /* ---------- 布局 ---------- */
@@ -127,49 +127,50 @@ body.pet #app{
 .stage-card{padding:16px 16px 14px;position:relative;overflow:hidden}
 .stage-card::after{
   content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;
-  background:linear-gradient(180deg, rgba(0,229,255,.06), transparent 40%);
+  background:linear-gradient(180deg, rgba(62,154,168,.05), transparent 40%);
 }
 .stage-head{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2.4px;color:var(--dim);padding:0 4px 8px}
-.stage-head .dot{width:8px;height:8px;border-radius:50%;background:var(--lime);box-shadow:0 0 12px var(--lime);animation:blink 1.6s infinite}
+.stage-head .dot{width:8px;height:8px;border-radius:50%;background:var(--leaf);box-shadow:0 0 12px var(--leaf);animation:blink 1.6s infinite}
 @keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.25} }
 
 .stage-wrap{
   position:relative;width:100%;aspect-ratio:1/.86;
   border-radius:16px;overflow:hidden;
   background:
-    radial-gradient(70% 55% at 50% 100%, rgba(0,229,255,.14), transparent 70%),
-    radial-gradient(60% 50% at 50% 12%, rgba(255,45,149,.12), transparent 72%),
-    #060814;
-  border:1px solid rgba(120,140,255,.18);
+    radial-gradient(70% 55% at 50% 100%, rgba(62,154,168,.10), transparent 70%),
+    radial-gradient(60% 50% at 50% 12%, rgba(217,161,95,.07), transparent 72%),
+    #e8eefb;
+  border:1px solid rgba(74,155,212,.18);
 }
 #stage{width:100%;height:100%;display:block}
 
 .stage-caption{
   margin:10px 4px 0;font-size:13px;color:var(--dim);letter-spacing:1px;min-height:19px;
 }
-.stage-caption b{color:var(--cyan)}
+.stage-caption b{color:var(--lake)}
 
 .toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-top:11px}
 .toolbar.toggles{margin-top:9px;gap:14px}
 
 .btn{
   appearance:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;
-  color:var(--text);background:rgba(120,140,255,.10);
+  color:var(--text);background:rgba(74,155,212,.10);
   border:1px solid var(--line);border-radius:12px;padding:9px 15px;
   transition:transform .12s ease, background .18s ease, box-shadow .18s ease, color .18s;
 }
-.btn:hover{background:rgba(120,140,255,.22);transform:translateY(-1px)}
+.btn:hover{background:rgba(111,181,107,.26);transform:translateY(-1px)}
 .btn:active{transform:translateY(1px) scale(.985)}
 .btn.primary{
-  background:linear-gradient(100deg,var(--pink),var(--purple));border-color:transparent;color:#fff;
-  box-shadow:0 8px 24px rgba(255,45,149,.34);
+  /* 同色系渐变：天空蓝 → 湖蓝。别用「陶土→蓝」那种互补色，中间会调出浑浊的紫灰 */
+  background:linear-gradient(100deg,var(--sky),var(--lake));border-color:transparent;color:#fff;
+  box-shadow:0 8px 22px rgba(62,154,168,.34);
 }
-.btn.primary:hover{box-shadow:0 10px 30px rgba(255,45,149,.5)}
+.btn.primary:hover{box-shadow:0 10px 26px rgba(62,154,168,.46)}
 .btn.ghost{background:transparent}
 .btn.sm{padding:7px 12px;font-size:12.5px;font-weight:500}
 .btn.big{padding:13px 26px;font-size:15px;border-radius:14px}
 
-.chk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none}.chk input{width:15px;height:15px;accent-color:var(--cyan);cursor:pointer}
+.chk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none}.chk input{width:15px;height:15px;accent-color:var(--lake);cursor:pointer}
 
 .hint{margin:10px 4px 0;font-size:11.5px;color:var(--dim);line-height:1.7}
 
@@ -185,20 +186,18 @@ body.pet #app{
   padding:6px 15px;cursor:pointer;transition:.16s;
 }
 .seg button + button{border-left:1px solid var(--line)}
-.seg button:hover{color:#fff;background:rgba(255,255,255,.08)}
+.seg button:hover{color:var(--text);background:#DFEDF6}
 .seg button.on{
-  color:#fff;background:linear-gradient(100deg,var(--pink),var(--purple));
-  box-shadow:0 0 14px rgba(255,45,149,.4);
+  color:#fff;background:linear-gradient(100deg,var(--sky),var(--lake));
+  box-shadow:0 0 14px rgba(217,161,95,.4);
 }kbd{
   font-family:Consolas,monospace;font-size:11px;padding:1px 6px;border-radius:6px;
-  background:rgba(120,140,255,.14);border:1px solid var(--line);color:var(--text);
+  background:rgba(74,155,212,.14);border:1px solid var(--line);color:var(--text);
 }
 
 /* ---------- 计时面板 ---------- */
 .panels{display:flex;flex-direction:column;gap:18px}
-.panel{--accent:var(--cyan);padding:16px 18px 18px}
-.panel[data-kind="water"]{--accent:#00e5ff}
-.panel[data-kind="rest"]{--accent:#ff2d95}
+.panel{--accent:var(--lake);padding:16px 18px 18px}
 .panel::before{
   content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
@@ -209,8 +208,8 @@ body.pet #app{
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .panel-head h2{
   margin:0;font-size:16px;letter-spacing:1.4px;font-weight:700;
-  display:flex;align-items:center;gap:8px;color:#fff;
-  text-shadow:0 0 16px color-mix(in srgb, var(--accent) 60%, transparent);
+  display:flex;align-items:center;gap:8px;color:var(--text);
+  text-shadow:none;
 }
 .panel-head .ico{font-size:17px;filter:drop-shadow(0 0 8px var(--accent))}
 
@@ -218,7 +217,7 @@ body.pet #app{
 .switch input{opacity:0;width:0;height:0}
 .slider{
   position:absolute;inset:0;border-radius:99px;cursor:pointer;transition:.22s;
-  background:rgba(255,255,255,.12);border:1px solid var(--line);
+  background:#dfe4f0;border:1px solid var(--line);
 }
 .slider::before{
   content:"";position:absolute;width:16px;height:16px;left:3px;top:2.5px;border-radius:50%;
@@ -231,7 +230,7 @@ body.pet #app{
 
 .ring-wrap{position:relative;width:132px;height:132px;flex:none}
 .ring{width:100%;height:100%;transform:rotate(-90deg)}
-.ring-bg{fill:none;stroke:rgba(255,255,255,.09);stroke-width:9}
+.ring-bg{fill:none;stroke:rgba(74,120,150,.12);stroke-width:9}
 .ring-fg{
   fill:none;stroke:var(--accent);stroke-width:9;stroke-linecap:round;
   stroke-dasharray:326.73;stroke-dashoffset:0;
@@ -243,7 +242,7 @@ body.pet #app{
 }
 .ring-text b{
   display:block;font-family:Consolas,"Courier New",monospace;font-size:24px;letter-spacing:1px;
-  color:#fff;text-shadow:0 0 12px var(--accent);
+  color:var(--text);text-shadow:none;
 }
 .ring-text small{display:block;margin-top:3px;font-size:10.5px;color:var(--dim);letter-spacing:1.5px}
 
@@ -251,8 +250,8 @@ body.pet #app{
 .row{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--dim)}
 .row .label{letter-spacing:1px}
 .row input[type=number]{
-  width:78px;font-family:Consolas,monospace;font-size:16px;font-weight:700;color:#fff;
-  background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:10px;
+  width:78px;font-family:Consolas,monospace;font-size:16px;font-weight:700;color:var(--text);
+  background:#ffffff;border:1px solid var(--line);border-radius:10px;
   padding:6px 10px;text-align:center;outline:none;transition:.18s;
 }
 .row input[type=number]:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)}
@@ -261,16 +260,25 @@ body.pet #app{
 .quick{display:flex;gap:6px;flex-wrap:wrap}
 .mini{
   cursor:pointer;font-family:inherit;font-size:11.5px;color:var(--dim);
-  background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:9px;padding:5px 9px;
+  background:#EEF6FB;border:1px solid var(--line);border-radius:9px;padding:5px 9px;
   transition:.16s;
 }
-.mini:hover{color:#fff;border-color:var(--accent);background:color-mix(in srgb, var(--accent) 16%, transparent)}
+.mini:hover{color:var(--text);border-color:var(--accent);background:color-mix(in srgb, var(--accent) 14%, transparent)}
 
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 
 .stat{font-size:12.5px;color:var(--dim);letter-spacing:.5px}
+/* #4 每日目标次数：直接在这个小输入框里改 */
+.goal-input{
+  width:48px;margin:0 2px;padding:2px 4px;vertical-align:middle;
+  font-family:Consolas,monospace;font-size:13px;font-weight:700;color:var(--text);
+  background:#fff;border:1px solid var(--line);border-radius:7px;
+  text-align:center;outline:none;transition:.15s;
+}
+.goal-input:hover{border-color:var(--lake)}
+.goal-input:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.18)}
 .stat b{color:var(--accent);font-family:Consolas,monospace;font-size:15px}
-.bar{height:5px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+.bar{height:5px;border-radius:99px;background:rgba(74,120,150,.12);overflow:hidden}
 .bar i{
   display:block;height:100%;width:0;border-radius:99px;
   background:linear-gradient(90deg,var(--accent),#fff);
@@ -285,7 +293,7 @@ body.pet #app{
 .titlebar{
   display:none;height:38px;flex:none;align-items:center;justify-content:space-between;
   padding:0 6px 0 12px;position:relative;z-index:40;
-  background:linear-gradient(180deg,rgba(14,18,42,.96),rgba(10,13,32,.92));
+  background:linear-gradient(180deg,#ffffff,#f4f7fd);
   border-bottom:1px solid var(--line);
   cursor:move;
 }
@@ -298,22 +306,21 @@ body.desktop .titlebar{display:flex}
   width:42px;height:30px;border:0;border-radius:8px;background:transparent;
   color:var(--dim);font-family:inherit;font-size:13px;cursor:pointer;transition:.15s;
 }
-.tb-btn:hover{background:rgba(255,255,255,.1);color:#fff}
-.tb-close:hover{background:#e5484d;color:#fff}
+.tb-btn:hover{background:rgba(74,120,150,.12);color:var(--text)}
+.tb-close:hover{background:#D9534F;color:#fff}
 
 /* ---------- 宠物模式：只剩坤坤，窗口透明，整窗可拖，右键出菜单 ---------- */
 body.pet{background:transparent;overflow:hidden;cursor:move}
+/* 白名单：除了小鸡和说话气泡，其余一律不显示。
+   以前是逐个列举要隐藏的元素，结果新加「宠物大小」那一排时漏掉了，
+   它就压在宠物身上显示出来了 —— 改成白名单，以后加元素也不会漏。 */
 body.pet .titlebar,
 body.pet .topbar,
-body.pet .stage-head,
-body.pet .stage-caption,
-body.pet .toolbar,
-body.pet .panels,
-body.pet .tip,
-body.pet .hint,
 body.pet .grid-floor,
 body.pet .aurora,
-body.pet .scanlines{display:none !important}
+body.pet .scanlines,
+body.pet .layout > *:not(.stage-card),
+body.pet .stage-card > *:not(.stage-wrap){display:none !important}
 
 body.pet .layout{display:block;max-width:none;margin:0;padding:0;height:100vh}
 body.pet .stage-card{
@@ -321,8 +328,12 @@ body.pet .stage-card{
   background:transparent;
 }
 body.pet .stage-card::after{display:none}
+/* 宠物模式下小鸡钉在窗口右下角。尺寸用固定的 --pet-w/--pet-h（进入宠物模式时量一次），
+   说话前后都不变 —— 早先用 100% 来回切，窗口缩回的那一帧小鸡会被挤动，看着就是闪一下。 */
 body.pet .stage-wrap{
-  height:100vh;aspect-ratio:auto;border:0;border-radius:0;
+  position:absolute;right:0;bottom:0;
+  width:var(--pet-w,150px);height:var(--pet-h,170px);
+  aspect-ratio:auto;border:0;border-radius:0;
   background:transparent;
 }
 body.pet .alert-stage-wrap{width:210px;height:198px}
@@ -330,7 +341,7 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 /* ---------- 提醒弹层 ---------- */
 .overlay{
   position:fixed;inset:0;z-index:100;display:grid;place-items:center;
-  background:radial-gradient(70% 60% at 50% 45%, rgba(20,8,40,.72), rgba(3,4,12,.94));
+  background:radial-gradient(70% 60% at 50% 45%, rgba(214,226,248,.75), rgba(238,242,250,.92));
   backdrop-filter:blur(6px);
   animation:fadeIn .22s ease;
 }
@@ -340,9 +351,9 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 .overlay-card{
   position:relative;width:min(92vw,520px);padding:22px 26px 26px;text-align:center;
   border-radius:24px;
-  background:linear-gradient(170deg, rgba(24,18,58,.96), rgba(9,10,26,.98));
-  border:1px solid rgba(255,45,149,.45);
-  box-shadow:0 0 0 1px rgba(0,229,255,.18), 0 26px 80px rgba(0,0,0,.7), 0 0 90px rgba(255,45,149,.28);
+  background:linear-gradient(170deg,#ffffff,#f6f8ff);
+  border:1px solid rgba(217,161,95,.45);
+  box-shadow:0 0 0 1px rgba(62,154,168,.16), 0 22px 60px rgba(30,50,100,.20), 0 0 60px rgba(217,161,95,.10);
   animation:popIn .32s cubic-bezier(.2,1.5,.4,1);
 }
 @keyframes popIn{ from{transform:scale(.86) translateY(14px);opacity:0} to{transform:none;opacity:1} }
@@ -351,35 +362,35 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 #alertStage{width:100%;height:100%;display:block}
 
 .glitch{
-  position:relative;font-size:31px;font-weight:900;letter-spacing:5px;margin:2px 0 10px;color:#fff;
-  text-shadow:0 0 16px var(--pink);
+  position:relative;font-size:31px;font-weight:900;letter-spacing:5px;margin:2px 0 10px;color:#3B4740;
+  text-shadow:0 0 14px rgba(217,161,95,.35);
   animation:glitchSkew .9s steps(2,end) infinite;
 }
 .glitch::before,.glitch::after{
   content:attr(data-text);position:absolute;inset:0;
 }
-.glitch::before{color:var(--cyan);transform:translate(-2px,0);mix-blend-mode:screen;animation:glitchA .7s infinite steps(3,end)}
-.glitch::after{color:var(--pink);transform:translate(2px,0);mix-blend-mode:screen;animation:glitchB .9s infinite steps(3,end)}
+.glitch::before{color:var(--lake);transform:translate(-2px,0);mix-blend-mode:screen;animation:glitchA .7s infinite steps(3,end)}
+.glitch::after{color:var(--clay);transform:translate(2px,0);mix-blend-mode:screen;animation:glitchB .9s infinite steps(3,end)}
 @keyframes glitchA{ 0%{clip-path:inset(0 0 62% 0)} 33%{clip-path:inset(48% 0 12% 0)} 66%{clip-path:inset(18% 0 55% 0)} 100%{clip-path:inset(0 0 62% 0)} }
 @keyframes glitchB{ 0%{clip-path:inset(58% 0 0 0)} 40%{clip-path:inset(10% 0 60% 0)} 70%{clip-path:inset(40% 0 32% 0)} 100%{clip-path:inset(58% 0 0 0)} }
 @keyframes glitchSkew{ 0%,100%{transform:skewX(0)} 50%{transform:skewX(-1.4deg)} }
 
-.alert-desc{margin:0 0 20px;color:#c6cdec;font-size:13.5px;line-height:1.8}
+.alert-desc{margin:0 0 20px;color:#5E6B60;font-size:13.5px;line-height:1.8}
 .alert-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 
 .close{
   position:absolute;top:12px;right:14px;width:32px;height:32px;border-radius:50%;
   cursor:pointer;color:var(--dim);font-size:14px;line-height:1;
-  background:rgba(255,255,255,.06);border:1px solid var(--line);
+  background:#EEF6FB;border:1px solid var(--line);
   transition:.16s;
 }
-.close:hover{color:#fff;background:rgba(255,45,149,.3)}
+.close:hover{color:#fff;background:var(--clay)}
 
 /* 飘字 */
 .float-words{position:fixed;inset:0;pointer-events:none;overflow:hidden}
 .float-words span{
   position:absolute;bottom:6vh;font-size:22px;font-weight:900;letter-spacing:2px;
-  color:#fff;text-shadow:0 0 14px var(--cyan),0 0 26px var(--pink);
+  color:#3B4740;text-shadow:0 0 12px rgba(62,154,168,.40),0 0 20px rgba(217,161,95,.25);
   animation:floatUp 2.6s ease-out forwards;
 }
 @keyframes floatUp{
@@ -392,3 +403,136 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 @media (prefers-reduced-motion: reduce){
   .grid-floor,.aurora,.logo,.glitch,.glitch::before,.glitch::after{animation:none}
 }
+
+/* =========================================================
+   提醒事项列表（由 JS 动态渲染，用户可增删）
+   ========================================================= */
+/* 提醒事项多的时候不把整个页面撑长：列表内部滚动，整体高度锁在设计高度
+   （max-height 由 capPanelList() 按实测高度算出来） */
+#panelList{
+  display:flex;flex-direction:column;gap:18px;
+  overflow-y:auto;overflow-x:hidden;
+  padding-right:7px;margin-right:-7px;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(74,120,150,.35) transparent;
+  overscroll-behavior:contain;
+}
+#panelList::-webkit-scrollbar{width:8px}
+#panelList::-webkit-scrollbar-track{background:transparent}
+#panelList::-webkit-scrollbar-thumb{background:rgba(74,120,150,.26);border-radius:4px}
+#panelList::-webkit-scrollbar-thumb:hover{background:rgba(74,120,150,.45)}
+/* 关键：面板不许被压缩。flex 子项默认 flex-shrink:1，会被压扁去适应
+   max-height，结果就是「滚动」变成了「挤压」，高度到了也不会溢出。 */
+#panelList > .panel{flex:0 0 auto}
+/* 列表可滚动时，底部留一点渐隐，提示「下面还有」 */
+#panelList.scrollable{
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent 100%);
+  mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent 100%);
+}
+
+.panel-tools{display:flex;align-items:center;gap:6px}
+/* 按钮改成带文字的：原来那个小垃圾桶图标又小又灰，根本看不清 */
+.icon-btn{
+  height:26px;padding:0 10px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--line);border-radius:8px;background:#EEF6FB;
+  color:#4E6675;font-size:12px;font-weight:600;font-family:inherit;transition:.15s;
+  white-space:nowrap;
+}
+.icon-btn:hover{color:var(--text);background:#DFEDF6;border-color:var(--lake)}
+/* 删除：红色描边 + 红字，一眼能认出来 */
+.icon-btn.del{
+  color:#B93B2C;background:#FDECE9;border-color:rgba(185,59,44,.45);
+}
+.icon-btn.del:hover{
+  background:#D9534F;border-color:transparent;color:#fff;
+  box-shadow:0 3px 10px rgba(217,83,79,.35);
+}
+
+.add-row{display:flex;gap:10px;flex-wrap:wrap}
+.add-row .btn{flex:1;min-width:148px}
+
+/* =========================================================
+   十二时辰养生
+   ========================================================= */
+.sc-card{
+  width:min(94vw,560px);max-height:86vh;display:flex;flex-direction:column;text-align:left;
+}
+.sc-now-wrap{text-align:center;margin:2px 0 10px}
+.sc-now{
+  font-size:26px;font-weight:900;letter-spacing:4px;color:#3B4740;
+  text-shadow:0 0 14px rgba(62,154,168,.30);
+}
+.sc-sub{margin-top:4px;font-size:13px;color:var(--lake);letter-spacing:1px}
+.sc-tip{
+  margin:0 0 12px;padding:10px 12px;font-size:13px;line-height:1.8;color:#5E6B60;text-align:center;
+  background:rgba(62,154,168,.07);border:1px solid rgba(62,154,168,.25);border-radius:12px;
+}
+.sc-list{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+.sc-list::-webkit-scrollbar{width:6px}
+.sc-list::-webkit-scrollbar-thumb{background:rgba(130,150,255,.3);border-radius:3px}
+.sc-row{
+  display:grid;grid-template-columns:70px 100px 58px 1fr;gap:8px;align-items:center;
+  padding:7px 10px;border-radius:10px;font-size:12.5px;color:var(--dim);
+  background:#f5f7fd;border:1px solid transparent;
+}
+.sc-row .sn{color:#3B4740;font-weight:700;letter-spacing:1px}
+.sc-row .st{font-family:Consolas,monospace;font-size:11.5px}
+.sc-row .sm{color:var(--clay);font-weight:600}
+.sc-row .sx{line-height:1.5}
+.sc-row.on{background:rgba(62,154,168,.12);border-color:rgba(62,154,168,.50)}
+.sc-row.on .sx{color:#1a2233}
+.sc-row.on .sm{color:var(--lake)}
+.sc-foot{margin:12px 0 0;text-align:center;font-size:11.5px;color:var(--dim);line-height:1.6}
+
+/* =========================================================
+   添加 / 编辑提醒事项
+   ========================================================= */
+.item-card{width:min(92vw,430px);text-align:left}
+.it-title{margin:0 0 16px;font-size:17px;letter-spacing:1px;color:var(--text)}
+.it-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:13px}
+.it-label{width:44px;flex:none;color:var(--dim)}
+.it-row input[type=text]{
+  flex:1;min-width:0;font-family:inherit;font-size:14px;color:var(--text);outline:none;
+  background:#ffffff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;
+}
+.it-row input[type=number]{
+  flex:none;width:86px;text-align:center;font-family:Consolas,monospace;font-weight:700;font-size:15px;
+  color:var(--text);outline:none;background:#ffffff;border:1px solid var(--line);border-radius:10px;padding:8px 6px;
+}
+.it-row input:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.18)}
+.emoji-pick{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.emoji-pick button{
+  width:34px;height:34px;display:grid;place-items:center;cursor:pointer;padding:0;font-size:17px;
+  border:1px solid var(--line);border-radius:10px;background:#EEF6FB;transition:.15s;
+}
+.emoji-pick button:hover{background:#DFEDF6}
+.emoji-pick button.on{border-color:var(--lake);background:rgba(62,154,168,.18);box-shadow:0 0 12px rgba(62,154,168,.35)}
+
+/* 睡眠/息屏自动暂停时的提示 */
+.paused-tag{
+  display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:2px 9px;border-radius:99px;
+  font-size:11px;letter-spacing:.5px;color:#ffd76a;
+  background:rgba(255,215,106,.12);border:1px solid rgba(255,215,106,.4);
+}
+
+/* =========================================================
+   今日黄历
+   ========================================================= */
+/* #5 黄历字号放大 */
+.almanac{padding:15px 18px 16px}
+.al-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:11px}
+.al-title{font-size:15px;font-weight:800;letter-spacing:1.2px;color:var(--text)}
+.al-gz{
+  font-size:14.5px;letter-spacing:.6px;color:#3A4E58;
+  font-family:Consolas,"Microsoft YaHei",monospace;
+}
+.al-gz b{color:#1A6E80;font-weight:800;font-size:15.5px}
+.al-row{display:flex;align-items:flex-start;gap:10px;margin-top:8px}
+.al-tag{
+  flex:none;width:26px;height:26px;border-radius:8px;
+  display:grid;place-items:center;font-size:14px;font-weight:800;color:#fff;
+}
+.al-tag.yi{background:linear-gradient(140deg,#6FB56B,#4E8F52)}
+.al-tag.ji{background:linear-gradient(140deg,#8C9BAA,#6B7A88)}
+.al-list{font-size:13.5px;line-height:1.9;color:var(--text);letter-spacing:.3px;padding-top:2px}
+

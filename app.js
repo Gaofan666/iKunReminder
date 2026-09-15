@@ -9,53 +9,164 @@
   /* ------------------------------------------------------------------ 常量 */
   const RING_C = 2 * Math.PI * 52;          // 进度环周长
   const SNOOZE_SEC = 5 * 60;                // 稍后提醒 = 5 分钟
-  const BAR_TARGET = { water: 8, rest: 6 }; // 每日目标次数
-
-  const META = {
-    water: {
-      name: '喝水',
-      emoji: '💧',
-      color: '#00e5ff',
-      title: '该喝水啦！',
-      desc: '咕嘟咕嘟～ 补充水分，大脑转得更快，皮肤也会谢谢你。',
-      done: '我喝了 💧',
-      voice: '该喝水啦，快喝一杯水吧',
-      caption: '坤坤喊你喝水'
-    },
-    rest: {
-      name: '休息',
-      emoji: '🛋️',
-      color: '#ff2d95',
-      title: '该休息啦！',
-      desc: '站起来走两步，看看远处，让眼睛和颈椎放个假。',
-      done: '我休息了 🛋️',
-      voice: '该休息啦，起来活动一下',
-      caption: '坤坤喊你休息'
-    }
-  };
-
   const STORE_KEY = { settings: 'kunkun.settings.v1', stats: 'kunkun.stats.v1' };
+
+  /* 提醒事项的候选配色（夏日：晴空蓝 / 草绿 / 阳光黄 / 湖水青 …） */
+  const PALETTE = ['#4A9BD4', '#6FB56B', '#E8B843', '#3E9AA8', '#7FA8D9', '#8FBF6A', '#D9A15F', '#5FB3A8'];
+
+  /* 新建提醒时可选的图标 */
+  const EMOJI_PICK = ['💧', '🛋️', '💊', '🏃', '🧘', '👀', '🍎', '☕', '🚶', '🧴', '🦷', '🐣'];
+
+  /* 内置的两条提醒（用户还能自己加） */
+  function defaultItems() {
+    return [
+      {
+        id: 'water', name: '喝水', emoji: '💧', minutes: 45, enabled: true,
+        color: PALETTE[0], goal: 8,
+        title: '该喝水啦！',
+        desc: '咕嘟咕嘟～ 补充水分，大脑转得更快，皮肤也会谢谢你。',
+        done: '我喝了 💧',
+        voice: '该喝水啦，快喝一杯水吧'
+      },
+      {
+        id: 'rest', name: '休息', emoji: '🛋️', minutes: 60, enabled: true,
+        color: PALETTE[1], goal: 6,
+        title: '该休息啦！',
+        desc: '站起来走两步，看看远处，让眼睛和颈椎放个假。',
+        done: '我休息了 🛋️',
+        voice: '该休息啦，起来活动一下'
+      }
+    ];
+  }
+
+  /* 十二时辰 · 子午流注：每个时辰哪条经络当令、这段时间该怎么照顾自己 */
+  const SHICHEN = [
+    { name: '子时', from: 23, to: 1,  label: '23:00 - 01:00', meridian: '胆经',   tag: '睡觉', tip: '该睡了。胆经当令，熬夜最耗胆气，尽量 23 点前躺下。' },
+    { name: '丑时', from: 1,  to: 3,  label: '01:00 - 03:00', meridian: '肝经',   tag: '睡觉', tip: '深睡养肝。肝在这时候解毒藏血，别熬夜、别喝酒。' },
+    { name: '寅时', from: 3,  to: 5,  label: '03:00 - 05:00', meridian: '肺经',   tag: '睡觉', tip: '熟睡时段。肺经当令，保持睡眠，别起身活动。' },
+    { name: '卯时', from: 5,  to: 7,  label: '05:00 - 07:00', meridian: '大肠经', tag: '喝水', tip: '起床先喝一杯温水，帮肠道动起来，顺便养成排便习惯。' },
+    { name: '辰时', from: 7,  to: 9,  label: '07:00 - 09:00', meridian: '胃经',   tag: '早餐', tip: '该吃早饭了。胃经当令，吃点温热的，别空着肚子出门。' },
+    { name: '巳时', from: 9,  to: 11, label: '09:00 - 11:00', meridian: '脾经',   tag: '锻炼', tip: '一天里精力最好的时候。适合专注干活，每小时起来动一动。' },
+    { name: '午时', from: 11, to: 13, label: '11:00 - 13:00', meridian: '心经',   tag: '午休', tip: '吃午饭，饭后小睡 15～30 分钟，养心安神。' },
+    { name: '未时', from: 13, to: 15, label: '13:00 - 15:00', meridian: '小肠经', tag: '喝水', tip: '小肠经当令，多喝水帮助吸收营养，别一直坐着。' },
+    { name: '申时', from: 15, to: 17, label: '15:00 - 17:00', meridian: '膀胱经', tag: '喝水', tip: '补水黄金期。多喝水、多走动，犯困就起来拉伸一下。' },
+    { name: '酉时', from: 17, to: 19, label: '17:00 - 19:00', meridian: '肾经',   tag: '喝水', tip: '肾经当令。适量喝水、别憋尿，晚饭别吃太咸。' },
+    { name: '戌时', from: 19, to: 21, label: '19:00 - 21:00', meridian: '心包经', tag: '散步', tip: '散散步、听听音乐放松一下，别做剧烈运动，也别再喝咖啡。' },
+    { name: '亥时', from: 21, to: 23, label: '21:00 - 23:00', meridian: '三焦经', tag: '睡觉', tip: '准备睡觉：少喝水免得夜里起夜，放下手机，泡个脚。' }
+  ];
+
+  /* ------------------------------------------------------------ 今日黄历
+     日柱用儒略日推算：干支序 = (JDN + 49) % 60
+     已用真实黄历反查校验：2000-01-01 → 己卯年 丙子月 戊午日（破日）
+     以及 2026-09-15 → 丙午年 丁酉月 壬辰日，本程序算出的结果完全一致。 */
+  const GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+  const ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+
+  /* 建除十二神及其传统宜忌 */
+  const JIANCHU = [
+    { name: '建', yi: '出行 · 上任 · 祈福 · 求嗣', ji: '动土 · 开仓 · 掘井' },
+    { name: '除', yi: '扫舍 · 疗病 · 除服 · 祭祀', ji: '出行 · 赴任 · 求财' },
+    { name: '满', yi: '祈福 · 结亲 · 开市 · 立契', ji: '服药 · 栽种 · 上任' },
+    { name: '平', yi: '修整 · 涂泥 · 平治道涂', ji: '祈福 · 求嗣 · 开市' },
+    { name: '定', yi: '嫁娶 · 开市 · 立契 · 入学', ji: '诉讼 · 出行 · 搬迁' },
+    { name: '执', yi: '嫁娶 · 祈福 · 立约 · 捕捉', ji: '开市 · 出财 · 搬家' },
+    { name: '破', yi: '破屋 · 求医 · 治病除灾', ji: '嫁娶 · 开市 · 动土' },
+    { name: '危', yi: '祭祀 · 安床 · 祈福', ji: '登高 · 行船 · 远行' },
+    { name: '成', yi: '嫁娶 · 开市 · 入学 · 立约', ji: '诉讼 · 破土' },
+    { name: '收', yi: '收纳 · 进财 · 纳畜', ji: '开仓 · 出行 · 安葬' },
+    { name: '开', yi: '祈福 · 开市 · 入学 · 动土', ji: '安葬 · 破土' },
+    { name: '闭', yi: '筑堤 · 修造 · 安葬', ji: '开市 · 出行 · 求医' }
+  ];
+
+  /* 十二个「节」的近似交节日期（用于定月支，误差 ±1 天） */
+  const JIE = [
+    { m: 1, d: 6, zhi: 1, name: '小寒' },
+    { m: 2, d: 4, zhi: 2, name: '立春' },
+    { m: 3, d: 6, zhi: 3, name: '惊蛰' },
+    { m: 4, d: 5, zhi: 4, name: '清明' },
+    { m: 5, d: 6, zhi: 5, name: '立夏' },
+    { m: 6, d: 6, zhi: 6, name: '芒种' },
+    { m: 7, d: 7, zhi: 7, name: '小暑' },
+    { m: 8, d: 8, zhi: 8, name: '立秋' },
+    { m: 9, d: 8, zhi: 9, name: '白露' },
+    { m: 10, d: 8, zhi: 10, name: '寒露' },
+    { m: 11, d: 7, zhi: 11, name: '立冬' },
+    { m: 12, d: 7, zhi: 0, name: '大雪' }
+  ];
+
+  /* 五虎遁：甲己起丙寅，乙庚起戊寅，丙辛起庚寅，丁壬起壬寅，戊癸起甲寅 */
+  const MONTH_START_GAN = [2, 4, 6, 8, 0];
+
+  function jdnOf(y, m, d) {
+    const a = Math.floor((14 - m) / 12);
+    const yy = y + 4800 - a;
+    const mm = m + 12 * a - 3;
+    return d + Math.floor((153 * mm + 2) / 5) + 365 * yy +
+      Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) - 32045;
+  }
+
+  function ganzhiName(idx) {
+    const i = ((idx % 60) + 60) % 60;
+    return GAN[i % 10] + ZHI[i % 12];
+  }
+
+  function almanacOf(date) {
+    const d = date || new Date();
+    const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+
+    /* 年柱：立春（约 2/4）前算上一年 */
+    const yBase = (m < 2 || (m === 2 && day < 4)) ? y - 1 : y;
+    const yearIdx = (((yBase - 4) % 60) + 60) % 60;
+
+    /* 月支：找最近一个已过的节 */
+    let zhi = 0, jieName = '大雪';
+    for (let i = JIE.length - 1; i >= 0; i--) {
+      if (m > JIE[i].m || (m === JIE[i].m && day >= JIE[i].d)) {
+        zhi = JIE[i].zhi; jieName = JIE[i].name; break;
+      }
+    }
+    const yearGan = yearIdx % 10;
+    const monthGan = (MONTH_START_GAN[yearGan % 5] + (((zhi - 2) % 12) + 12) % 12) % 10;
+    /* 天干月干 + 地支 zhi 在六十甲子里的序号 */
+    let monthIdx = 0;
+    for (let i = 0; i < 60; i++) {
+      if (i % 10 === monthGan && i % 12 === zhi) { monthIdx = i; break; }
+    }
+
+    /* 日柱 */
+    const dayIdx = ((jdnOf(y, m, day) + 49) % 60 + 60) % 60;
+
+    /* 建除：月建上起建 —— 日支与月支相同者为「建」 */
+    const jc = (((dayIdx % 12) - zhi) % 12 + 12) % 12;
+
+    return {
+      year: ganzhiName(yearIdx),
+      month: ganzhiName(monthIdx),
+      day: ganzhiName(dayIdx),
+      zhi: zhi,
+      jie: jieName,
+      jc: JIANCHU[jc],
+      dateText: y + '年' + m + '月' + day + '日'
+    };
+  }
 
   /* ------------------------------------------------------------------ 状态 */
   const settings = {
-    water: { minutes: 45, enabled: true },
-    rest: { minutes: 60, enabled: true },
+    items: defaultItems(),     // 提醒事项列表（用户可增删改）
     sound: true,
     speech: true,
-    petSize: 'max'          // 宠物默认大小：max 迷你 / mid 小小 / min 超小
+    petSize: 'max',            // 宠物默认大小：max 迷你 / mid 小小 / min 超小
   };
   const PET_SIZE_KEYS = ['max', 'mid', 'min'];
 
   const rt = {
     running: true,
-    alertKind: null,
-    timers: {
-      water: { remaining: 45 * 60, total: 45 * 60 },
-      rest: { remaining: 60 * 60, total: 60 * 60 }
-    }
+    alertId: null,             // 正在弹提醒的那条事项 id
+    sleeping: false,           // 电脑睡眠 / 息屏时自动暂停计时
+    timers: {}                 // id -> { remaining, total }
   };
 
-  let stats = { date: '', water: 0, rest: 0 };
+  let stats = { date: '', counts: {} };
   let moodTimer = null;
 
   /* --------------------------------------------------------------- 小工具 */
@@ -240,8 +351,13 @@
       const vis = r.width ? clamp(r.width / w, 0.05, 4) : 1;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const k = dpr * vis;
-      el.width = Math.round(w * k);
-      el.height = Math.round(h * k);
+      const nw = Math.round(w * k);
+      const nh = Math.round(h * k);
+      /* 给 canvas 赋 width/height 会立刻清空画布，所以尺寸没变时绝不能碰，
+         否则会出现「有一帧是空的」——点宠物时闪一下就是这么来的 */
+      if (el.width === nw && el.height === nh && this.w === w && this.h === h) return;
+      el.width = nw;
+      el.height = nh;
       this.ctx.setTransform(k, 0, 0, k, 0, 0);
       this.w = w;
       this.h = h;
@@ -266,9 +382,15 @@
       ctx.translate(w / 2, h * 0.94);
       ctx.scale(s, s);
 
-      this.drawGround(ctx, t, mood);
-      drawFigure(ctx, t, mood, energy);
-      this.drawOrbits(ctx, t, mood);
+      /* plain = 宠物模式：桌面上只要角色本身，不要地面光圈和环绕粒子 */
+      PLAIN = !!this.plain;
+      if (!this.plain) {
+        this.drawGround(ctx, t, mood);
+        drawFigure(ctx, t, mood, energy);
+        this.drawOrbits(ctx, t, mood);
+      } else {
+        drawFigure(ctx, t, mood, energy);
+      }
 
       ctx.restore();
     }
@@ -277,7 +399,7 @@
       const pulse = mood === 'idle' ? 1 + Math.sin(t * 1.6) * 0.04 : 1 + Math.sin(t * 8) * 0.12;
       const g = ctx.createRadialGradient(0, 0, 4, 0, 0, 150 * pulse);
       const a = mood === 'idle' ? 0.30 : 0.55;
-      g.addColorStop(0, `rgba(0,229,255,${a})`);
+      g.addColorStop(0, `rgba(62,154,168,${a})`);
       g.addColorStop(0.5, `rgba(138,92,255,${a * 0.45})`);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g;
@@ -287,7 +409,7 @@
 
       // 地面光环虚线
       ctx.save();
-      ctx.strokeStyle = 'rgba(0,229,255,.45)';
+      ctx.strokeStyle = 'rgba(62,154,168,.45)';
       ctx.lineWidth = 1.4;
       ctx.setLineDash([10, 12]);
       ctx.lineDashOffset = -t * 34;
@@ -306,7 +428,7 @@
         const x = Math.cos(a) * rx;
         const y = -160 + Math.sin(a * 1.3) * 72 + Math.sin(a) * ry;
         const size = 2 + (i % 3);
-        ctx.fillStyle = i % 2 ? '#ff2d95' : '#00e5ff';
+        ctx.fillStyle = i % 2 ? '#6FB56B' : '#4A9BD4';
         ctx.shadowColor = ctx.fillStyle;
         ctx.shadowBlur = 12;
         ctx.beginPath();
@@ -316,6 +438,11 @@
       }
     }
   }
+
+  /* --------------------------------------------------------------- 绘制开关 */
+  /* 宠物模式（plain）下：不画地面光圈、不画环绕粒子，角色也不加发光。
+     桌面上只要角色本体，其余全部透明。 */
+  let PLAIN = false;
 
   /* 绘制角色（本地坐标：脚底为原点，向上为负 y）
      造型照着参考图来：黄色小鸡 + 银灰中分乱发 + 半眯大眼 + 橙鸭嘴 + 红脸蛋
@@ -392,8 +519,8 @@
     ctx.save();
     ctx.translate(hipX, hipY);
     ctx.rotate(lean);
-    ctx.shadowColor = 'rgba(0,229,255,.5)';
-    ctx.shadowBlur = mood === 'idle' ? 8 : 16;
+    ctx.shadowColor = 'rgba(62,154,168,.5)';
+    ctx.shadowBlur = PLAIN ? 0 : (mood === 'idle' ? 8 : 16);
     ctx.fillStyle = C.hoodie;
     roundRect(ctx, -27, -38, 54, 42, 16);
     ctx.fill();
@@ -628,8 +755,8 @@
     ctx.save();
     ctx.translate(fx, fy);
     ctx.fillStyle = C.shoe;
-    ctx.shadowColor = 'rgba(0,229,255,.4)';
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = 'rgba(62,154,168,.4)';
+    ctx.shadowBlur = PLAIN ? 0 : 8;
     roundRect(ctx, -16, -9, 32, 14, 7);
     ctx.fill();
     ctx.restore();
@@ -654,31 +781,98 @@
     floatWords: $('#floatWords'),
     btnToggle: $('#btnToggle'),
     btnResetAll: $('#btnResetAll'),
-    btnTest: $('#btnTest'),
-    chkSound: $('#chkSound'),
-    chkSpeech: $('#chkSpeech'),
-    chkNotify: $('#chkNotify'),
     btnPet: $('#btnPet'),
     btnTray: $('#btnTray'),
+    btnAddItem: $('#btnAddItem'),
+    panelList: $('#panelList'),
+    alGz: $('#alGz'),
+    alYi: $('#alYi'),
+    alJi: $('#alJi'),
     tbMin: $('#tbMin'),
     tbTray: $('#tbTray'),
     tbClose: $('#tbClose'),
     petSizeRow: $('#petSizeRow'),
     petSizeSeg: $('#petSizeSeg'),
-    panels: { water: $('#panel-water'), rest: $('#panel-rest') }
+    chkSound: $('#chkSound'),
+    chkSpeech: $('#chkSpeech'),
+    chkNotify: $('#chkNotify'),
+    scOverlay: $('#shichenOverlay'),
+    scNow: $('#scNow'),
+    scNowSub: $('#scNowSub'),
+    scTip: $('#scTip'),
+    scList: $('#scList'),
+    scClose: $('#scClose'),
+    itemOverlay: $('#itemOverlay'),
+    itTitle: $('#itTitle'),
+    itName: $('#itName'),
+    itEmoji: $('#itEmoji'),
+    itMinutes: $('#itMinutes'),
+    itSave: $('#itSave'),
+    itCancel: $('#itCancel'),
+    itClose: $('#itClose')
   };
 
-  /* 桌面版（Electron）才有：抢前台 / 托盘 / 宠物模式 */
+  /* 桌面版（Electron）才有：抢前台 / 托盘 / 宠物模式 / 电源事件 */
   const native = window.kunkunNative || null;
   if (native) document.body.classList.add('desktop');
 
-  /* 把运行状态回传给主进程，用于刷新托盘菜单 */
-  function pushState() {
-    if (!native || !native.syncState) return;
-    native.syncState({ running: rt.running, petMode: document.body.classList.contains('pet') });
+  /* ============================================================ 提醒事项模型 */
+  function itemById(id) {
+    for (let i = 0; i < settings.items.length; i++) {
+      if (settings.items[i].id === id) return settings.items[i];
+    }
+    return null;
+  }
+  function itemIndex(id) {
+    for (let i = 0; i < settings.items.length; i++) {
+      if (settings.items[i].id === id) return i;
+    }
+    return -1;
+  }
+  function newId() {
+    return 'it' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+  function normalizeItem(it) {
+    const name = String(it.name || '提醒').slice(0, 12);
+    return {
+      id: String(it.id),
+      name: name,
+      emoji: it.emoji || '⏰',
+      minutes: clamp(Math.round(+it.minutes) || 30, 1, 600),
+      enabled: it.enabled !== false,
+      color: it.color || PALETTE[0],
+      goal: clamp(Math.round(+it.goal) || 8, 1, 99),
+      title: it.title || ('该' + name + '啦！'),
+      desc: it.desc || ('到点啦，' + name + '的时间到了。'),
+      done: it.done || '我完成了',
+      voice: it.voice || ('该' + name + '了')
+    };
+  }
+  function makeItem(name, emoji, minutes) {
+    return normalizeItem({
+      id: newId(),
+      name: name,
+      emoji: emoji,
+      minutes: minutes,
+      enabled: true,
+      color: PALETTE[settings.items.length % PALETTE.length],
+      goal: 8
+    });
   }
 
-  /* 主界面上的「宠物默认大小」选择 */
+  /* 把最新的提醒列表同步给主进程（托盘菜单 / 宠物右键菜单要用） */
+  function pushState() {
+    if (!native || !native.syncState) return;
+    native.syncState({
+      running: rt.running,
+      petMode: document.body.classList.contains('pet'),
+      items: settings.items.map(function (it) {
+        return { id: it.id, name: it.name, emoji: it.emoji, minutes: it.minutes };
+      })
+    });
+  }
+
+  /* ---------------------------------------------------------- 宠物模式 */
   function updatePetSizeUI() {
     if (!el.petSizeSeg) return;
     const btns = el.petSizeSeg.querySelectorAll('button');
@@ -694,17 +888,36 @@
     updatePetSizeUI();
     Sound.click();
     if (native && native.setPetSize) native.setPetSize(name);
-    setCaption(`宠物默认大小已设为 <b>${{ max: '迷你 150×170', mid: '小小 118×134', min: '超小 92×104' }[name]}</b>`);
+    /* 主进程那边改完窗口尺寸之后，重新量一次宠物本体大小 */
+    setTimeout(syncPetBox, 260);
+    const txt = { max: '迷你 150×170', mid: '小小 118×134', min: '超小 92×104' }[name];
+    setCaption('宠物默认大小已设为 <b>' + txt + '</b>');
   }
 
-  /* 切换宠物模式（按钮和主进程菜单都走这里） */
-  function setPetMode(on) {    document.body.classList.toggle('pet', on);
+  function setPetMode(on, fromMain) {
+    if (!on) endTalk();                    // 退出宠物模式时把气泡收掉
+    document.body.classList.toggle('pet', on);
     el.btnPet.textContent = on ? '🐣 退出宠物模式' : '🐣 宠物模式';
     el.btnPet.classList.toggle('primary', on);
     stage.fit = on ? 268 : 330;
-    setCaption(on ? '宠物模式 · 右键出菜单' : '待机中 · 坤坤在划水，到点会喊你');
+    stage.plain = on;                      // 宠物模式：去掉地面光圈、环绕粒子、角色发光
+    if (on) setCaption('宠物模式 · 点我一下，我告诉你现在是什么时辰');
+    else setCaption('待机中 · 到点会提醒你');
     pushState();
-    setTimeout(() => { fitApp(); stage.resize(); alertStage.resize(); }, 80);
+
+    const settle = function () {
+      if (!fromMain && native && native.setPetMode) native.setPetMode(on);
+      fitApp();
+      syncPetBox();
+      stage.resize();
+      alertStage.resize();
+    };
+
+    /* 进宠物模式：先把「只剩小鸡」这一版画出来，再让窗口缩成宠物大小。
+       反过来的话，窗口缩小那一帧会拿主界面去裁切，看起来就是主界面向
+       宠物那块矩形缩了一下、闪一下。 */
+    if (on) afterPaint(settle);
+    else setTimeout(settle, 80);
   }
 
   /* ---------------------------------------------------------- 本地存储 */
@@ -712,24 +925,50 @@
     try {
       const s = JSON.parse(localStorage.getItem(STORE_KEY.settings) || '{}');
       if (s && typeof s === 'object') {
-        ['water', 'rest'].forEach(k => {
-          if (s[k]) {
-            if (Number.isFinite(+s[k].minutes)) settings[k].minutes = clamp(Math.round(+s[k].minutes), 1, 600);
-            if (typeof s[k].enabled === 'boolean') settings[k].enabled = s[k].enabled;
+        if (Array.isArray(s.items) && s.items.length) {
+          settings.items = s.items
+            .filter(function (it) { return it && it.id && it.name; })
+            .map(normalizeItem);
+        } else if (s.water || s.rest) {
+          /* 老版本只有「喝水 / 休息」两条，平滑迁移过来 */
+          const items = defaultItems();
+          if (s.water) {
+            items[0].minutes = clamp(Math.round(+s.water.minutes) || 45, 1, 600);
+            items[0].enabled = s.water.enabled !== false;
           }
-        });
+          if (s.rest) {
+            items[1].minutes = clamp(Math.round(+s.rest.minutes) || 60, 1, 600);
+            items[1].enabled = s.rest.enabled !== false;
+          }
+          settings.items = items;
+        }
         if (typeof s.sound === 'boolean') settings.sound = s.sound;
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
       }
     } catch (e) { /* 忽略损坏数据 */ }
+    if (!settings.items.length) settings.items = defaultItems();
+
+    /* 事项颜色一律按调色板顺序派生（软件没有自定义颜色的功能）。
+       这样换配色方案以后，老用户 localStorage 里的旧颜色也能立刻跟上，
+       不需要版本号，也不会出现「版本号已是最新但颜色还是旧的」这种死角。 */
+    settings.items.forEach(function (it, i) {
+      it.color = PALETTE[i % PALETTE.length];
+    });
 
     try {
       const st = JSON.parse(localStorage.getItem(STORE_KEY.stats) || '{}');
-      if (st && st.date) stats = { date: st.date, water: +st.water || 0, rest: +st.rest || 0 };
+      if (st && st.date) {
+        if (st.counts && typeof st.counts === 'object') {
+          stats = { date: st.date, counts: st.counts };
+        } else {
+          /* 老版统计：{ water, rest } */
+          stats = { date: st.date, counts: { water: +st.water || 0, rest: +st.rest || 0 } };
+        }
+      }
     } catch (e) { /* 忽略 */ }
 
-    if (stats.date !== todayKey()) stats = { date: todayKey(), water: 0, rest: 0 };
+    if (stats.date !== todayKey()) stats = { date: todayKey(), counts: {} };
   }
 
   function saveSettings() {
@@ -740,51 +979,68 @@
   }
 
   /* ---------------------------------------------------------- 计时逻辑 */
-  function setInterval_(kind, minutes) {
-    settings[kind].minutes = clamp(Math.round(minutes) || 1, 1, 600);
-    resetTimer(kind);
+  function ensureTimer(it) {
+    const total = it.minutes * 60;
+    const t = rt.timers[it.id];
+    if (!t) rt.timers[it.id] = { remaining: total, total: total };
+    else if (t.total !== total) {
+      t.total = total;
+      t.remaining = Math.min(t.remaining, total);
+    }
+  }
+
+  function resetTimer(id) {
+    const it = itemById(id);
+    if (!it) return;
+    const total = it.minutes * 60;
+    rt.timers[id] = { remaining: total, total: total };
+  }
+
+  function setItemMinutes(id, minutes) {
+    const it = itemById(id);
+    if (!it) return;
+    it.minutes = clamp(Math.round(minutes) || 1, 1, 600);
+    resetTimer(id);
     saveSettings();
   }
 
-  function resetTimer(kind) {
-    const total = settings[kind].minutes * 60;
-    rt.timers[kind].total = total;
-    rt.timers[kind].remaining = total;
-  }
-
   function resetAll() {
-    ['water', 'rest'].forEach(resetTimer);
+    settings.items.forEach(function (it) { resetTimer(it.id); });
     render();
   }
 
-  function fire(kind, opts) {
-    if (rt.alertKind) return;                    // 已有提醒在进行
-    rt.alertKind = kind;
-    const meta = META[kind];
+  /* ---------------------------------------------------------- 到点提醒 */
+  function fire(id, opts) {
+    if (rt.alertId) return;                       // 已有提醒在进行
+    const it = itemById(id);
+    if (!it) return;
+    rt.alertId = id;
     const info = opts || {};
+    const title = info.title || it.title || ('该' + it.name + '啦！');
 
-    el.alertTitle.textContent = meta.title;
-    el.alertTitle.dataset.text = meta.title;
-    el.alertDesc.textContent = info.desc || meta.desc;
-    el.alertDone.textContent = info.done || meta.done;
+    el.alertTitle.textContent = title;
+    el.alertTitle.dataset.text = title;
+    el.alertDesc.textContent = info.desc || it.desc || '';
+    el.alertDone.textContent = info.done || it.done || '我完成了';
+    el.overlay.style.setProperty('--accent', it.color || '#4A9BD4');
     el.overlay.hidden = false;
+
     alertStage.setMood('dance');
     alertStage.resize();
     spawnWords();
-
     stage.setMood('dance');
-    setCaption(`<b>${meta.caption}！</b>`);
+    setCaption('<b>' + (it.emoji || '') + ' ' + it.name + ' 时间到了！</b>');
 
     Sound.alert();
-    speak(info.voice || meta.voice);
-    notify(meta.title, info.desc || meta.desc);
+    speak(info.voice || it.voice || ('该' + it.name + '了'));
+    notify(title, info.desc || it.desc || '');
     flashTitle(true);
-    if (native) native.alert(kind);          // 桌面版：把窗口抢到最前台
+    if (native) native.alert(id);
     try { el.alertDone.focus(); } catch (e) { }
   }
 
   function closeAlert() {
-    rt.alertKind = null;
+    rt.alertId = null;
     el.overlay.hidden = true;
     el.floatWords.innerHTML = '';
     flashTitle(false);
@@ -793,34 +1049,53 @@
   }
 
   function completeAlert() {
-    const kind = rt.alertKind;
-    if (!kind) return;
-    if (stats.date !== todayKey()) stats = { date: todayKey(), water: 0, rest: 0 };
-    stats[kind] = (stats[kind] || 0) + 1;
+    const id = rt.alertId;
+    if (!id) return;
+    if (stats.date !== todayKey()) stats = { date: todayKey(), counts: {} };
+    stats.counts[id] = (stats.counts[id] || 0) + 1;
     saveStats();
-    resetTimer(kind);
+    resetTimer(id);
     Sound.confirm();
     closeAlert();
     render();
   }
 
   function snoozeAlert() {
-    const kind = rt.alertKind;
-    if (!kind) return;
-    rt.timers[kind].remaining = SNOOZE_SEC;
-    rt.timers[kind].total = Math.max(rt.timers[kind].total, SNOOZE_SEC);
+    const id = rt.alertId;
+    if (!id) return;
+    const t = rt.timers[id] || { total: SNOOZE_SEC };
+    rt.timers[id] = { remaining: SNOOZE_SEC, total: Math.max(t.total, SNOOZE_SEC) };
+    const it = itemById(id);
     closeAlert();
-    setCaption(`<b>${META[kind].name}</b>提醒已延后 5 分钟`);
+    if (it) setCaption('<b>' + it.name + '</b>提醒已延后 5 分钟');
     render();
   }
 
   function setMood(m, ms) {
     stage.setMood(m);
     if (moodTimer) clearTimeout(moodTimer);
-    if (ms) moodTimer = setTimeout(() => { if (!rt.alertKind) stage.setMood('idle'); }, ms);
+    if (ms) moodTimer = setTimeout(function () { if (!rt.alertId) stage.setMood('idle'); }, ms);
   }
 
   function setCaption(html) { el.caption.innerHTML = html; }
+
+  /* ------------------------------------------- 睡眠 / 息屏自动暂停 */
+  /* gapPause：不是电源事件、而是靠「两次 tick 间隔异常大」推测出来的暂停，
+     时间恢复流动后自动解除；电源事件触发的暂停只能由 resume / unlock 解除。 */
+  let gapPause = false;
+
+  function setSleepPause(on) {
+    if (rt.sleeping === on) return;
+    rt.sleeping = on;
+    last = Date.now();                 // 不管暂停还是恢复，都把基准时间拉到现在
+    if (on) {
+      setCaption('<b>电脑睡眠 / 息屏中</b> · 计时已自动暂停');
+      stage.setMood('idle');
+    } else {
+      setCaption('电脑已唤醒 · 计时继续');
+    }
+    render();
+  }
 
   /* ---------------------------------------------------------- 系统通知 */
   function notify(title, body) {
@@ -833,8 +1108,8 @@
     if (!('Notification' in window)) { el.chkNotify.checked = false; return; }
     if (Notification.permission === 'granted') return;
     if (Notification.permission === 'denied') { el.chkNotify.checked = false; return; }
-    Notification.requestPermission().then(p => { el.chkNotify.checked = (p === 'granted'); })
-      .catch(() => { el.chkNotify.checked = false; });
+    Notification.requestPermission().then(function (p) { el.chkNotify.checked = (p === 'granted'); })
+      .catch(function () { el.chkNotify.checked = false; });
   }
 
   /* ---------------------------------------------------------- 标题闪烁 */
@@ -842,23 +1117,26 @@
   function flashTitle(on) {
     if (flashTimer) { clearInterval(flashTimer); flashTimer = null; }
     if (!on) { flashOn = false; updateTitle(); return; }
-    flashTimer = setInterval(() => {
+    flashTimer = setInterval(function () {
       flashOn = !flashOn;
       document.title = flashOn ? '🔔 时间到啦！' : '　　';
     }, 650);
   }
 
   function updateTitle() {
-    if (flashTimer || rt.alertKind) return;
+    if (flashTimer || rt.alertId) return;
     let best = null, bestKind = null;
-    ['water', 'rest'].forEach(k => {
-      if (!settings[k].enabled) return;
-      const r = rt.timers[k].remaining;
-      if (best === null || r < best) { best = r; bestKind = k; }
+    settings.items.forEach(function (it) {
+      if (!it.enabled) return;
+      const t = rt.timers[it.id];
+      if (!t) return;
+      if (best === null || t.remaining < best) { best = t.remaining; bestKind = it; }
     });
-    document.title = bestKind
-      ? `${fmt(best)} ${META[bestKind].emoji} 电子坤坤`
-      : '电子坤坤 · 喝水休息提醒器';
+    if (bestKind) {
+      document.title = fmt(best) + ' ' + (bestKind.emoji || '') + ' 电子坤坤';
+    } else {
+      document.title = '电子坤坤 · 喝水休息提醒器';
+    }
   }
 
   /* ---------------------------------------------------------- 飘字动画 */
@@ -876,8 +1154,18 @@
   }
 
   /* ---------------------------------------------------------- 等比缩放 */
-  /* 主界面按 1180 × 842 的设计尺寸排版，窗口多大就整体缩放到多大 */
   const DESIGN_W = 1180, DESIGN_H = 842;
+
+  /* 宠物本体那一块的尺寸：只在「进入宠物模式」和「改宠物大小」时量一次。
+     不在 resize 里量 —— 说话窗口缩放会让 Windows 把尺寸取整成 1px 的偏差，
+     重量一次小鸡就会跟着动一下，看着就是闪。 */
+  function syncPetBox() {
+    if (!document.body.classList.contains('pet')) return;
+    const w = Math.max(40, Math.round(window.innerWidth));
+    const h = Math.max(40, Math.round(window.innerHeight));
+    document.documentElement.style.setProperty('--pet-w', w + 'px');
+    document.documentElement.style.setProperty('--pet-h', h + 'px');
+  }
 
   function fitApp() {
     const app = $('#app');
@@ -886,6 +1174,7 @@
       app.style.transform = '';
       app.style.left = '0px';
       app.style.top = '0px';
+      syncPetBox();          // 宠物窗尺寸一变就重新量（说话不再改窗口，所以这里很安全）
       stage.resize();
       return;
     }
@@ -893,7 +1182,6 @@
     const tbH = (tb && getComputedStyle(tb).display !== 'none') ? tb.offsetHeight : 0;
     const availW = Math.max(1, window.innerWidth);
     const availH = Math.max(1, window.innerHeight - tbH);
-    // 用实际内容高度，避免最后一截被切掉（transform 不影响布局，量出来是稳定的）
     const designH = Math.max(DESIGN_H, app.offsetHeight || 0);
     const s = Math.min(availW / DESIGN_W, availH / designH);
     app.style.top = tbH + 'px';
@@ -907,40 +1195,333 @@
   function requestFit() {
     if (fitPending) return;
     fitPending = true;
-    requestAnimationFrame(() => { fitPending = false; fitApp(); });
+    requestAnimationFrame(function () { fitPending = false; fitApp(); });
   }
   window.addEventListener('resize', requestFit);
 
-  /* ---------------------------------------------------------- 渲染 */
-  function render() {
-    // 时钟
-    const now = new Date();
-    const p = n => String(n).padStart(2, '0');
-    el.clock.textContent = `${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
-    const wk = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()];
-    el.date.textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 · ${wk}`;
+  /* ============================================================ 十二时辰 */
+  function currentShichen(d) {
+    const h = (d || new Date()).getHours();
+    for (let i = 0; i < SHICHEN.length; i++) {
+      const s = SHICHEN[i];
+      if (s.from < s.to) {
+        if (h >= s.from && h < s.to) return s;
+      } else if (h >= s.from || h < s.to) {   // 子时跨午夜
+        return s;
+      }
+    }
+    return SHICHEN[0];
+  }
 
-    ['water', 'rest'].forEach(kind => {
-      const panel = el.panels[kind];
-      const t = rt.timers[kind];
-      const on = settings[kind].enabled;
-      panel.classList.toggle('off', !on);
-      $('[data-role="countdown"]', panel).textContent = on ? fmt(t.remaining) : '--:--';
+  function renderShichen() {
+    const cur = currentShichen();
+    el.scNow.textContent = cur.name;
+    el.scNowSub.textContent = cur.label + ' · ' + cur.meridian + '当令 · 宜' + cur.tag;
+    el.scTip.textContent = cur.tip;
+    el.scList.innerHTML = '';
+    SHICHEN.forEach(function (s) {
+      const row = document.createElement('div');
+      row.className = 'sc-row' + (s === cur ? ' on' : '');
+      const sn = document.createElement('span'); sn.className = 'sn'; sn.textContent = s.name;
+      const st = document.createElement('span'); st.className = 'st'; st.textContent = s.label;
+      const sm = document.createElement('span'); sm.className = 'sm'; sm.textContent = s.meridian;
+      const sx = document.createElement('span'); sx.className = 'sx'; sx.textContent = s.tip;
+      row.appendChild(sn); row.appendChild(st); row.appendChild(sm); row.appendChild(sx);
+      el.scList.appendChild(row);
+    });
+  }
+
+  function openShichen() {
+    renderShichen();
+    el.scOverlay.hidden = false;
+    const on = el.scList.querySelector('.sc-row.on');
+    if (on && on.scrollIntoView) {
+      try { on.scrollIntoView({ block: 'center' }); } catch (e) { }
+    }
+  }
+  function closeShichen() { el.scOverlay.hidden = true; }
+
+  /* ================================================== 今日黄历（宜忌） */
+  let almanacDate = '';
+
+  function renderAlmanac() {
+    if (!el.alGz) return;
+    const al = almanacOf(new Date());
+    almanacDate = todayKey();
+    const gz = document.createElement('b');
+    gz.textContent = al.day;
+    el.alGz.textContent = '';
+    el.alGz.appendChild(document.createTextNode(al.year + '年 ' + al.month + '月 '));
+    el.alGz.appendChild(gz);
+    el.alGz.appendChild(document.createTextNode('日 · ' + al.jc.name + '日 · ' + al.jie));
+    el.alYi.textContent = al.jc.yi;
+    el.alJi.textContent = al.jc.ji;
+  }
+
+  /* ============================================ 宠物说话（点一下小鸡） */
+  let talkTimer = null;
+  let talking = false;
+
+  /* 最近要到的提醒，作为气泡最后一行 */
+  function nextReminderText() {
+    let best = null, bestIt = null;
+    settings.items.forEach(function (it) {
+      if (!it.enabled) return;
+      const t = rt.timers[it.id];
+      if (!t) return;
+      if (best === null || t.remaining < best) { best = t.remaining; bestIt = it; }
+    });
+    if (!bestIt) return '现在没有开启的提醒事项';
+    if (rt.sleeping) return '电脑睡着中 · 计时已暂停';
+    const m = Math.max(1, Math.round(best / 60));
+    return '再过约 ' + m + ' 分钟该' + bestIt.name + '了';
+  }
+
+  /* 气泡现已是独立的小窗（见 main.js），宠物窗说话时一动不动，
+     所以这里不再需要「等两帧再动窗口」这套补丁了。 */
+  function afterPaint(fn) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(fn);
+    });
+  }
+
+  /* 气泡默认放宠物哪一侧：宠物在桌面左半边 → 放右边，反之放左边 */
+  function talkPrefSide(screenX, winW) {
+    const scr = window.screen || {};
+    const availW = scr.availWidth || scr.width || 1920;
+    return ((screenX || 0) + winW / 2) < availW / 2 ? 'right' : 'left';
+  }
+
+  function petTalk() {
+    if (!document.body.classList.contains('pet')) return;
+
+    /* 已经开着就先收起来，等于再点一次切换 */
+    if (talking) { endTalk(); return; }
+
+    const cur = currentShichen();
+    talking = true;
+
+    /* 只把文字内容交给主进程，位置由它按桌面边界算 ——
+       宠物窗本身不缩放、不移动，所以不可能出现错位的闪烁。 */
+    if (native && native.petTalk) {
+      native.petTalk({
+        head: '现在是 ' + cur.name + '（' + cur.label + '）',
+        mer: cur.meridian + '当令 · 宜' + cur.tag,
+        tip: cur.tip,
+        next: nextReminderText(),
+        side: talkPrefSide(window.screenX, Math.max(60, window.innerWidth))
+      });
+    }
+
+    if (talkTimer) clearTimeout(talkTimer);
+    talkTimer = setTimeout(endTalk, 5000);     // 气泡显示 5 秒后自动收起
+  }
+
+  function endTalk() {
+    if (talkTimer) { clearTimeout(talkTimer); talkTimer = null; }
+    if (!talking) return;
+    talking = false;
+    if (native && native.petTalkEnd) native.petTalkEnd();
+  }
+
+  /* ====================================================== 添加 / 编辑事项 */
+  let editingId = null;
+  let pickedEmoji = '⏰';
+
+  function renderEmojiPick() {
+    el.itEmoji.innerHTML = '';
+    EMOJI_PICK.forEach(function (e) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = e;
+      b.classList.toggle('on', e === pickedEmoji);
+      b.addEventListener('click', function () { pickedEmoji = e; renderEmojiPick(); });
+      el.itEmoji.appendChild(b);
+    });
+  }
+
+  function openItemModal(id) {
+    editingId = id || null;
+    const it = id ? itemById(id) : null;
+    el.itTitle.textContent = it ? '修改提醒事项' : '添加提醒事项';
+    el.itName.value = it ? it.name : '';
+    el.itMinutes.value = it ? it.minutes : 30;
+    pickedEmoji = it ? it.emoji : '⏰';
+    el.itName.style.borderColor = '';
+    renderEmojiPick();
+    el.itemOverlay.hidden = false;
+    setTimeout(function () { try { el.itName.focus(); } catch (e) { } }, 50);
+  }
+  function closeItemModal() { el.itemOverlay.hidden = true; }
+
+  function saveItemModal() {
+    const name = el.itName.value.trim().slice(0, 12);
+    if (!name) {
+      el.itName.style.borderColor = '#e5484d';
+      try { el.itName.focus(); } catch (e) { }
+      return;
+    }
+    const minutes = clamp(Math.round(+el.itMinutes.value) || 30, 1, 600);
+
+    if (editingId) {
+      const it = itemById(editingId);
+      if (it) {
+        it.name = name;
+        it.emoji = pickedEmoji;
+        it.minutes = minutes;
+        it.title = '该' + name + '啦！';
+        it.desc = '到点啦，' + name + '的时间到了。';
+        it.voice = '该' + name + '了';
+        it.done = '我完成了';
+        resetTimer(editingId);
+      }
+    } else {
+      const it = makeItem(name, pickedEmoji, minutes);
+      settings.items.push(it);
+      resetTimer(it.id);
+    }
+
+    saveSettings();
+    renderPanels();
+    render();
+    pushState();
+    closeItemModal();
+    Sound.click();
+    setCaption('已保存提醒：<b>' + name + '</b>，每 ' + minutes + ' 分钟一次');
+  }
+
+  function deleteItem(id) {
+    const it = itemById(id);
+    if (!it) return;
+    if (!window.confirm('确定删除「' + it.name + '」这条提醒吗？')) return;
+    const i = itemIndex(id);
+    if (i < 0) return;
+    settings.items.splice(i, 1);
+    delete rt.timers[id];
+    if (stats.counts) delete stats.counts[id];
+    saveSettings();
+    saveStats();
+    renderPanels();
+    render();
+    pushState();
+    setCaption('已删除提醒：<b>' + it.name + '</b>');
+  }
+
+  /* ================================================================ 渲染 */
+  const QUICK_MINUTES = [15, 30, 45, 60, 90];
+
+  function buildPanel(it, idx) {
+    const art = document.createElement('article');
+    art.className = 'card panel';
+    art.dataset.id = it.id;
+    art.style.setProperty('--accent', it.color || PALETTE[idx % PALETTE.length]);
+    art.innerHTML =
+      '<header class="panel-head">' +
+        '<h2><span class="ico"></span><span class="pname"></span></h2>' +
+        '<div class="panel-tools">' +
+          '<button class="icon-btn" data-role="edit" title="改名称 / 图标 / 间隔">编辑</button>' +
+          '<button class="icon-btn del" data-role="del" title="删除这条提醒">删除</button>' +
+          '<label class="switch" title="启用 / 停用">' +
+            '<input type="checkbox" data-role="enable"><span class="slider"></span></label>' +
+        '</div>' +
+      '</header>' +
+      '<div class="panel-body">' +
+        '<div class="ring-wrap">' +
+          '<svg class="ring" viewBox="0 0 120 120" aria-hidden="true">' +
+            '<circle class="ring-bg" cx="60" cy="60" r="52"></circle>' +
+            '<circle class="ring-fg" cx="60" cy="60" r="52" data-role="ring"></circle>' +
+          '</svg>' +
+          '<div class="ring-text"><b data-role="countdown">--:--</b><small>下次提醒</small></div>' +
+        '</div>' +
+        '<div class="ctrl">' +
+          '<div class="row"><span class="label">间隔</span>' +
+            '<input type="number" data-role="minutes" min="1" max="600" step="1">' +
+            '<span class="unit">分钟</span></div>' +
+          '<div class="quick"></div>' +
+          '<div class="actions">' +
+            '<button class="btn sm" data-role="reset">重置本轮</button>' +
+            '<button class="btn sm" data-role="skip">立即提醒</button>' +
+          '</div>' +
+          '<div class="stat">今日已 <b data-role="count">0</b> 次 · 每日目标 ' +
+            '<input type="number" class="goal-input" data-role="goal" min="1" max="99" step="1" title="每天想做几次，直接改这里"> 次</div>' +
+          '<div class="bar"><i data-role="bar"></i></div>' +
+        '</div>' +
+      '</div>';
+
+    /* 文本一律用 textContent 填，避免名字里的符号被当成 HTML */
+    $('.ico', art).textContent = it.emoji || '⏰';
+    $('.pname', art).textContent = it.name;
+    $('[data-role="enable"]', art).checked = it.enabled;
+    $('[data-role="minutes"]', art).value = it.minutes;
+    $('[data-role="goal"]', art).value = it.goal || 8;
+    const quick = $('.quick', art);
+    QUICK_MINUTES.forEach(function (m) {
+      const b = document.createElement('button');
+      b.className = 'mini';
+      b.dataset.min = String(m);
+      b.textContent = m + '分';
+      quick.appendChild(b);
+    });
+    return art;
+  }
+
+  function renderPanels() {
+    el.panelList.innerHTML = '';
+    settings.items.forEach(function (it, i) {
+      el.panelList.appendChild(buildPanel(it, i));
+    });
+    capPanelList();
+  }
+
+  /* 提醒事项多了以后，整个界面不能被撑长（那样等比缩放会把字越缩越小）。
+     这里量一下「列表之外」占了多少高度，把剩下的留给列表，多出来的就滚动看。 */
+  function capPanelList() {
+    const list = el.panelList;
+    const app = $('#app');
+    if (!list || !app) return;
+
+    list.style.maxHeight = 'none';
+    const others = app.offsetHeight - list.offsetHeight;   // offsetHeight 不含 transform 缩放
+    const room = DESIGN_H - others;
+
+    if (list.offsetHeight > room && room > 200) {
+      list.style.maxHeight = Math.round(room) + 'px';
+      list.classList.add('scrollable');
+    } else {
+      list.style.maxHeight = 'none';
+      list.classList.remove('scrollable');
+    }
+    requestFit();
+  }
+
+  function render() {
+    const now = new Date();
+    const p = function (n) { return String(n).padStart(2, '0'); };
+    el.clock.textContent = p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds());
+    const wk = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()];
+    el.date.textContent = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 · ' + wk;
+
+    settings.items.forEach(function (it, i) {
+      const art = el.panelList.children[i];
+      if (!art) return;
+      const t = rt.timers[it.id] || { remaining: 0, total: 1 };
+      art.classList.toggle('off', !it.enabled);
+      $('[data-role="countdown"]', art).textContent = it.enabled ? fmt(t.remaining) : '--:--';
       const ratio = t.total > 0 ? clamp(t.remaining / t.total, 0, 1) : 0;
-      $('[data-role="ring"]', panel).style.strokeDashoffset = String(RING_C * (1 - ratio));
-      const n = stats[kind] || 0;
-      $('[data-role="count"]', panel).textContent = String(n);
-      const bar = $('[data-role="bar"]', panel);
-      bar.style.width = Math.min(100, (n / BAR_TARGET[kind]) * 100) + '%';
+      $('[data-role="ring"]', art).style.strokeDashoffset = String(RING_C * (1 - ratio));
+      const n = (stats.counts && stats.counts[it.id]) || 0;
+      $('[data-role="count"]', art).textContent = String(n);
+      $('[data-role="bar"]', art).style.width = Math.min(100, (n / (it.goal || 8)) * 100) + '%';
     });
 
     el.btnToggle.textContent = rt.running ? '⏸ 暂停计时' : '▶ 继续计时';
     el.btnToggle.classList.toggle('primary', rt.running);
 
-    if (!rt.alertKind) {
-      const idle = !settings.water.enabled && !settings.rest.enabled;
-      if (idle) setCaption('两个提醒都关掉了 · 坤坤在发呆');
-      else if (!rt.running) setCaption('<b>计时已暂停</b> · 坤坤在喝水');
+    if (!rt.alertId) {
+      const anyOn = settings.items.some(function (it) { return it.enabled; });
+      if (rt.sleeping) setCaption('<b>电脑睡眠 / 息屏中</b> · 计时已自动暂停');
+      else if (!anyOn) setCaption('所有提醒都关掉了');
+      else if (!rt.running) setCaption('<b>计时已暂停</b>');
     }
     updateTitle();
   }
@@ -952,20 +1533,32 @@
     let dt = (now - last) / 1000;
     last = now;
     if (dt < 0) dt = 0;
-    if (dt > 3600) dt = 3600;
 
-    if (rt.running && !rt.alertKind) {
-      for (const kind of ['water', 'rest']) {
-        if (!settings[kind].enabled) continue;
-        const t = rt.timers[kind];
+    /* 两次 tick 之间隔了很久 —— 电脑睡过 / 息屏过，这段时间不计入倒计时 */
+    if (dt > 30) {
+      if (!rt.sleeping) { gapPause = true; setSleepPause(true); }
+      dt = 0;
+    } else if (rt.sleeping && gapPause) {
+      /* 时间又正常流动了，说明机器已经醒着（这条只对「推测出来的暂停」生效） */
+      gapPause = false;
+      setSleepPause(false);
+    }
+
+    if (rt.running && !rt.sleeping && !rt.alertId) {
+      for (let i = 0; i < settings.items.length; i++) {
+        const it = settings.items[i];
+        if (!it.enabled) continue;
+        const t = rt.timers[it.id];
+        if (!t) continue;
         t.remaining -= dt;
         if (t.remaining <= 0) {
           t.remaining = 0;
-          fire(kind);
+          fire(it.id);
           break;
         }
       }
     }
+    if (almanacDate !== todayKey()) renderAlmanac();   // 跨天刷新黄历
     render();
   }
 
@@ -976,212 +1569,285 @@
   }
 
   /* ---------------------------------------------------------- 事件绑定 */
-  function bindPanel(kind) {
-    const panel = el.panels[kind];
-
-    $('[data-role="enable"]', panel).addEventListener('change', e => {
-      settings[kind].enabled = e.target.checked;
-      saveSettings();
-      Sound.click();
-      render();
-    });
-
-    $('[data-role="minutes"]', panel).addEventListener('change', e => {
-      setInterval_(kind, +e.target.value);
-      e.target.value = settings[kind].minutes;
-      render();
-    });
-
-    $('[data-role="reset"]', panel).addEventListener('click', () => {
-      resetTimer(kind);
-      Sound.click();
-      setCaption(`<b>${META[kind].name}</b>计时已重新开始`);
-      render();
-    });
-
-    $('[data-role="skip"]', panel).addEventListener('click', () => {
-      fire(kind);
-    });
-
-    panel.querySelectorAll('.mini').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const m = +btn.dataset.min;
-        setInterval_(kind, m);
-        $('[data-role="minutes"]', panel).value = settings[kind].minutes;
-        Sound.click();
-        setCaption(`<b>${META[kind].name}</b>间隔已设为 ${settings[kind].minutes} 分钟`);
+  function bindPanelList() {
+    /* 面板是动态生成的，事件用委托接 */
+    el.panelList.addEventListener('click', function (e) {
+      const art = e.target.closest ? e.target.closest('.panel') : null;
+      if (!art) return;
+      const id = art.dataset.id;
+      const minBtn = e.target.closest ? e.target.closest('.mini') : null;
+      if (minBtn) {
+        setItemMinutes(id, +minBtn.dataset.min);
         render();
-      });
+        return;
+      }
+      const roleEl = e.target.closest ? e.target.closest('[data-role]') : null;
+      if (!roleEl) return;
+      const role = roleEl.dataset.role;
+      const it = itemById(id);
+      if (role === 'reset') {
+        resetTimer(id);
+        Sound.click();
+        if (it) setCaption('<b>' + it.name + '</b> 计时已重新开始');
+        render();
+      } else if (role === 'skip') {
+        fire(id);
+      } else if (role === 'edit') {
+        openItemModal(id);
+      } else if (role === 'del') {
+        deleteItem(id);
+      }
+    });
+
+    el.panelList.addEventListener('change', function (e) {
+      const art = e.target.closest ? e.target.closest('.panel') : null;
+      if (!art) return;
+      const id = art.dataset.id;
+      const it = itemById(id);
+      if (!it) return;
+      const role = e.target.dataset ? e.target.dataset.role : '';
+      if (role === 'enable') {
+        it.enabled = e.target.checked;
+        saveSettings();
+        Sound.click();
+        render();
+        pushState();
+      } else if (role === 'minutes') {
+        setItemMinutes(id, +e.target.value);
+        e.target.value = it.minutes;
+        render();
+      } else if (role === 'goal') {
+        it.goal = clamp(Math.round(+e.target.value) || 8, 1, 99);
+        e.target.value = it.goal;
+        saveSettings();
+        render();
+      }
+    });
+
+    /* 目标次数用输入框，边打边存 */
+    el.panelList.addEventListener('input', function (e) {
+      if (!e.target.dataset || e.target.dataset.role !== 'goal') return;
+      const art = e.target.closest ? e.target.closest('.panel') : null;
+      if (!art) return;
+      const it = itemById(art.dataset.id);
+      if (!it) return;
+      const v = clamp(Math.round(+e.target.value) || 8, 1, 99);
+      it.goal = v;
+      saveSettings();
+      const n = (stats.counts && stats.counts[it.id]) || 0;
+      $('[data-role="bar"]', art).style.width = Math.min(100, (n / v) * 100) + '%';
     });
   }
 
   function bindAll() {
-    bindPanel('water');
-    bindPanel('rest');
+    bindPanelList();
 
-    el.btnToggle.addEventListener('click', () => {
+    el.btnToggle.addEventListener('click', function () {
       rt.running = !rt.running;
       Sound.click();
-      setCaption(rt.running ? '计时已继续 · 坤坤继续营业' : '<b>计时已暂停</b> · 坤坤在喝水');
+      setCaption(rt.running ? '计时已继续' : '<b>计时已暂停</b>');
       pushState();
       render();
     });
 
-    el.btnResetAll.addEventListener('click', () => {
+    el.btnResetAll.addEventListener('click', function () {
       resetAll();
       Sound.click();
       setCaption('全部重置完毕 · 重新开始计时');
     });
 
-    el.btnTest.addEventListener('click', () => {
-      const kind = settings.water.enabled ? 'water' : 'rest';
-      fire(kind, { desc: '这是一次试听，正式提醒也会这样出现。', done: '知道了', voice: '提醒效果就是这样' });
-    });
+    el.btnAddItem.addEventListener('click', function () { Sound.click(); openItemModal(null); });
 
-    /* 宠物模式：缩成只剩动画的悬浮小窗 */
-    el.btnPet.addEventListener('click', () => {
+    el.btnPet.addEventListener('click', function () {
       Sound.click();
-      const on = !document.body.classList.contains('pet');
-      setPetMode(on);
-      if (native) native.setPetMode(on);
+      setPetMode(!document.body.classList.contains('pet'));
     });
 
-    /* 自绘标题栏三个按钮 */
-    if (el.tbMin) el.tbMin.addEventListener('click', () => { if (native) native.minimize(); });
-    if (el.tbTray) el.tbTray.addEventListener('click', () => { if (native) native.hideToTray(); });
-    if (el.tbClose) el.tbClose.addEventListener('click', () => { if (native) native.hideToTray(); });
+    if (el.tbMin) el.tbMin.addEventListener('click', function () { if (native) native.minimize(); });
+    if (el.tbTray) el.tbTray.addEventListener('click', function () { if (native) native.hideToTray(); });
+    if (el.tbClose) el.tbClose.addEventListener('click', function () { if (native) native.hideToTray(); });
 
-    /* 手动拖窗：普通模式拖标题栏，宠物模式整个窗口都能拖
-       （CSS 的 -webkit-app-region 在透明窗口上不生效，所以自己算偏移） */
-    if (native && native.dragStart) {
-      let dragging = false;
-      const isPet = () => document.body.classList.contains('pet');
-
-      document.addEventListener('pointerdown', e => {
-        if (e.button !== 0) return;                       // 右键留给菜单
-        const t = e.target;
-        const onButton = t && t.closest && t.closest('.tb-btn, .btn, .mini, button, input, label');
-        const inTitlebar = t && t.closest && t.closest('.titlebar');
-        if (!isPet() && (!inTitlebar || onButton)) return; // 普通模式只拖标题栏
-        if (isPet() && onButton) return;
-
-        dragging = true;
-        try { document.body.setPointerCapture(e.pointerId); } catch (err) { }
-        native.dragStart({ x: e.screenX, y: e.screenY });
-        e.preventDefault();
-      });
-
-      document.addEventListener('pointermove', e => {
-        if (!dragging) return;
-        native.dragMove({ x: e.screenX, y: e.screenY });
-      });
-
-      const stopDrag = e => {
-        if (!dragging) return;
-        dragging = false;
-        try { document.body.releasePointerCapture(e.pointerId); } catch (err) { }
-        native.dragEnd();
-      };
-      document.addEventListener('pointerup', stopDrag);
-      document.addEventListener('pointercancel', stopDrag);
-    }
-
-    /* 收进系统托盘 */
     if (el.btnTray) {
-      el.btnTray.addEventListener('click', () => {
+      el.btnTray.addEventListener('click', function () {
         Sound.click();
         if (native) native.hideToTray();
       });
     }
 
-    /* 宠物模式（以及主界面画布）上右键 → 原生菜单：
-       显示主界面 / 收进托盘 / 调整倒计时 / 退出 */
-    document.addEventListener('contextmenu', (e) => {
+    /* 手动拖窗：普通模式拖标题栏，宠物模式整个窗口都能拖
+       宠物模式下「按下没怎么动就松开」= 单击 → 让小鸡开口说话 */
+    if (native && native.dragStart) {
+      let dragging = false;
+      let downX = 0, downY = 0, moved = 0;
+      let lastX = 0, lastY = 0;
+      let skipTalkOnce = false;      // 这一下是用来收起气泡的，松手时别再弹开
+      const isPet = function () { return document.body.classList.contains('pet'); };
+
+      document.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) return;
+        const t = e.target;
+        const onButton = t && t.closest && t.closest('.pb-close, .tb-btn, .btn, .mini, .icon-btn, button, input, label, .sc-row');
+        const inTitlebar = t && t.closest && t.closest('.titlebar');
+        if (!isPet() && (!inTitlebar || onButton)) return;
+        if (isPet() && onButton) return;
+
+        dragging = true;
+        moved = 0;
+        downX = e.screenX; downY = e.screenY;
+        lastX = e.screenX; lastY = e.screenY;
+        try { document.body.setPointerCapture(e.pointerId); } catch (err) { }
+
+        const beginDrag = function () {
+          native.dragStart({ x: downX, y: downY });
+        };
+
+        /* 气泡开着的话，按下鼠标就先把它收掉再拖。
+           气泡是独立小窗，收掉它一不影响宠物窗，所以这里不需要等帧、
+           也不会出现任何错位或闪烁。 */
+        if (isPet() && talking) {
+          endTalk();
+          skipTalkOnce = true;
+        } else {
+          skipTalkOnce = false;
+        }
+        beginDrag();
+        e.preventDefault();
+      });
+
+      document.addEventListener('pointermove', function (e) {
+        lastX = e.screenX; lastY = e.screenY;
+        if (!dragging) return;
+        moved = Math.max(moved, Math.abs(e.screenX - downX) + Math.abs(e.screenY - downY));
+        if (moved > 6) native.dragMove({ x: e.screenX, y: e.screenY });
+      });
+
+      const stopDrag = function (e) {
+        if (!dragging) return;
+        dragging = false;
+        try { document.body.releasePointerCapture(e.pointerId); } catch (err) { }
+        native.dragEnd();
+        if (isPet() && moved <= 6 && !skipTalkOnce) petTalk();   // 单击 = 说话
+        skipTalkOnce = false;
+      };
+      document.addEventListener('pointerup', stopDrag);
+      document.addEventListener('pointercancel', stopDrag);
+    }
+
+    /* 宠物模式右键 → 原生菜单 */
+    document.addEventListener('contextmenu', function (e) {
       if (!native || !native.petMenu) return;
-      if (!document.body.classList.contains('pet')) return;   // 只在宠物模式拦截
+      if (!document.body.classList.contains('pet')) return;
       e.preventDefault();
       native.petMenu();
     });
 
-    /* 主进程发来的指令 */
-    if (native && native.onTrayAlert) {
-      native.onTrayAlert(kind => { if (META[kind]) fire(kind); });
-    }
-    if (native && native.onTrayToggle) {
-      native.onTrayToggle(() => el.btnToggle.click());
-    }
-    if (native && native.onPetModeChanged) {
-      native.onPetModeChanged(on => { setPetMode(!!on); });
-    }
-    if (native && native.onSetInterval) {
-      native.onSetInterval(d => {
-        if (!d || !META[d.kind]) return;
-        setInterval_(d.kind, d.minutes);
-        const input = $('[data-role="minutes"]', el.panels[d.kind]);
-        if (input) input.value = settings[d.kind].minutes;
-        Sound.click();
-        setCaption(`<b>${META[d.kind].name}</b>间隔已设为 ${settings[d.kind].minutes} 分钟`);
-        render();
-      });
-    }
+    /* 十二时辰弹层 */
+    el.scClose.addEventListener('click', closeShichen);
+    el.scOverlay.addEventListener('click', function (e) { if (e.target === el.scOverlay) closeShichen(); });
 
-    /* 主界面：宠物默认大小 */
-    if (el.petSizeSeg) {
-      el.petSizeSeg.addEventListener('click', e => {
-        const b = e.target.closest ? e.target.closest('button[data-size]') : null;
-        if (b) choosePetSize(b.dataset.size);
-      });
-    }
-    if (native && native.onPetSizeChanged) {
-      native.onPetSizeChanged(name => {
-        if (PET_SIZE_KEYS.indexOf(name) < 0) return;
-        settings.petSize = name;
-        saveSettings();
-        updatePetSizeUI();
-      });
-    }
+    /* 添加 / 编辑弹层 */
+    el.itSave.addEventListener('click', saveItemModal);
+    el.itCancel.addEventListener('click', closeItemModal);
+    el.itClose.addEventListener('click', closeItemModal);
+    el.itemOverlay.addEventListener('click', function (e) { if (e.target === el.itemOverlay) closeItemModal(); });
+    el.itName.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveItemModal(); });
+    el.itMinutes.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveItemModal(); });
 
-    el.chkSound.addEventListener('change', e => {
+    el.chkSound.addEventListener('change', function (e) {
       settings.sound = e.target.checked;
       saveSettings();
       if (settings.sound) Sound.click();
     });
 
-    el.chkSpeech.addEventListener('change', e => {
+    el.chkSpeech.addEventListener('change', function (e) {
       settings.speech = e.target.checked;
       saveSettings();
       if (settings.speech) speak('语音播报已开启');
     });
 
-    el.chkNotify.addEventListener('change', e => {
+    el.chkNotify.addEventListener('change', function (e) {
       if (e.target.checked) askNotify();
     });
+
+    if (el.petSizeSeg) {
+      el.petSizeSeg.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('button[data-size]') : null;
+        if (b) choosePetSize(b.dataset.size);
+      });
+    }
 
     el.alertDone.addEventListener('click', completeAlert);
     el.alertSnooze.addEventListener('click', snoozeAlert);
     el.alertClose.addEventListener('click', snoozeAlert);
+    el.overlay.addEventListener('click', function (e) { if (e.target === el.overlay) snoozeAlert(); });
 
-    el.overlay.addEventListener('click', e => { if (e.target === el.overlay) snoozeAlert(); });
+    /* 主进程发来的指令 */
+    if (native) {
+      if (native.onTrayAlert) native.onTrayAlert(function (id) { if (itemById(id)) fire(id); });
+      if (native.onTrayToggle) native.onTrayToggle(function () { el.btnToggle.click(); });
+      if (native.onPetModeChanged) native.onPetModeChanged(function (on) { setPetMode(!!on, true); });
+      if (native.onSetInterval) {
+        native.onSetInterval(function (d) {
+          if (!d || !itemById(d.id)) return;
+          setItemMinutes(d.id, d.minutes);
+          render();
+          Sound.click();
+          const it = itemById(d.id);
+          if (it) setCaption('<b>' + it.name + '</b>间隔已设为 ' + it.minutes + ' 分钟');
+        });
+      }
+      if (native.onSetPetSize) {
+        native.onSetPetSize(function (name) {
+          if (PET_SIZE_KEYS.indexOf(name) < 0) return;
+          settings.petSize = name;
+          saveSettings();
+          updatePetSizeUI();
+          /* 从托盘菜单 / 宠物右键菜单改大小走的是这条路，之前漏了这一步，
+             窗口缩了但小鸡那块还是旧尺寸，看起来像「改了没用」。 */
+          setTimeout(function () { fitApp(); stage.resize(); }, 120);
+        });
+      }
+      if (native.onShowShichen) native.onShowShichen(function () { openShichen(); });
+      if (native.onAddItem) native.onAddItem(function () { openItemModal(null); });
+      if (native.onPower) {
+        native.onPower(function (kind) {
+          if (kind === 'suspend' || kind === 'lock') {
+            gapPause = false;          // 电源事件为准，不再靠时间跳变推测
+            setSleepPause(true);
+          } else if (kind === 'resume' || kind === 'unlock') {
+            gapPause = false;
+            setSleepPause(false);
+          }
+        });
+      }
+    }
 
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && rt.alertKind) { snoozeAlert(); return; }
+    document.addEventListener('keydown', function (e) {
+      const k = (e.key || '').toLowerCase();
+      if (k === 'escape') {
+        if (!el.itemOverlay.hidden) { closeItemModal(); return; }
+        if (!el.scOverlay.hidden) { closeShichen(); return; }
+        if (rt.alertId) { snoozeAlert(); return; }
+      }
       if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
-      const k = e.key.toLowerCase();
       if (e.code === 'Space') {
         e.preventDefault();
         el.btnToggle.click();
       } else if (k === 'w') {
-        fire('water');
+        const it = itemById('water') || settings.items[0];
+        if (it) fire(it.id);
       } else if (k === 'r') {
-        fire('rest');
+        const it = itemById('rest') || settings.items[1];
+        if (it) fire(it.id);
+      } else if (k === 't') {
+        openShichen();
       }
     });
 
-    // 首次交互解锁音频
-    const unlock = () => { Sound.ensure(); document.removeEventListener('pointerdown', unlock); };
+    const unlock = function () { Sound.ensure(); document.removeEventListener('pointerdown', unlock); };
     document.addEventListener('pointerdown', unlock);
 
-    document.addEventListener('visibilitychange', () => {
+    document.addEventListener('visibilitychange', function () {
       if (!document.hidden) { last = Date.now(); render(); }
     });
   }
@@ -1191,29 +1857,26 @@
     loadStore();
     el.chkSound.checked = settings.sound;
     el.chkSpeech.checked = settings.speech;
-    ['water', 'rest'].forEach(kind => {
-      const panel = el.panels[kind];
-      $('[data-role="enable"]', panel).checked = settings[kind].enabled;
-      $('[data-role="minutes"]', panel).value = settings[kind].minutes;
-      resetTimer(kind);
-    });
+    settings.items.forEach(function (it) { ensureTimer(it); });
     if ('Notification' in window && Notification.permission === 'granted') el.chkNotify.checked = true;
     if (native && el.btnTray) el.btnTray.hidden = false;
     if (native && el.petSizeRow) el.petSizeRow.hidden = false;
     updatePetSizeUI();
-    if (native && native.setPetSize) native.setPetSize(settings.petSize);   // 把上次的选择告诉主进程
+    if (native && native.setPetSize) native.setPetSize(settings.petSize);
 
     bindAll();
+    renderPanels();
     pushState();
     render();
     fitApp();
     setTimeout(fitApp, 60);
+    setTimeout(capPanelList, 140);   // 等字体和布局稳定后再量一次
+
     last = Date.now();
     setInterval(tick, 250);
     requestAnimationFrame(loop);
-
-    setCaption('待机中 · 坤坤在划水，到点会喊你');
-    setTimeout(() => { if (!rt.alertKind) setCaption('待机中 · 坤坤在划水，到点会喊你'); }, 10);
+    renderAlmanac();
+    setCaption('待机中 · 到点会提醒你');
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
