@@ -399,16 +399,48 @@ function drawPanda(ctx, q, p, kind) {
   ctx.beginPath(); ctx.ellipse(-14, -40, 13, 15, -0.34, 0, TAU); ctx.fill();
   ctx.beginPath(); ctx.ellipse(14, -40, 13, 15, 0.34, 0, TAU); ctx.fill();
 
-  /* ---- 懒散半眯眼 ---- */
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath(); ctx.ellipse(-14, -39, 8, 5.2, -0.34, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(14, -39, 8, 5.2, 0.34, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.arc(-14 + look * 0.6, -38.5 + smug * 1.7, 2.8, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.arc(14 + look * 0.6, -38.5 + smug * 1.7, 2.8, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(-14, -44, 9.2, 4.6, -0.34, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(14, -44, 9.2, 4.6, 0.34, 0, TAU); ctx.fill();
+  /* ---- 墨镜：镜片压在黑眼罩上，所以用亮色镜框 + 强反光才分得出来 ---- */
+  const GY = -39 + smug * 1.2;
+  const lens = function (sg) {
+    ctx.beginPath();
+    ctx.moveTo(sg * 25, GY - 5);
+    ctx.quadraticCurveTo(sg * 14, GY - 11, sg * 4, GY - 7);
+    ctx.quadraticCurveTo(sg * 3, GY + 5, sg * 13, GY + 9);
+    ctx.quadraticCurveTo(sg * 23, GY + 10, sg * 25.5, GY + 1);
+    ctx.closePath();
+    const lg = ctx.createLinearGradient(sg * 4, GY - 10, sg * 25, GY + 10);
+    lg.addColorStop(0, '#3A3A46');
+    lg.addColorStop(0.45, '#15151C');
+    lg.addColorStop(1, '#0A0A0F');
+    ctx.fillStyle = lg; ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = '#EDEDF4'; ctx.stroke();
+    /* 镜面反光：两道斜杠，拽感来源 */
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(sg * 25, GY - 5);
+    ctx.quadraticCurveTo(sg * 14, GY - 11, sg * 4, GY - 7);
+    ctx.quadraticCurveTo(sg * 3, GY + 5, sg * 13, GY + 9);
+    ctx.quadraticCurveTo(sg * 23, GY + 10, sg * 25.5, GY + 1);
+    ctx.closePath(); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 6, GY + 11); ctx.lineTo(sg * 20, GY - 11); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sg * 13, GY + 12); ctx.lineTo(sg * 25, GY - 5); ctx.stroke();
+    ctx.restore();
+  };
+  lens(-1); lens(1);
+  /* 鼻梁 */
+  ctx.fillStyle = '#15151C';
+  ctx.beginPath(); ctx.rect(-4.5, GY - 6, 9, 3.6); ctx.fill();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = '#EDEDF4'; ctx.stroke();
+  /* 镜腿 */
+  ctx.strokeStyle = '#EDEDF4'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-25, GY - 2); ctx.lineTo(-36, GY - 7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(25, GY - 2); ctx.lineTo(36, GY - 7); ctx.stroke();
+  /* 镜腿下面压着一道阴影，显得镜架有厚度 */
+  ctx.strokeStyle = 'rgba(17,17,17,.55)'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(-25, GY + 1); ctx.lineTo(-36, GY - 4); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(25, GY + 1); ctx.lineTo(36, GY - 4); ctx.stroke();
 
   /* ---- 粗斜眉 ---- */
   ctx.strokeStyle = '#111111'; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
@@ -440,30 +472,31 @@ function drawPanda(ctx, q, p, kind) {
   }
 
   /* ---- 烟：从嘴里斜插出去，正好被手指捏住 ---- */
-  const cigAng = -0.38;
+  /* 烟朝下斜插：原来朝上，末端正好落在举起的右拳位置，看着像被烟头挡住了手 */
+  const cigAng = 0.72;
   const cx0 = 9, cy0 = -19;
   const cx1 = 26, cy1 = -6;
   ctx.save();
   ctx.translate(cx0, cy0);
   ctx.rotate(cigAng);
   ctx.fillStyle = '#F7F2E6';
-  ctx.beginPath(); ctx.rect(0, -2.6, 30, 5.2);
+  ctx.beginPath(); ctx.rect(0, -2.6, 24, 5.2);
   ctx.fill();
   ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
   ctx.fillStyle = '#E2574C';
-  ctx.beginPath(); ctx.rect(25, -2.6, 5, 5.2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(19, -2.6, 5, 5.2); ctx.fill(); ctx.stroke();
   /* 烟头火星 */
   ctx.fillStyle = 'rgba(255,120,60,' + (0.55 + 0.45 * Math.abs(Math.sin(p * TAU * 3))) + ')';
-  ctx.beginPath(); ctx.arc(31, 0, 3.2, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(24.5, 0, 3.2, 0, TAU); ctx.fill();
   ctx.restore();
 
   /* ---- 两条胳膊对称举起，双手比中指 ----
        位置固定在身体轮廓之外（x = ±48），保证看得见。 ---- */
   const rise = q.arm * 5;
   [-1, 1].forEach(function (sg) {
-    const shX = sg * 30, shY = -2;
-    const elX = sg * 47, elY = -12 - rise * 0.4;
-    const hx = sg * 48, hy = -30 - rise;
+    const shX = sg * 29, shY = -18;
+    const elX = sg * 46, elY = -26 - rise * 0.4;
+    const hx = sg * 48, hy = -42 - rise;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     /* 上臂 + 前臂（先描粗边再填色，保持梗图的粗描边） */
     [[shX, shY, elX, elY, 15], [elX, elY, hx, hy, 13]].forEach(function (a) {
