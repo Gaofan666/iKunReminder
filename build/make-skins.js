@@ -1876,6 +1876,8 @@ function drawCat(ctx, q, p, kind) {
   ctx.bezierCurveTo(22, 36, -22, 36, -23, 26);
   ctx.bezierCurveTo(-24, 14, -20, 0, 0, 0);
   ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.stroke();
+
 
   /* 前腿：从【胸口】直直垂到地上的两条管子。
      颜色和身体一样，只给管子的边缘描一道深色线把它勾出来。
@@ -1910,6 +1912,7 @@ function drawCat(ctx, q, p, kind) {
     ctx.quadraticCurveTo(-12, -16, 2, -19);
     ctx.quadraticCurveTo(14, -11, 14, 24);
     ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.stroke();
     /* 内耳灰绿 */
     ctx.fillStyle = INNER;
     ctx.beginPath();
@@ -1929,6 +1932,8 @@ function drawCat(ctx, q, p, kind) {
   ctx.bezierCurveTo(-26, 4, -34, -6, -34, -22);
   ctx.bezierCurveTo(-34, -36, -28, -48, 0, -48);
   ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.stroke();
+
   ctx.fillStyle = 'rgba(255,255,255,.05)';
   ctx.beginPath(); ctx.ellipse(-9, -38, 18, 7, -0.12, 0, TAU); ctx.fill();
 
