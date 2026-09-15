@@ -2,12 +2,12 @@
   "name": "熊猫人",
   "author": "",
   "frame": {
-    "w": 164,
+    "w": 436,
     "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",
-  "bottomGap": 4,
+  "bottomGap": 5,
   "animations": {
     "idle": {
       "row": 0,

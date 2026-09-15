@@ -2,12 +2,12 @@
   "name": "悲伤蛙",
   "author": "",
   "frame": {
-    "w": 122,
+    "w": 304,
     "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",
-  "bottomGap": 4,
+  "bottomGap": 6,
   "animations": {
     "idle": {
       "row": 0,

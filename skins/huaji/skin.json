@@ -2,12 +2,12 @@
   "name": "滑稽",
   "author": "",
   "frame": {
-    "w": 114,
+    "w": 378,
     "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",
-  "bottomGap": 4,
+  "bottomGap": 7,
   "animations": {
     "idle": {
       "row": 0,

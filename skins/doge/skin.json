@@ -2,12 +2,12 @@
   "name": "狗头",
   "author": "",
   "frame": {
-    "w": 106,
+    "w": 333,
     "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",
-  "bottomGap": 4,
+  "bottomGap": 7,
   "animations": {
     "idle": {
       "row": 0,

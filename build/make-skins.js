@@ -1900,7 +1900,7 @@ app.whenReady().then(async () => {
 
       /* ---- 反算成品尺寸：高度固定 140、内容占 94%；宽度按内容比例给 ---- */
       const base = 0.8;
-      const scale = Math.min(1.0, base * (FH * 0.90) / envH);
+      const scale = Math.min(8, base * (FH * 0.90) / envH);   // 不再封顶在 1.0：封顶会让内容只占格子一小块，主界面里宠物就变得极小
       const k = scale / base;
       const fw = Math.max(72, Math.ceil(envW * k + 22));
       const offX = -((minX + maxX) / 2) * k;

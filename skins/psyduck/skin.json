@@ -2,12 +2,12 @@
   "name": "可达鸭",
   "author": "",
   "frame": {
-    "w": 152,
+    "w": 383,
     "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",
-  "bottomGap": 5,
+  "bottomGap": 7,
   "animations": {
     "idle": {
       "row": 0,
