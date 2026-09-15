@@ -1317,6 +1317,79 @@ function drawPenguin(ctx, q, p, kind) {
   ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,0,0,.5)';
   ctx.beginPath(); ctx.moveTo(-6, -5); ctx.lineTo(6, -5); ctx.stroke();
 
+  /* ---- 嘴：橙色，上下两片 ---- */
+  const bkg = ctx.createLinearGradient(0, -16, 0, 4);
+  bkg.addColorStop(0, '#FBC24A'); bkg.addColorStop(1, '#D98A12');
+  ctx.fillStyle = bkg;
+  ctx.beginPath();
+  ctx.moveTo(-11, -10);
+  ctx.quadraticCurveTo(0, -16, 11, -10);
+  ctx.quadraticCurveTo(0, 4, -11, -10);
+  ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(120,70,5,.6)'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-9, -8.5); ctx.lineTo(9, -8.5);
+  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(120,70,5,.5)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  ctx.beginPath(); ctx.ellipse(-4, -11.5, 3.4, 1.4, -0.2, 0, TAU); ctx.fill();
+
+  /* ---- 大墨镜 ---- */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath();
+    ctx.moveTo(sg * 27, -31);
+    ctx.quadraticCurveTo(sg * 14, -38, sg * 4, -31);
+    ctx.quadraticCurveTo(sg * 3, -16, sg * 14, -12);
+    ctx.quadraticCurveTo(sg * 26, -11, sg * 28, -22);
+    ctx.closePath();
+    const lg2 = ctx.createLinearGradient(sg * 4, -36, sg * 28, -12);
+    lg2.addColorStop(0, '#4E4E5C'); lg2.addColorStop(0.4, '#141420'); lg2.addColorStop(1, '#05050A');
+    ctx.fillStyle = lg2; ctx.fill();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = '#0A0A0F'; ctx.stroke();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineWidth = 4.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 5, -12); ctx.lineTo(sg * 22, -37); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(sg * 14, -10); ctx.lineTo(sg * 28, -30); ctx.stroke();
+    ctx.restore();
+  });
+  ctx.fillStyle = '#0A0A0F';
+  ctx.beginPath(); ctx.rect(-5, -32, 10, 3.6); ctx.fill();
+  ctx.strokeStyle = '#0A0A0F'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(-27, -26); ctx.lineTo(-36, -31); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(27, -26); ctx.lineTo(36, -31); ctx.stroke();
+
+  /* ---- 黑礼帽：帽檐 + 帽冠 + 帽带 ---- */
+  ctx.save();
+  ctx.translate(1 + s1 * 0.6, -1);
+  ctx.beginPath();
+  ctx.ellipse(0, -42, 36, 9.5, 0, 0, TAU);
+  const brg = ctx.createLinearGradient(0, -52, 0, -33);
+  brg.addColorStop(0, '#3E3E4A'); brg.addColorStop(1, '#0A0A0F');
+  ctx.fillStyle = brg; ctx.fill();
+  ctx.lineWidth = 1.8; ctx.strokeStyle = '#05050A'; ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-22, -43);
+  ctx.quadraticCurveTo(-24, -62, -12, -68);
+  ctx.quadraticCurveTo(0, -71, 12, -68);
+  ctx.quadraticCurveTo(24, -62, 22, -43);
+  ctx.closePath();
+  const crg = ctx.createLinearGradient(-22, -70, 22, -43);
+  crg.addColorStop(0, '#4E4E5C'); crg.addColorStop(0.45, '#22222B'); crg.addColorStop(1, '#0A0A0F');
+  ctx.fillStyle = crg; ctx.fill();
+  ctx.lineWidth = 1.8; ctx.strokeStyle = '#05050A'; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(-9, -66); ctx.quadraticCurveTo(0, -60, 9, -66); ctx.stroke();
+  ctx.fillStyle = '#141419';
+  ctx.beginPath();
+  ctx.moveTo(-22.5, -50);
+  ctx.quadraticCurveTo(0, -44, 22.5, -50);
+  ctx.lineTo(22.5, -44);
+  ctx.quadraticCurveTo(0, -38, -22.5, -44);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#C9A227';
+  ctx.beginPath(); ctx.rect(-6, -49.5, 12, 4.6); ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
+  ctx.restore();
+
   /* ---- 右翅（观众右侧）：贴着身侧下压 ---- */
   const rg = ctx.createLinearGradient(28, -10, 40, 26);
   rg.addColorStop(0, '#33333D'); rg.addColorStop(1, '#0B0B0F');
@@ -1329,14 +1402,14 @@ function drawPenguin(ctx, q, p, kind) {
   ctx.closePath(); ctx.fill();
 
   /* ---- 左翅（观众左侧）：举起来抓牌杆 ---- */
-  const handX = -29, handY = -14 - lift * 0.7;
+  const handX = -44, handY = -32 - lift * 0.5;
   const lg = ctx.createLinearGradient(-42, -26, -20, 12);
   lg.addColorStop(0, '#3A3A46'); lg.addColorStop(1, '#0B0B0F');
   ctx.fillStyle = lg;
   ctx.beginPath();
-  ctx.moveTo(-23, -12);
-  ctx.quadraticCurveTo(-41, -16 - lift * 0.6, handX - 5, handY - 4);
-  ctx.quadraticCurveTo(handX + 7, handY + 12, -21, 4);
+  ctx.moveTo(-24, -6);
+  ctx.quadraticCurveTo(-40, -14 - lift * 0.5, handX - 3, handY - 6);
+  ctx.quadraticCurveTo(handX + 6, handY + 12, -20, 8);
   ctx.closePath(); ctx.fill();
 
   /* ---- 牌子：尺寸由文字实测宽度反推 ---- */
@@ -1348,7 +1421,7 @@ function drawPenguin(ctx, q, p, kind) {
   const halfH = FS * 0.62 + 7;
 
   /* 牌杆与牌子共用一套坐标：杆从手心竖直往上，正好顶到牌子底边 */
-  const boardCX = handX - 2;
+  const boardCX = -34;   // 比手更靠内，杆子斜着走，绕开脑袋
   const boardBottom = -76;                 // 高过头顶（礼帽顶大约 -70）
   const boardCY = boardBottom - halfH;
 
