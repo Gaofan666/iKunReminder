@@ -1744,42 +1744,45 @@ function drawBanana(ctx, q, p, kind) {
 
   /* 右臂举扇子 */
   ctx.strokeStyle = '#8CC63F'; ctx.lineWidth = 8;
-  ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(25, -8 + breath); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(16, 6); ctx.lineTo(30, 2 + breath); ctx.stroke();
   ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
-  ctx.restore();
 
-/* ---------- 手里的蒲扇（正在扇风） ---------- */
-  const fanX = 34, fanY = -10 + breath * 1.6;
+  /* 蒲扇：画在香蕉自己的坐标系里，手柄正好落在手上 */
   ctx.save();
-  ctx.translate(fanX, fanY);
-  ctx.rotate(-0.45 + breeze * 0.34);
+  ctx.translate(30, 2 + breath);           // 与右臂末端同一个点
+  ctx.rotate(0.34 + breeze * 0.26);        // 往外侧转，别糊在脸上
   ctx.strokeStyle = '#B98B52'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, -6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(0, -4); ctx.stroke();
   ctx.lineWidth = 1.4; ctx.strokeStyle = '#6B4A2A';
-  ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, -6); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(0, -19, 14, 12.5, 0, 0, TAU);
-  const fg = ctx.createRadialGradient(-4, -23, 2, 0, -19, 16);
+  ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(0, -4); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0, -17, 14, 12.5, 0, 0, TAU);
+  const fg = ctx.createRadialGradient(-4, -21, 2, 0, -17, 16);
   fg.addColorStop(0, '#FBF0CC'); fg.addColorStop(1, '#E3CE94');
   ctx.fillStyle = fg; ctx.fill();
   ctx.lineWidth = 2.2; ctx.strokeStyle = '#8A6A12'; ctx.stroke();
   ctx.strokeStyle = 'rgba(138,106,18,.55)'; ctx.lineWidth = 1.2;
   [-8, -4, 0, 4, 8].forEach(function (dx) {
-    ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(dx, -31); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(dx, -29); ctx.stroke();
   });
   ctx.restore();
-
-  /* ---------- 风线 ---------- */
+  /* 握住扇柄的手 */
+  ctx.fillStyle = '#8CC63F';
+  ctx.beginPath(); ctx.arc(30, 2 + breath, 5, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 风线也跟着扇子走 */
   for (let i = 0; i < 3; i++) {
     const t = (p * 1.4 + i * 0.33) % 1;
     ctx.globalAlpha = (1 - t) * 0.7;
     ctx.strokeStyle = '#9FD4E8'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-    const wx = fanX + 16 + t * 24, wy = fanY - 16 - i * 7 + breeze * 3;
+    const wx = 48 + t * 24, wy = -14 - i * 7 + breeze * 3;
     ctx.beginPath();
     ctx.moveTo(wx, wy);
     ctx.quadraticCurveTo(wx + 9, wy - 7, wx + 18, wy);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+  ctx.restore();
+
 
   /* ---------- 「拒绝焦虑」牌子 ---------- */
   const TEXT = '拒绝焦虑';
