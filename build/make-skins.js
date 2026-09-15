@@ -1851,7 +1851,7 @@ function drawCat(ctx, q, p, kind) {
 
   /* ---------- 尾巴（身后，向左下弯出去） ---------- */
   ctx.save();
-  ctx.translate(-20, 17);
+  ctx.translate(20, 19);       // 尾巴挪到身体右侧
     /* 尾巴：先描粗的褐边，再压细的黑芯 —— 就得到带描边的尾巴。
        长度比之前长一截，弯得也更舒展。 */
     /* 尾巴：像水草那样摆 —— 不用整体旋转（那样很僵硬），
@@ -1862,12 +1862,13 @@ function drawCat(ctx, q, p, kind) {
       ctx.beginPath();
       for (let i = 0; i <= N; i++) {
         const u = i / N;                                  // 0=根部 1=尾尖
-        const bx = 8 + (-32 - 8) * u;                     // 基线：向左
-        const by = 2 + (-16 - 2) * u;                     // 基线：略微向上
-        const sag = Math.sin(u * Math.PI) * 9;            // 基础下垂弧度
-        const wave = Math.sin(t * 1.7 - u * 3.6) * 11 * u * u;  // 行波
-        const px = bx - sag * 0.45;
-        const py = by + sag * 0.9 + wave;
+        const bx = -8 + 40 * u;                           // 基线：往右
+        const by = 4 - 38 * u;                            // 基线：往上（比之前长、更竖）
+        const bow = Math.sin(u * Math.PI) * 9;            // 基础弯曲，先压后挑
+        const wave = Math.sin(t * 1.7 - u * 3.6) * 13 * u * u;  // 沿长度传播的行波
+        /* 波动方向取尾巴轴向的垂线，这样才是左右摆，而不是整体上下弹 */
+        const px = bx + wave * 0.62;
+        const py = by + wave * 0.78 + bow * 0.85;
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
     };
@@ -1881,11 +1882,12 @@ function drawCat(ctx, q, p, kind) {
     ctx.beginPath();
     for (let i = 0; i <= 6; i++) {
       const u = i / 6;
-      const bx = 5 + (-30 - 5) * u;
-      const by = 1 + (-14 - 1) * u;
-      const sag = Math.sin(u * Math.PI) * 9;
-      const wave = Math.sin(t * 1.7 - u * 3.6) * 11 * u * u;
-      const px = bx - sag * 0.45, py = by + sag * 0.9 + wave - 1.6;
+      const bx = -7 + 38 * u;
+      const by = 3 - 36 * u;
+      const bow = Math.sin(u * Math.PI) * 9;
+      const wave = Math.sin(t * 1.7 - u * 3.6) * 13 * u * u;
+      const px = bx + wave * 0.62 - 1.4;
+      const py = by + wave * 0.78 + bow * 0.85;
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.stroke();
