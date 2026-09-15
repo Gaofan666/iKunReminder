@@ -811,14 +811,15 @@ function drawStar(ctx, q, p, kind) {
 
   /* ---- 绿短裤 ---- */
   ctx.beginPath();
-  ctx.moveTo(-31, 22); ctx.quadraticCurveTo(0, 32, 31, 22);
-  ctx.lineTo(34, 42); ctx.quadraticCurveTo(0, 50, -34, 42);
+  /* 裤腰比身体最宽处（±37）还要宽一点，否则身体两侧会露出来 */
+  ctx.moveTo(-39, 20); ctx.quadraticCurveTo(0, 33, 39, 20);
+  ctx.lineTo(41, 44); ctx.quadraticCurveTo(0, 55, -41, 44);
   ctx.closePath();
   const sg = ctx.createLinearGradient(0, 22, 0, 46);
   sg.addColorStop(0, '#A8DE5C'); sg.addColorStop(1, '#8CC843');
   ctx.fillStyle = sg; ctx.fill();
   ctx.strokeStyle = '#5E8F2A'; ctx.lineWidth = 2.2; ctx.stroke();
-  [[-17, 31], [17, 31], [0, 39]].forEach(function (pt) {
+  [[-21, 31], [21, 31], [0, 40]].forEach(function (pt) {
     ctx.fillStyle = '#A97FE0';
     for (let k = 0; k < 5; k++) {
       const a = k / 5 * TAU - Math.PI / 2;
@@ -1591,11 +1592,33 @@ app.whenReady().then(async () => {
       }).resize({ width: fw * 6, height: FH * 3, quality: 'best' });
 
       const dir = path.join(root, 'skins', s.id);
+      /* 量一次「脚底到格子底边的余量」：宠物模式下要按它把宠物精确贴到窗口底边 */
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, 'sheet.png'), img.toPNG());
+      /* 先量底部余量：扫所有帧，取内容最低点到格子底边的距离 */
+      let bottomGap = 0;
+      {
+        const gi = nativeImage.createFromPath(path.join(dir, 'sheet.png'));
+        const gb = gi.toBitmap(), gs = gi.getSize();
+        const GA = (xx, yy) => gb[(yy * gs.width + xx) * 4 + 3];
+        let minGap = 999;
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 6; c++) {
+            let last = -1;
+            for (let yy = 0; yy < FH; yy++) {
+              for (let xx = 0; xx < fw; xx++) {
+                if (GA(c * fw + xx, r * FH + yy) > 8) { last = yy; break; }
+              }
+            }
+            if (last >= 0 && FH - 1 - last < minGap) minGap = FH - 1 - last;
+          }
+        }
+        bottomGap = minGap === 999 ? 0 : minGap;
+      }
+
       fs.writeFileSync(path.join(dir, 'skin.json'), JSON.stringify({
         name: s.name, author: '',
-        frame: { w: fw, h: FH }, fps: 10, sheet: 'sheet.png',
+        frame: { w: fw, h: FH }, fps: 10, sheet: 'sheet.png',        /* 脚底到格子底边的真实余量(px)，程序据此刻精确贴底 */        bottomGap: bottomGap,
         animations: {
           /* 待机放慢：帧率太高会一直在抖，看久了很烦 */
           idle: { row: 0, count: 4, fps: 3.5 },

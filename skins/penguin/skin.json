@@ -7,6 +7,7 @@
   },
   "fps": 10,
   "sheet": "sheet.png",
+  "bottomGap": 4,
   "animations": {
     "idle": {
       "row": 0,

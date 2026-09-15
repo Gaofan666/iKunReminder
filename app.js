@@ -380,7 +380,17 @@
       const s = Math.min(w / this.fit, h / this.fit);
 
       ctx.save();
-      ctx.translate(w / 2, h * 0.94);
+      /* 主界面：放在画布 94% 高度处（底部留一点，视觉上居中）。
+         宠物模式：直接贴住窗口底边 —— 但不能用画布底边，
+         因为生成的精灵图在格子底部还留了 5px 余量，
+         要按「宠物真实边界」往上退这 5px，脚才能真的踩到桌面底边。 */
+      let baseY = h * 0.94;
+      if (this.plain) {
+        const bg = skinState.meta && skinState.meta.bottomGap != null ? skinState.meta.bottomGap : 0;
+        const gapPx = skinState.ready ? bg * (310 / skinState.meta.frame.h) * s : 0;
+        baseY = h + gapPx;   // 内容底边在原点【上方】gapPx 处，所以原点要放到画布下方 gapPx，脚才落在底边
+      }
+      ctx.translate(w / 2, baseY);
       ctx.scale(s, s);
 
       /* plain = 宠物模式：桌面上只要角色本身，不要地面光圈和环绕粒子 */
