@@ -548,111 +548,168 @@ function drawSponge(ctx, q, p, kind) {
 }
 
 /* ============================================================ ⑤ 粉海星 */
+/* 呆傻版派大星
+   关键特征（来自萌娘百科）：粉红海星、光膀子穿绿短裤、
+   「眼皮是紫色的」、没有鼻子、两脚各一只指甲。
+   表情走呆傻路线：紫眼皮压住一半眼睛、瞳孔往上飘、嘴巴松弛张开、流口水。 */
 function drawStar(ctx, q, p, kind) {
-  const look = Math.sin(p * TAU) * 1.6;
+  const LINE = '#C4607A';          // 描边用比体色深一点的粉
+  const PINK = '#F79FB0';
+  const PINK_D = '#EE8AA0';
+  const PINK_L = '#FDD3DC';
+  const LID = '#9B7BD4';           // 紫色眼皮
+  const look = Math.sin(p * TAU) * 1.8;
   const blow = kind === 'cheer' ? 1 : kind === 'dance' ? 0.7 : 0.35;
-  shadow(ctx, 58, 26);
+  /* 发呆抖动：小幅度、慢，显得更呆 */
+  const derp = Math.sin(p * TAU * 1.5) * (kind === 'idle' ? 1.2 : 2.2);
+  shadow(ctx, 58, 27);
 
-  /* 小短腿（海星下面两个角） */
-  ctx.fillStyle = '#f2748c';
-  ctx.beginPath();
-  ctx.moveTo(-16, 26); ctx.quadraticCurveTo(-24, 46, -12, 52);
-  ctx.quadraticCurveTo(-2, 48, -4, 30); ctx.closePath(); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(16, 26); ctx.quadraticCurveTo(24, 46, 12, 52);
-  ctx.quadraticCurveTo(2, 48, 4, 30); ctx.closePath(); ctx.fill();
-
-  /* 两条粗手臂 */
-  const aa = -0.3 - q.arm * 1.9;
+  /* ---- 两条粗手臂：圆头圆脑垂在两边 ---- */
+  const aa = -0.25 - q.arm * 1.9;
   [-1, 1].forEach(function (sgn) {
-    const ex = sgn * (26 + Math.cos(aa) * 22), ey = 4 + Math.sin(aa) * 22;
-    ctx.strokeStyle = '#f2748c'; ctx.lineWidth = 16; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(sgn * 22, 4); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.strokeStyle = 'rgba(200,90,115,.35)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(sgn * 22, 4); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.fillStyle = '#f2748c'; circle(ctx, ex, ey, 8.6);
+    const ex = sgn * (27 + Math.cos(aa) * 20), ey = 4 + Math.sin(aa) * 20;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = PINK; ctx.lineWidth = 17;
+    ctx.beginPath(); ctx.moveTo(sgn * 20, 2); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = LINE; ctx.lineWidth = 18.5;   // 先描深的再压浅的，做出轮廓
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.moveTo(sgn * 20, 2); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = PINK; ctx.lineWidth = 15;
+    ctx.beginPath(); ctx.moveTo(sgn * 20, 2); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.fillStyle = PINK;
+    ctx.beginPath(); ctx.arc(ex, ey, 8.6, 0, TAU); ctx.fill();
+    ctx.strokeStyle = LINE; ctx.lineWidth = 2; ctx.stroke();
   });
 
-  /* ---- 身体：上尖下圆的海星形，不是五角星 ---- */
-  const g = ctx.createLinearGradient(0, -66, 0, 40);
-  g.addColorStop(0, '#ffa8bb'); g.addColorStop(0.55, '#fa8ea6'); g.addColorStop(1, '#ef7090');
+  /* ---- 两条短腿 + 各一只脚指甲 ---- */
+  [-1, 1].forEach(function (sgn) {
+    ctx.fillStyle = PINK_D;
+    ctx.beginPath();
+    ctx.moveTo(sgn * 15, 24);
+    ctx.quadraticCurveTo(sgn * 26, 44, sgn * 13, 52);
+    ctx.quadraticCurveTo(sgn * 2, 48, sgn * 4, 28);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = LINE; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#F2E7C8';                       // 指甲
+    ctx.beginPath(); ctx.ellipse(sgn * 15, 49, 3.4, 2.4, sgn * 0.3, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#C9A96A'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  /* ---- 头身：上尖下圆的整块海星体 ---- */
+  const g = ctx.createLinearGradient(0, -68, 0, 34);
+  g.addColorStop(0, '#FBAEC0'); g.addColorStop(0.5, PINK); g.addColorStop(1, PINK_D);
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.moveTo(0, -66);                                        // 头顶尖
-  ctx.bezierCurveTo(16, -60, 23, -46, 25, -32);              // 右侧（加宽）
-  ctx.bezierCurveTo(28, -20, 34, -12, 34, 2);
-  ctx.bezierCurveTo(34, 22, 22, 36, 0, 36);                  // 右下半圆
-  ctx.bezierCurveTo(-22, 36, -34, 22, -34, 2);
-  ctx.bezierCurveTo(-34, -12, -28, -20, -25, -32);
-  ctx.bezierCurveTo(-23, -46, -16, -60, 0, -66);
-  ctx.fill();
-  ctx.lineWidth = 1.8; ctx.strokeStyle = 'rgba(200,90,115,.6)'; ctx.stroke();
-
-  /* 肚子上的浅色 */
-  ctx.fillStyle = 'rgba(255,205,216,.75)';
-  oval(ctx, 0, 8, 18, 18, 0);
-  /* 身上的小点（海星特有的那种） */
-  ctx.fillStyle = 'rgba(214,110,138,.55)';
-  oval(ctx, -20, -6, 2, 2.4, 0); oval(ctx, 21, -4, 2, 2.4, 0);
-  oval(ctx, -14, 22, 1.8, 2.2, 0); oval(ctx, 15, 23, 1.8, 2.2, 0);
-
-  /* 绿短裤 + 紫花 */
-  ctx.fillStyle = '#9ed94f';
-  ctx.beginPath();
-  ctx.moveTo(-24, 18); ctx.quadraticCurveTo(0, 26, 24, 18);
-  ctx.lineTo(27, 36); ctx.quadraticCurveTo(0, 44, -27, 36);
+  ctx.moveTo(0, -68);
+  ctx.bezierCurveTo(13, -62, 20, -48, 22, -34);
+  ctx.bezierCurveTo(25, -22, 32, -14, 32, 0);
+  ctx.bezierCurveTo(32, 20, 21, 34, 0, 34);
+  ctx.bezierCurveTo(-21, 34, -32, 20, -32, 0);
+  ctx.bezierCurveTo(-32, -14, -25, -22, -22, -34);
+  ctx.bezierCurveTo(-20, -48, -13, -62, 0, -68);
   ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(110,160,40,.55)'; ctx.stroke();
-  [[-13, 28], [13, 28], [0, 35]].forEach(function (pt) {
-    ctx.fillStyle = '#a97fe0';
-    circle(ctx, pt[0], pt[1], 3.4);
-    ctx.fillStyle = '#e0c8ff';
-    circle(ctx, pt[0], pt[1], 1.3);
+  ctx.strokeStyle = LINE; ctx.lineWidth = 2.4; ctx.stroke();
+
+  /* ---- 绿短裤（在身体之前画下半截，贴合胯部） ---- */
+  ctx.beginPath();
+  ctx.moveTo(-26, 16); ctx.quadraticCurveTo(0, 25, 26, 16);
+  ctx.lineTo(29, 34); ctx.quadraticCurveTo(0, 42, -29, 34);
+  ctx.closePath();
+  const sg = ctx.createLinearGradient(0, 16, 0, 38);
+  sg.addColorStop(0, '#A8DE5C'); sg.addColorStop(1, '#8CC843');
+  ctx.fillStyle = sg; ctx.fill();
+  ctx.strokeStyle = '#5E8F2A'; ctx.lineWidth = 2.2; ctx.stroke();
+  /* 紫花 */
+  [[-14, 27], [14, 27], [0, 34]].forEach(function (pt) {
+    ctx.fillStyle = '#A97FE0';
+    for (let k = 0; k < 5; k++) {
+      const a = k / 5 * TAU - Math.PI / 2;
+      ctx.beginPath();
+      ctx.ellipse(pt[0] + Math.cos(a) * 3.1, pt[1] + Math.sin(a) * 3.1, 2.2, 2.2, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#F0DFFF';
+    ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.5, 0, TAU); ctx.fill();
   });
 
-  /* ---- 脸 ---- */
-  /* 眼白 + 厚眼皮（派大星标志性的半睁眼） */
-  ctx.fillStyle = '#ffffff';
-  oval(ctx, -12, -24, 10, 11, 0); oval(ctx, 12, -24, 10, 11, 0);
-  ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(180,80,105,.55)';
-  ctx.beginPath(); ctx.ellipse(-12, -24, 10, 11, 0, 0, TAU); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(12, -24, 10, 11, 0, 0, TAU); ctx.stroke();
-  ctx.fillStyle = '#1d1d22';
-  circle(ctx, -12 + look, -22, 4.4); circle(ctx, 12 + look, -22, 4.4);
+  /* ---- 浅色肚皮 ---- */
+  ctx.fillStyle = 'rgba(255,214,224,.85)';
+  ctx.beginPath(); ctx.ellipse(0, 6, 17, 17, 0, 0, TAU); ctx.fill();
+  /* 身上的小点（海星的质感，鼻子的位置没有） */
+  ctx.fillStyle = 'rgba(214,110,138,.5)';
+  [[-21, -8], [21, -6], [-15, 20], [16, 21], [-24, -26], [24, -25]].forEach(function (pt) {
+    ctx.beginPath(); ctx.ellipse(pt[0], pt[1], 1.9, 2.3, 0, 0, TAU); ctx.fill();
+  });
+
+  /* ---- 眼睛：白眼球 + 紫色厚眼皮压住上半边（这是派大星的灵魂） ---- */
+  const eyY = -26, er = 10.5;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.ellipse(-11.5, eyY, er, er * 1.05, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(11.5, eyY, er, er * 1.05, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = LINE; ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.ellipse(-11.5, eyY, er, er * 1.05, 0, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(11.5, eyY, er, er * 1.05, 0, 0, TAU); ctx.stroke();
+  /* 瞳孔：往上飘、还各看各的 */
+  ctx.fillStyle = '#1D1D22';
+  ctx.beginPath(); ctx.arc(-11.5 + look * 1.4, eyY - 2.4 + derp * 0.6, 3.6, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(11.5 - look * 1.4, eyY - 3.0 - derp * 0.6, 3.6, 0, TAU); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,.9)';
-  circle(ctx, -13.4 + look, -24, 1.5); circle(ctx, 10.6 + look, -24, 1.5);
-  /* 眉毛 */
-  ctx.strokeStyle = '#c25f78'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-20, -38); ctx.lineTo(-5, -35); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(20, -38); ctx.lineTo(5, -35); ctx.stroke();
+  ctx.beginPath(); ctx.arc(-12.6 + look * 1.4, eyY - 3.6 + derp * 0.6, 1.3, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(10.4 - look * 1.4, eyY - 4.2 - derp * 0.6, 1.3, 0, TAU); ctx.fill();
+  /* 紫色眼皮 */
+  ctx.fillStyle = LID;
+  ctx.beginPath(); ctx.ellipse(-11.5, eyY - 4.2, er + 0.6, 6.2, 0, Math.PI, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(11.5, eyY - 4.2, er + 0.6, 6.2, 0, Math.PI, TAU); ctx.fill();
+  ctx.strokeStyle = '#7C5EB8'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(-22, eyY - 4.2); ctx.lineTo(-1, eyY - 4.2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(1, eyY - 4.2); ctx.lineTo(22, eyY - 4.2); ctx.stroke();
 
-  /* 嘴：张开大笑、鼓着腮帮子吹泡泡 */
-  const puff = 1 + blow * 0.45;
-  ctx.fillStyle = '#b8546d';
-  oval(ctx, 0, -6, 11 * puff, 8.6 * puff, 0);          // 唇
-  ctx.fillStyle = '#6f2937';
-  oval(ctx, 0, -5, 8.6 * puff, 6.6 * puff, 0);         // 口腔
-  ctx.fillStyle = '#ff7b8a';
-  oval(ctx, 0, -1.2, 5.4 * puff, 3.6 * puff, 0);       // 舌头
-  ctx.fillStyle = 'rgba(255,255,255,.92)';             // 上排牙
-  rrect(ctx, -5.4, -10, 4.6, 3.4, 1); ctx.fill();
-  rrect(ctx, 0.8, -10, 4.6, 3.4, 1); ctx.fill();
+  /* ---- 粗眉（粉的，压得很低 = 呆） ---- */
+  ctx.strokeStyle = '#E06A8C'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-20, -41 + derp * 0.5); ctx.lineTo(-4, -38 + derp * 0.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(20, -41 - derp * 0.5); ctx.lineTo(4, -38 - derp * 0.5); ctx.stroke();
 
-  /* ---- 泡泡：从嘴里飘出来，越吹越大 ---- */
+  /* ---- 嘴：松弛张开、舌头吐出来 ---- */
+  const mw = 11 + blow * 3, mh = 6 + blow * 5;
+  ctx.beginPath();
+  ctx.ellipse(0, -8 + derp * 0.4, mw, mh, 0, 0, TAU);
+  ctx.fillStyle = '#8E3B52'; ctx.fill();
+  ctx.strokeStyle = LINE; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#FF7B8A';
+  ctx.beginPath(); ctx.ellipse(0, -5.5 + blow * 2.5 + derp * 0.4, mw * 0.6, mh * 0.46, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#FFFFFF';                       // 两颗上门牙
+  ctx.beginPath(); ctx.rect(-5.4, -13 + derp * 0.4, 4.4, 3.6); ctx.fill();
+  ctx.beginPath(); ctx.rect(1, -13 + derp * 0.4, 4.4, 3.6); ctx.fill();
+
+  /* ---- 口水（呆傻感的点睛之笔） ---- */
+  if (kind !== 'cheer') {
+    const drool = 4 + (Math.sin(p * TAU * 2) * 0.5 + 0.5) * 6;
+    ctx.fillStyle = 'rgba(180,230,255,.85)';
+    ctx.beginPath();
+    ctx.moveTo(9, -2);
+    ctx.quadraticCurveTo(12.5, drool * 0.6, 9.5, drool);
+    ctx.quadraticCurveTo(6.5, drool * 0.6, 6.5, -2);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.beginPath(); ctx.arc(8.2, drool - 1.4, 1.7, 0, TAU); ctx.fill();
+  }
+
+  /* ---- 泡泡（抓水母 / 吹泡泡是他的爱好） ---- */
   for (let i = 0; i < 4; i++) {
     const t = (p * 2.2 + i * 0.25) % 1;
     const r = (3.6 + i * 2.0) * (1 + blow * 0.5);
-    const bx = 14 + t * 28 + i * 3;
-    const by = -16 - t * 48;
+    const bx = 16 + t * 26 + i * 3;
+    const by = -20 - t * 44;
     const fade = t > 0.78 ? (1 - t) / 0.22 : 1;
-    ctx.globalAlpha = Math.min(1, fade * (0.6 + blow * 0.4));
+    ctx.globalAlpha = Math.min(1, fade * (0.55 + blow * 0.45));
     ctx.fillStyle = 'rgba(255,255,255,.5)';
-    circle(ctx, bx, by, r);
-    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.arc(bx, by, r, 0, TAU); ctx.fill();
+    ctx.lineWidth = 1.7;
     ctx.strokeStyle = 'rgba(146,206,246,.95)';
     ctx.beginPath(); ctx.arc(bx, by, r, 0, TAU); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,.95)';
-    circle(ctx, bx - r * 0.36, by - r * 0.36, r * 0.24);
+    ctx.beginPath(); ctx.arc(bx - r * 0.36, by - r * 0.36, r * 0.24, 0, TAU); ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
