@@ -207,256 +207,229 @@ function drawDog(ctx, q, p, kind) {
 }
 
 /* ============================================================ ② 小黄龙 */
+/* 抽象版奶龙：粗黑描边 + 平涂高对比 + 呆滞大小眼 + 大张歪嘴 */
 function drawDragon(ctx, q, p, kind) {
-  const look = Math.sin(p * TAU) * 1.6;
-  /* 腹肌大小：待机时若隐若现，跳舞/欢呼时越绷越大 */
-  const flex = kind === 'idle' ? (0.5 + 0.5 * Math.sin(p * TAU))
-    : kind === 'dance' ? (1.1 + 0.35 * Math.abs(Math.sin(p * TAU * 2)))
-      : 1.6;
-  shadow(ctx, 52, 26);
+  const LINE = '#141414';
+  const derp = kind === 'cheer' ? 1 : kind === 'dance' ? 0.65 : 0.3;
+  const jit = Math.sin(p * TAU * 2) * (kind === 'idle' ? 0.6 : 1.6);
+  shadow(ctx, 54, 26);
 
   /* 尾巴 */
-  ctx.fillStyle = '#f2b52e';
   ctx.beginPath();
-  ctx.moveTo(-18, 18); ctx.quadraticCurveTo(-52, 26, -44, 44);
-  ctx.quadraticCurveTo(-30, 46, -16, 34); ctx.closePath(); ctx.fill();
+  ctx.moveTo(-24, 14); ctx.quadraticCurveTo(-50, 20, -44, 40);
+  ctx.quadraticCurveTo(-28, 40, -18, 28); ctx.closePath();
+  ctx.fillStyle = '#FFD93B'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
 
   /* 小短腿 */
-  ctx.fillStyle = '#f2b52e';
-  oval(ctx, -14, 48, 11, 10, 0); oval(ctx, 14, 48, 11, 10, 0);
-  ctx.fillStyle = '#e09a1c';
-  oval(ctx, -15, 54, 10, 5, 0); oval(ctx, 15, 54, 10, 5, 0);
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.ellipse(sg * 15, 46, 12, 10, 0, 0, TAU);
+    ctx.fillStyle = '#FFD93B'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(sg * 15, 52, 9, 4, 0, 0, TAU);
+    ctx.fillStyle = '#E8B92A'; ctx.fill();
+    ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
+  });
 
-  /* 大身子 */
-  const g = ctx.createLinearGradient(0, -56, 0, 44);
-  g.addColorStop(0, '#ffe066'); g.addColorStop(1, '#f7b52c');
-  ctx.fillStyle = g;
+  /* 头身一体的大圆 */
   ctx.beginPath();
-  ctx.moveTo(0, -56);
-  ctx.bezierCurveTo(34, -56, 42, -18, 40, 14);
-  ctx.bezierCurveTo(38, 42, -38, 42, -40, 14);
-  ctx.bezierCurveTo(-42, -18, -34, -56, 0, -56);
-  ctx.fill();
-  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(190,130,10,.5)'; ctx.stroke();
+  ctx.moveTo(0, -58);
+  ctx.bezierCurveTo(36, -58, 45, -14, 43, 16);
+  ctx.bezierCurveTo(41, 44, -41, 44, -43, 16);
+  ctx.bezierCurveTo(-45, -14, -36, -58, 0, -58);
+  ctx.closePath();
+  ctx.fillStyle = '#FFD93B'; ctx.fill();
+  ctx.lineWidth = 3.4; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* 肚皮（绷紧时整体鼓一点） */
-  const bellyRy = 22 * (1 + (flex - 1) * 0.13);
-  const bellyRx = 26 * (1 + (flex - 1) * 0.07);
-  const bellyG = ctx.createLinearGradient(0, 20 - bellyRy, 0, 20 + bellyRy);
-  bellyG.addColorStop(0, 'rgba(255,253,225,.96)');
-  bellyG.addColorStop(1, 'rgba(252,238,175,.92)');
-  ctx.fillStyle = bellyG;
-  oval(ctx, 0, 20, bellyRx, bellyRy, 0);
-  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(210,170,40,.4)';
-  ctx.beginPath(); ctx.ellipse(0, 20, bellyRx, bellyRy, 0, 0, TAU); ctx.stroke();
+  /* 肚皮 */
+  ctx.beginPath(); ctx.ellipse(0, 20, 23, 19, 0, 0, TAU);
+  ctx.fillStyle = '#FFF6C8'; ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* ---- 腹肌：靠「沟」和「隆起」画，不是贴六个椭圆 ----
-     真实腹肌 = 一道竖沟 + 两条横沟把腹直肌分成六块。
-     所以先铺隆起，再压沟，最后给每块加高光；绷得越紧对比越强。 */
-  const abGrow = 1 + (flex - 1) * 0.55;
-  const abW = 7.4 * abGrow, abH = 4.2 * abGrow;
-  const rowH = 2 * abH + 2.2;
-  const abMid = 22;                       // 腹肌中心（在肚皮中间，不再被嘴压住）
-  const abTop = abMid - rowH * 1.5;
+  /* 犄角 */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath();
+    ctx.moveTo(sg * 11, -54);
+    ctx.quadraticCurveTo(sg * 19, -72, sg * 27, -57);
+    ctx.quadraticCurveTo(sg * 19, -50, sg * 11, -51);
+    ctx.closePath();
+    ctx.fillStyle = '#FFF6C8'; ctx.fill();
+    ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
+  });
 
-  /* 整片隆起 */
-  const mg = ctx.createRadialGradient(-3, abTop + rowH * 1.1, 2, 0, abMid, abW * 2.6);
-  mg.addColorStop(0, 'rgba(255,255,255,.75)');
-  mg.addColorStop(0.6, 'rgba(247,206,92,.5)');
-  mg.addColorStop(1, 'rgba(230,180,50,0)');
-  ctx.fillStyle = mg;
-  oval(ctx, 0, abMid, abW * 2.2, rowH * 1.75, 0);
+  /* 呆滞大小眼：左眼大、右眼小，瞳孔各看各的 —— 抽象感的来源 */
+  const eL = 14, eR = 10.5;
+  ctx.lineWidth = 3.2; ctx.strokeStyle = LINE;
+  ctx.beginPath(); ctx.ellipse(-15, -26, eL, eL * 1.05, 0, 0, TAU);
+  ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(16, -23, eR, eR * 1.05, 0, 0, TAU);
+  ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = LINE;
+  ctx.beginPath(); ctx.arc(-13 + jit, -24 + derp * 2.5, 3.6, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(15 - jit, -25 - derp * 2.5, 3.0, 0, TAU); ctx.fill();
 
-  /* 沟（对比度给足，否则看不出是肌肉） */
-  ctx.lineCap = 'round';
-  const gAlpha = Math.min(0.8, 0.45 + flex * 0.22);
-  ctx.strokeStyle = 'rgba(163,108,14,' + gAlpha + ')';
-  ctx.lineWidth = 1.4 + flex * 0.7;
+  /* 大张的歪嘴 */
+  const mh = 9 + derp * 13;
   ctx.beginPath();
-  ctx.moveTo(0, abTop - abH * 0.45);
-  ctx.lineTo(0, abTop + rowH * 2 + abH * 0.45);
-  ctx.stroke();
-  for (let r = 1; r <= 2; r++) {
-    const gy = abTop + r * rowH - rowH * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(-abW * 0.98, gy + 1.9);
-    ctx.quadraticCurveTo(0, gy - 1.9, abW * 0.98, gy + 1.9);
-    ctx.stroke();
-  }
-  /* 每块上面的高光，和下面的暗边，做出立体感 */
-  for (let r = 0; r < 3; r++) {
-    for (let c = -1; c <= 1; c += 2) {
-      const ax = c * abW * 0.5, ay = abTop + r * rowH;
-      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.85, 0.4 + flex * 0.28) + ')';
-      oval(ctx, ax - abW * 0.16, ay - abH * 0.26, abW * 0.42, abH * 0.36, c * 0.08);
-      ctx.fillStyle = 'rgba(178,124,20,' + Math.min(0.4, 0.14 + flex * 0.14) + ')';
-      oval(ctx, ax + abW * 0.1, ay + abH * 0.34, abW * 0.4, abH * 0.2, c * 0.06);
-    }
-  }
-  /* 绷到最大时，两侧再压两道外轮廓 */
-  if (flex > 1.1) {
-    ctx.strokeStyle = 'rgba(170,116,16,' + Math.min(0.62, (flex - 1.1) * 1.1) + ')';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.moveTo(-abW * 1.16, abTop - abH * 0.15);
-    ctx.quadraticCurveTo(-abW * 1.3, abMid, -abW * 0.92, abTop + rowH * 2.85);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(abW * 1.16, abTop - abH * 0.15);
-    ctx.quadraticCurveTo(abW * 1.3, abMid, abW * 0.92, abTop + rowH * 2.85);
-    ctx.stroke();
-  }
+  ctx.moveTo(-20, -3);
+  ctx.quadraticCurveTo(-2, -3 + mh, 21, -8);
+  ctx.quadraticCurveTo(2, 5, -20, -3);
+  ctx.closePath();
+  ctx.fillStyle = '#4A1F1A'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.fillStyle = '#FF7B8A';
+  ctx.beginPath(); ctx.ellipse(2, 1 + derp * 4, 7, 4, 0, 0, TAU); ctx.fill();
+  /* 龅牙 */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(-9, -5, 6.5, 6.5);
+  ctx.fillRect(1, -6, 5.5, 6);
+  ctx.lineWidth = 1.6; ctx.strokeStyle = LINE;
+  ctx.strokeRect(-9, -5, 6.5, 6.5);
+  ctx.strokeRect(1, -6, 5.5, 6);
 
-  /* 头顶小角 */
-  ctx.fillStyle = '#fff0b8';
-  ctx.beginPath(); ctx.moveTo(-20, -50); ctx.quadraticCurveTo(-26, -66, -14, -62); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(20, -50); ctx.quadraticCurveTo(26, -66, 14, -62); ctx.closePath(); ctx.fill();
-
-  /* 眼睛 */
-  eye(ctx, -15, -26, 11, '#2e7d52', look);
-  eye(ctx, 15, -26, 11, '#2e7d52', look);
-
-  /* 红脸蛋 */
-  ctx.fillStyle = 'rgba(255,130,90,.5)';
-  oval(ctx, -29, -10, 8, 6, 0); oval(ctx, 29, -10, 8, 6, 0);
-
-  /* 嘴（上移到脸下半部，别压到腹肌） */
-  ctx.fillStyle = '#f9c22e'; oval(ctx, 0, -12, 15, 10, 0);
-  if (q.open) mouthOpen(ctx, 0, -10, 11, q.open === 2 ? 8 : 5, '#a8610f');
-  else {
-    ctx.strokeStyle = '#a8610f'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(0, -11, 10, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
-  }
-  if (q.open) teeth(ctx, -6, -15, 5, 5, 2);
-  ctx.fillStyle = '#c98a1a'; circle(ctx, -4, -15, 1.6); circle(ctx, 4, -15, 1.6);
-
-  /* ---- 手臂 + 二头肌：二头肌和手臂同色，才连成一条胳膊而不是浮在旁边的球 ---- */
-  const a = -0.35 - q.arm * 1.1 + Math.sin(p * TAU) * (kind === 'dance' ? 0.45 : 0.3);
-  const bulge = 5.5 + flex * 3.6;
-  [-1, 1].forEach(function (sgn) {
-    /* 肩点要落在身体轮廓外（身体半宽约 40），否则胳膊只剩个圆点露出来 */
-    const sx = sgn * 39, sy = 8;
-    const mx = sgn * (39 + Math.cos(a) * 9), my = sy + Math.sin(a) * 9;      // 肘
-    const ex = sgn * (39 + Math.cos(a) * 19), ey = sy + Math.sin(a) * 19;    // 手
-    limb(ctx, sx, sy, mx, my, 10, '#f7b52c');                               // 上臂
-    ctx.fillStyle = '#f7b52c';
-    circle(ctx, (sx + mx) / 2, (sy + my) / 2 - 1.5, bulge * 0.66);          // 二头肌
-    ctx.fillStyle = 'rgba(255,255,255,.45)';                                // 肌肉高光
-    circle(ctx, (sx + mx) / 2 - sgn * 2.5, (sy + my) / 2 - bulge * 0.42, bulge * 0.28);
-    limb(ctx, mx, my, ex, ey, 8, '#f7b52c');                                // 前臂
-    ctx.fillStyle = '#f7b52c'; circle(ctx, ex, ey, 5.6);                    // 手
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(190,130,10,.35)';
-    ctx.beginPath(); ctx.arc(ex, ey, 5.6, 0, TAU); ctx.stroke();
+  /* 小短手（先描粗黑边再填色，得到梗图那种粗描边） */
+  const a = -0.3 - q.arm * 2.0;
+  [-1, 1].forEach(function (sg) {
+    const ex = sg * (41 + Math.cos(a) * 14), ey = 6 + Math.sin(a) * 14;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 38, 6); ctx.lineTo(ex, ey);
+    ctx.lineWidth = 12; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sg * 38, 6); ctx.lineTo(ex, ey);
+    ctx.lineWidth = 6.5; ctx.strokeStyle = '#FFD93B'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(ex, ey, 6.4, 0, TAU);
+    ctx.fillStyle = '#FFD93B'; ctx.fill();
+    ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
   });
 }
 
 /* ============================================================ ③ 熊猫人 */
+/* 抽象版熊猫人：直接照「熊猫头」梗图的画法 —— 黑白两色、粗线条、
+   白脸膛 + 黑耳朵 + 黑眼罩，里面塞一张手绘的「三分讥笑」脸，还叼根烟。 */
 function drawPanda(ctx, q, p, kind) {
-  const look = Math.sin(p * TAU) * 1.5;
-  const pedal = p * TAU * (kind === 'idle' ? 1 : kind === 'dance' ? 3.2 : 1.6);
-  const wheel = pedal * 1.1;
-  shadow(ctx, 56, 34);
+  const LINE = '#111111';
+  const look = Math.sin(p * TAU) * 2.4;
+  const smug = kind === 'cheer' ? 1 : kind === 'dance' ? 0.6 : 0.3;
+  const smoke = (p * 2) % 1;                       // 吐烟的节奏
+  shadow(ctx, 56, 24);
 
-  /* ---- 自行车（先画，人在上面） ---- */
-  const wheelR = 15, wx = 30, wy = 40;
-  /* 车轮 */
-  [-1, 1].forEach(function (sgn) {
-    const cx = sgn * wx;
-    ctx.strokeStyle = '#2b2b31'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(cx, wy, wheelR, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = '#aeb6bf'; ctx.lineWidth = 1.2;
-    for (let i = 0; i < 6; i++) {
-      const a = wheel + i * Math.PI / 3;
-      ctx.beginPath();
-      ctx.moveTo(cx, wy);
-      ctx.lineTo(cx + Math.cos(a) * (wheelR - 2), wy + Math.sin(a) * (wheelR - 2));
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#8d949c'; circle(ctx, cx, wy, 2.4);
+  /* 黑腿 */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.ellipse(sg * 18, 46, 14, 10, 0, 0, TAU);
+    ctx.fillStyle = '#111111'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
   });
-  /* 车架 */
-  ctx.strokeStyle = '#d9534f'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+
+  /* 白身子 + 黑肚子 */
   ctx.beginPath();
-  ctx.moveTo(-wx, wy); ctx.lineTo(-4, wy - 20); ctx.lineTo(18, wy - 20);
-  ctx.moveTo(18, wy - 20); ctx.lineTo(wx, wy);
-  ctx.moveTo(-4, wy - 20); ctx.lineTo(-14, wy); ctx.lineTo(-wx, wy);
-  ctx.stroke();
-  /* 车把 & 座垫 */
-  ctx.strokeStyle = '#8d949c'; ctx.lineWidth = 2.6;
-  ctx.beginPath(); ctx.moveTo(18, wy - 20); ctx.lineTo(22, wy - 30); ctx.lineTo(30, wy - 32); ctx.stroke();
-  ctx.fillStyle = '#2b2b31';
-  rrect(ctx, -12, wy - 27, 16, 5, 2.4); ctx.fill();
+  ctx.moveTo(0, -20);
+  ctx.bezierCurveTo(32, -20, 38, 14, 33, 36);
+  ctx.bezierCurveTo(28, 52, -28, 52, -33, 36);
+  ctx.bezierCurveTo(-38, 14, -32, -20, 0, -20);
+  ctx.closePath();
+  ctx.fillStyle = '#FFFFFF'; ctx.fill();
+  ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0, 20, 19, 16, 0, 0, TAU);
+  ctx.fillStyle = '#111111'; ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* ---- 熊猫 ---- */
-  const hipY = wy - 24;
-  const legLift = Math.sin(pedal) * 5, legLift2 = Math.sin(pedal + Math.PI) * 5;
+  /* 黑手臂 */
+  const a = -0.3 - q.arm * 2.0;
+  [-1, 1].forEach(function (sg) {
+    const ex = sg * (30 + Math.cos(a) * 17), ey = 0 + Math.sin(a) * 17;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 28, 0); ctx.lineTo(ex, ey);
+    ctx.lineWidth = 13; ctx.strokeStyle = '#111111'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(ex, ey, 7, 0, TAU);
+    ctx.fillStyle = '#111111'; ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+  });
 
-  /* 腿（蹬车） */
-  ctx.strokeStyle = '#26262b'; ctx.lineWidth = 8; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-6, hipY + 8); ctx.lineTo(-8, hipY + 16 + legLift); ctx.lineTo(-4 + Math.sin(pedal) * 8, wy - 4 + legLift); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(6, hipY + 8); ctx.lineTo(8, hipY + 16 + legLift2); ctx.lineTo(-4 + Math.sin(pedal + Math.PI) * 8, wy - 4 + legLift2); ctx.stroke();
-  /* 脚踏 */
-  ctx.fillStyle = '#3a3a42';
-  oval(ctx, -4 + Math.sin(pedal) * 8, wy - 4 + legLift, 5, 2.4, 0);
-  oval(ctx, -4 + Math.sin(pedal + Math.PI) * 8, wy - 4 + legLift2, 5, 2.4, 0);
+  /* 大黑耳朵（先在头后面画） */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.arc(sg * 25, -56, 12, 0, TAU);
+    ctx.fillStyle = '#111111'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+  });
 
-  /* 白身子 */
-  ctx.fillStyle = '#fbfbfb';
+  /* 白脸膛 */
   ctx.beginPath();
-  ctx.moveTo(0, hipY - 22);
-  ctx.bezierCurveTo(26, hipY - 22, 30, hipY, 26, hipY + 12);
-  ctx.bezierCurveTo(22, hipY + 22, -22, hipY + 22, -26, hipY + 12);
-  ctx.bezierCurveTo(-30, hipY, -26, hipY - 22, 0, hipY - 22);
-  ctx.fill();
-  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(120,120,125,.3)'; ctx.stroke();
+  ctx.moveTo(0, -62);
+  ctx.bezierCurveTo(28, -62, 33, -42, 31, -26);
+  ctx.bezierCurveTo(29, -10, -29, -10, -31, -26);
+  ctx.bezierCurveTo(-33, -42, -28, -62, 0, -62);
+  ctx.closePath();
+  ctx.fillStyle = '#FFFFFF'; ctx.fill();
+  ctx.lineWidth = 3.4; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* 手臂 → 握车把；欢呼时举一只手 */
-  ctx.strokeStyle = '#26262b'; ctx.lineWidth = 7; ctx.lineCap = 'round';
-  if (kind === 'cheer') {
-    ctx.beginPath(); ctx.moveTo(-16, hipY - 6); ctx.lineTo(-30, hipY - 22); ctx.lineTo(-34, hipY - 44); ctx.stroke();
-    ctx.fillStyle = '#26262b'; circle(ctx, -34, hipY - 46, 5);
+  /* 黑眼罩（斜着，就是熊猫头那两个黑块） */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(-13, -38, 12, 14, -0.34, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(13, -38, 12, 14, 0.34, 0, TAU); ctx.fill();
+
+  /* 懒散半眯的眼睛：眼白压成一条缝，眼神往下斜 */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.ellipse(-13, -37, 7.5, 5, -0.34, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(13, -37, 7.5, 5, 0.34, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(-13 + look * 0.6, -36.5 + smug * 1.6, 2.6, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(13 + look * 0.6, -36.5 + smug * 1.6, 2.6, 0, TAU); ctx.fill();
+  /* 上眼皮（盖住上半边 = 不屑） */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(-13, -42, 8.6, 4.4, -0.34, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(13, -42, 8.6, 4.4, 0.34, 0, TAU); ctx.fill();
+
+  /* 粗斜眉 */
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 3.4;
+  ctx.beginPath(); ctx.moveTo(-23, -50); ctx.lineTo(-6, -46); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(23, -50); ctx.lineTo(6, -46); ctx.stroke();
+
+  /* 鼻子 */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(0, -25, 6, 4.2, 0, 0, TAU); ctx.fill();
+
+  /* 歪嘴：一边嘴角翘起来，就是那个「三分讥笑」 */
+  const mOpen = kind === 'cheer' ? 9 : kind === 'dance' ? 5 : 0;
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  if (mOpen) {
+    ctx.beginPath();
+    ctx.moveTo(-11, -18);
+    ctx.quadraticCurveTo(0, -18 + mOpen * 2.2, 14, -21);
+    ctx.quadraticCurveTo(2, -13, -11, -18);
+    ctx.closePath();
+    ctx.fillStyle = '#3A1A1A'; ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(-5, -19.5, 5, 5);
+    ctx.fillRect(2, -20.5, 4.6, 4.6);
   } else {
-    ctx.beginPath(); ctx.moveTo(-16, hipY - 6); ctx.lineTo(-6, hipY - 14); ctx.lineTo(30, wy - 32); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-11, -17);
+    ctx.quadraticCurveTo(1, -13, 14, -20);
+    ctx.stroke();
   }
-  ctx.beginPath(); ctx.moveTo(16, hipY - 6); ctx.lineTo(24, hipY - 14); ctx.lineTo(30, wy - 32); ctx.stroke();
-  ctx.fillStyle = '#26262b'; circle(ctx, 30, wy - 33, 4.6);
 
-  /* 头 */
-  const hy = hipY - 60;
-  ctx.fillStyle = '#fbfbfb';
-  ctx.beginPath();
-  ctx.moveTo(0, hy);
-  ctx.bezierCurveTo(26, hy, 30, hy + 18, 28, hy + 32);
-  ctx.bezierCurveTo(26, hy + 46, -26, hy + 46, -28, hy + 32);
-  ctx.bezierCurveTo(-30, hy + 18, -26, hy, 0, hy);
-  ctx.fill();
-  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(120,120,125,.3)'; ctx.stroke();
-
-  /* 耳朵 */
-  ctx.fillStyle = '#26262b';
-  circle(ctx, -23, hy + 2, 10); circle(ctx, 23, hy + 2, 10);
-
-  /* 黑眼圈（斜的 = 欠） */
-  ctx.fillStyle = '#26262b';
-  oval(ctx, -12, hy + 22, 11, 13, -0.35);
-  oval(ctx, 12, hy + 22, 11, 13, 0.35);
-  /* 半眯的眼睛 */
-  ctx.fillStyle = '#ffffff';
-  oval(ctx, -12, hy + 22, 5, 6, -0.35); oval(ctx, 12, hy + 22, 5, 6, 0.35);
-  ctx.fillStyle = '#1d1d22';
-  circle(ctx, -12 + look, hy + 23, 2.8); circle(ctx, 12 + look, hy + 23, 2.8);
-  /* 挑眉 */
-  ctx.strokeStyle = '#26262b'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-19, hy + 10); ctx.lineTo(-6, hy + 13); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(19, hy + 10); ctx.lineTo(6, hy + 13); ctx.stroke();
-
-  /* 鼻子 + 歪嘴 */
-  ctx.fillStyle = '#26262b'; oval(ctx, 0, hy + 36, 6, 4.4, 0);
-  if (q.open) mouthOpen(ctx, 2, hy + 40, 9, q.open === 2 ? 7 : 4.5, '#3a3a40');
-  else {
-    ctx.strokeStyle = '#3a3a40'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(2, hy + 39, 7, 0.15 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+  /* 叼着的烟 */
+  ctx.strokeStyle = LINE; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.fillStyle = '#F5F0E6';
+  ctx.save();
+  ctx.translate(16, -19);
+  ctx.rotate(-0.34);
+  ctx.beginPath(); ctx.rect(0, -2, 15, 4);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#E2574C';
+  ctx.beginPath(); ctx.rect(12, -2, 3.5, 4); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  /* 烟圈（待机时更明显） */
+  for (let i = 0; i < 3; i++) {
+    const t = (smoke + i * 0.33) % 1;
+    ctx.globalAlpha = (1 - t) * (kind === 'idle' ? 0.85 : 0.5);
+    ctx.strokeStyle = '#8A8A8A'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(30 + t * 12, -24 - t * 26, 3 + t * 5, 0, TAU);
+    ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 }
 
 /* ============================================================ ④ 方块海绵 */
