@@ -1820,9 +1820,9 @@ function drawBanana(ctx, q, p, kind) {
    身体短、是蹲着的，底部两只前脚并排。
    三种动作：摇尾巴（连续）、眨眼（待机中段两帧）、动耳朵（待机末两帧）。 */
 function drawCat(ctx, q, p, kind) {
-  const FUR = '#2A1A14';
-  const FUR_L = '#3D2820';
-  const FUR_D = '#1B100C';
+  const FUR = '#100C0A';        // 身体：黑
+  const FUR_L = '#1E1613';      // 尾尖等稍亮处
+  const FUR_D = '#5A4030';      // 所有描边：褐
   const CREAM = '#F7EFC9';
   const CREAM_D = '#DCCF9E';
   const INNER = '#A9C79B';
@@ -1900,7 +1900,9 @@ function drawCat(ctx, q, p, kind) {
     /* 支点放在【耳朵根部】：这样转动时只有耳尖摆，根部始终贴着脸的曲线，
        不会一转就裂开。根部位置贴着头顶的圆弧（x=±20 处头顶约 y=-42）。 */
     ctx.translate(sg * 20, -41);
-    ctx.rotate(sg * earTw);
+    /* 基础内倾：左耳逆时针(sg=-1)、右耳顺时针(sg=+1)，
+       把外根部的那个角转进头的轮廓里，接缝就不会突出去 */
+    ctx.rotate(sg * (0.22 + earTw));
     /* 根部往头里埋深、并加宽 —— 接缝要完全藏进脸的轮廓里才不会看着断开 */
     ctx.fillStyle = FUR;
     ctx.beginPath();
