@@ -375,42 +375,7 @@ function drawPanda(ctx, q, p, kind) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('發', mx, my + 2);
 
-  /* ---- 左臂：叉腰。注意必须画在身体【左侧】（x 为负）——
-       之前两条胳膊都在右侧，左侧是空的，看着就像少一只手。
-       叉腰要画出「肘向外撑、手按回腰侧」的折角，才一眼认得出。 ---- */
-  const elbowOut = 52 + q.arm * 3;
-  const hipX = -30, hipY = 20 + q.arm * 2;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = LINE; ctx.lineWidth = 17;
-  ctx.beginPath();
-  ctx.moveTo(-32, -6);
-  ctx.lineTo(-elbowOut, 8);
-  ctx.lineTo(hipX, hipY);
-  ctx.stroke();
-  ctx.strokeStyle = '#111111'; ctx.lineWidth = 13.5;
-  ctx.beginPath();
-  ctx.moveTo(-32, -6);
-  ctx.lineTo(-elbowOut, 8);
-  ctx.lineTo(hipX, hipY);
-  ctx.stroke();
-  /* 按在腰上的手 */
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(hipX, hipY, 9, 7.5, -0.25, 0, TAU); ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-  /* 手指缝，让它一眼是「手」而不是一坨 */
-  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.moveTo(hipX - 5, hipY - 3); ctx.lineTo(hipX + 4, hipY - 5); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(hipX - 5, hipY + 1); ctx.lineTo(hipX + 5, hipY - 1); ctx.stroke();
 
-  /* ---- 左手：抬到嘴边掐着烟 ---- */
-  const ha = -1.45 - q.arm * 0.35;
-  const hx = 26 + Math.cos(ha) * 22, hy = -6 + Math.sin(ha) * 22;
-  ctx.strokeStyle = '#111111'; ctx.lineWidth = 14; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(26, -2); ctx.lineTo(hx, hy); ctx.stroke();
-  /* 捏烟的两根手指 */
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.arc(hx, hy, 7.2, 0, TAU); ctx.fill();
-  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
 
   /* ---- 大黑耳朵 ---- */
   [-1, 1].forEach(function (sg) {
@@ -477,7 +442,7 @@ function drawPanda(ctx, q, p, kind) {
   /* ---- 烟：从嘴里斜插出去，正好被手指捏住 ---- */
   const cigAng = -0.38;
   const cx0 = 9, cy0 = -19;
-  const cx1 = hx + Math.cos(cigAng) * 2, cy1 = hy + 12;
+  const cx1 = 26, cy1 = -6;
   ctx.save();
   ctx.translate(cx0, cy0);
   ctx.rotate(cigAng);
@@ -491,10 +456,46 @@ function drawPanda(ctx, q, p, kind) {
   ctx.fillStyle = 'rgba(255,120,60,' + (0.55 + 0.45 * Math.abs(Math.sin(p * TAU * 3))) + ')';
   ctx.beginPath(); ctx.arc(31, 0, 3.2, 0, TAU); ctx.fill();
   ctx.restore();
-  /* 捏烟的手指（盖在烟上，形成「掐着」的感觉） */
-  ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(hx + 1, hy + 1, 5.4, 4.2, cigAng, 0, TAU); ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* ---- 两条胳膊对称举起，双手比中指 ----
+       位置固定在身体轮廓之外（x = ±48），保证看得见。 ---- */
+  const rise = q.arm * 5;
+  [-1, 1].forEach(function (sg) {
+    const shX = sg * 30, shY = -2;
+    const elX = sg * 47, elY = -12 - rise * 0.4;
+    const hx = sg * 48, hy = -30 - rise;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    /* 上臂 + 前臂（先描粗边再填色，保持梗图的粗描边） */
+    [[shX, shY, elX, elY, 15], [elX, elY, hx, hy, 13]].forEach(function (a) {
+      ctx.strokeStyle = LINE; ctx.lineWidth = a[4] + 3;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.stroke();
+      ctx.strokeStyle = '#111111'; ctx.lineWidth = a[4];
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.stroke();
+    });
+    /* 拳头 */
+    ctx.beginPath(); ctx.ellipse(hx, hy, 9.5, 9, 0, 0, TAU);
+    ctx.fillStyle = '#111111'; ctx.fill();
+    ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
+    /* 握起来的指节：两个小凸起 */
+    [[-6.5, -5.5], [6.5, -5.5]].forEach(function (k) {
+      ctx.beginPath(); ctx.arc(hx + k[0], hy + k[1], 4.2, 0, TAU);
+      ctx.fillStyle = '#111111'; ctx.fill();
+      ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
+    });
+    /* 中指：从拳头上方竖起来 */
+    ctx.beginPath();
+    ctx.moveTo(hx - 3.4, hy - 2);
+    ctx.lineTo(hx - 3.4, hy - 15);
+    ctx.quadraticCurveTo(hx, hy - 20, hx + 3.4, hy - 15);
+    ctx.lineTo(hx + 3.4, hy - 2);
+    ctx.closePath();
+    ctx.fillStyle = '#111111'; ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+    /* 指节纹路，让它一眼是根手指 */
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(hx - 2.6, hy - 6); ctx.lineTo(hx + 2.6, hy - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 2.6, hy - 10); ctx.lineTo(hx + 2.6, hy - 10); ctx.stroke();
+  });
 
   /* ---- 烟圈（待机时最明显） ---- */
   for (let i = 0; i < 4; i++) {
