@@ -504,42 +504,39 @@ function drawPanda(ctx, q, p, kind) {
       ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.stroke();
     });
     /* 拳头 */
+    /* 整只手：白填充 + 黑描边（原来是实心黑，和黑胳膊糊在一起） */
     ctx.beginPath(); ctx.ellipse(hx, hy, 9, 8.5, 0, 0, TAU);
-    ctx.fillStyle = '#111111'; ctx.fill();
-    ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
     [[-7, -2.5], [7, -2.5]].forEach(function (k) {
       ctx.beginPath(); ctx.arc(hx + k[0], hy + k[1], 4, 0, TAU);
-      ctx.fillStyle = '#111111'; ctx.fill();
-      ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
+      ctx.fillStyle = '#FFFFFF'; ctx.fill();
+      ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
     });
     /* 中指：又长又粗还往外撇 —— 太细太短的话缩到桌面上就只剩个小凸起，
        根本看不出在比中指。让中指长度接近拳头直径的两倍。 */
     const out = sg * 5;
-    const half = 4.6;
+    const half = 4.8;
+    const tipY = 52;                       // 中指高度（原来 43）
     ctx.beginPath();
     ctx.moveTo(hx - half, hy - 2);
-    ctx.lineTo(hx + out - half, hy - 34);
-    ctx.quadraticCurveTo(hx + out, hy - 43, hx + out + half, hy - 34);
+    ctx.lineTo(hx + out - half, hy - tipY + 9);
+    ctx.quadraticCurveTo(hx + out, hy - tipY, hx + out + half, hy - tipY + 9);
     ctx.lineTo(hx + half, hy - 2);
     ctx.closePath();
-    ctx.fillStyle = '#111111'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
-    /* 指节纹路 */
-    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.8;
-    [10, 18, 26, 33].forEach(function (dy) {
-      const k = (hy - dy - (hy - 2)) / (hy - 40 - (hy - 2));
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
+    /* 指节纹路（白底上要用深色才看得见） */
+    ctx.strokeStyle = 'rgba(17,17,17,.45)'; ctx.lineWidth = 1.8;
+    [12, 21, 30, 39].forEach(function (dy) {
+      const k = (hy - dy - (hy - 2)) / (hy - tipY - (hy - 2));
       const cx = hx + out * k;
       ctx.beginPath();
-      ctx.moveTo(cx - half + 1, hy - dy);
-      ctx.lineTo(cx + half - 1, hy - dy);
+      ctx.moveTo(cx - half + 1.4, hy - dy);
+      ctx.lineTo(cx + half - 1.4, hy - dy);
       ctx.stroke();
     });
-    /* 金戒指：套在中指根部 */
-    ctx.beginPath(); ctx.ellipse(hx + sg * 0.4, hy - 6, 6.4, 3, sg * 0.12, 0, TAU);
-    const rg = ctx.createLinearGradient(hx - 5, hy + 14, hx + 5, hy + 19);
-    rg.addColorStop(0, '#FFF2B0'); rg.addColorStop(0.5, '#F0C43A'); rg.addColorStop(1, '#A87508');
-    ctx.fillStyle = rg; ctx.fill();
-    ctx.lineWidth = 1.4; ctx.strokeStyle = '#6B4A06'; ctx.stroke();
+    /* 金戒指已按用户要求移除 */
   });
 
   /* ---- 雪茄烟：粗烟柱 + 飘散的烟圈 ---- */
