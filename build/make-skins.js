@@ -1878,24 +1878,19 @@ function drawCat(ctx, q, p, kind) {
   ctx.closePath(); ctx.fill();
 
   /* 前腿：从【胸口】直直垂到地上的两条管子。
-     上端用平口（butt），不封口 —— 管子是从身体里伸出来的，不是顶在脖子上；
-     下端单独补一个半圆（圆头）当爪子。 */
+     颜色和身体一样，只给管子的边缘描一道深色线把它勾出来。
+     上端不封口（描边不画顶边），下端是半圆。 */
   [-1, 1].forEach(function (sg) {
-    const topY = 14, botY = 30;                 // 从胸口（不是脖子）开始
-    ctx.strokeStyle = FUR_L; ctx.lineWidth = 11; ctx.lineCap = 'butt';
+    const cx = sg * 9, halfW = 5.5, topY = 14, botY = 29;
     ctx.beginPath();
-    ctx.moveTo(sg * 9, topY);
-    ctx.lineTo(sg * 9, botY);
-    ctx.stroke();
-    /* 下端补半圆 = 爪子 */
-    ctx.fillStyle = FUR_L;
-    ctx.beginPath();
-    ctx.arc(sg * 9, botY, 5.5, 0, Math.PI); ctx.fill();
-    /* 管身左侧一道浅高光，做出圆柱的转折 */
-    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 3; ctx.lineCap = 'butt';
-    ctx.beginPath();
-    ctx.moveTo(sg * 6.5, topY + 3);
-    ctx.lineTo(sg * 6.5, botY - 1);
+    ctx.moveTo(cx - halfW, topY);
+    ctx.lineTo(cx - halfW, botY);
+    ctx.arc(cx, botY, halfW, Math.PI, 0, true);   // 底部半圆（爪子）
+    ctx.lineTo(cx + halfW, topY);
+    ctx.fillStyle = FUR;                          // 和身体同色
+    ctx.fill();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.2; // 只描边，把管子勾出来
+    ctx.lineJoin = 'round';
     ctx.stroke();
   });
 
@@ -1906,19 +1901,19 @@ function drawCat(ctx, q, p, kind) {
        不会一转就裂开。根部位置贴着头顶的圆弧（x=±20 处头顶约 y=-42）。 */
     ctx.translate(sg * 20, -41);
     ctx.rotate(sg * earTw);
-    /* 根部画在支点下方一点，保证转动时根部仍压在头里 */
+    /* 根部往头里埋深、并加宽 —— 接缝要完全藏进脸的轮廓里才不会看着断开 */
     ctx.fillStyle = FUR;
     ctx.beginPath();
-    ctx.moveTo(-13, 8);
-    ctx.quadraticCurveTo(-11, -16, 2, -19);
-    ctx.quadraticCurveTo(13, -11, 13, 8);
+    ctx.moveTo(-15, 24);
+    ctx.quadraticCurveTo(-12, -16, 2, -19);
+    ctx.quadraticCurveTo(14, -11, 14, 24);
     ctx.closePath(); ctx.fill();
     /* 内耳灰绿 */
     ctx.fillStyle = INNER;
     ctx.beginPath();
-    ctx.moveTo(-6, 5);
+    ctx.moveTo(-6, 6);
     ctx.quadraticCurveTo(-4.5, -9, 2, -11.5);
-    ctx.quadraticCurveTo(8, -5, 7.5, 5);
+    ctx.quadraticCurveTo(8, -5, 7.5, 6);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   });
