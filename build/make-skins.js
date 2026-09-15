@@ -334,16 +334,6 @@ function drawPanda(ctx, q, p, kind) {
   ctx.fillStyle = '#111111'; ctx.fill();
   ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* ---- 右臂：垂着插手 ---- */
-  const ra = -0.15 - q.arm * 1.1;
-  const rex = 34 + Math.cos(ra) * 12, rey = 8 + Math.sin(ra) * 22;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#111111'; ctx.lineWidth = 14;
-  ctx.beginPath(); ctx.moveTo(30, 2); ctx.lineTo(rex, rey); ctx.stroke();
-  ctx.beginPath(); ctx.arc(rex, rey, 7.5, 0, TAU);
-  ctx.fillStyle = '#111111'; ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-
   /* ---- 大金链子：一圈金珠子 + 一块金牌 ---- */
   const chainY = -12, chainR = 27;
   ctx.strokeStyle = '#8A6410'; ctx.lineWidth = 6.5;
@@ -384,6 +374,16 @@ function drawPanda(ctx, q, p, kind) {
   ctx.font = 'bold 17px "Microsoft YaHei",sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('發', mx, my + 2);
+
+  /* ---- 右臂：画在身体之上，末端伸出轮廓外（否则会被身体整个盖住，看着像少只手） ---- */
+  const ra = 1.15 - q.arm * 2.4;
+  const rex = 35 + Math.cos(ra) * 19, rey = -6 + Math.sin(ra) * 21;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 15;
+  ctx.beginPath(); ctx.moveTo(34, -2); ctx.lineTo(rex, rey); ctx.stroke();
+  ctx.beginPath(); ctx.arc(rex, rey, 8, 0, TAU);
+  ctx.fillStyle = '#111111'; ctx.fill();
+  ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
 
   /* ---- 左手：抬到嘴边掐着烟 ---- */
   const ha = -1.45 - q.arm * 0.35;
