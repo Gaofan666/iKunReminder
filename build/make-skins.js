@@ -375,15 +375,32 @@ function drawPanda(ctx, q, p, kind) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('發', mx, my + 2);
 
-  /* ---- 右臂：画在身体之上，末端伸出轮廓外（否则会被身体整个盖住，看着像少只手） ---- */
-  const ra = 1.15 - q.arm * 2.4;
-  const rex = 35 + Math.cos(ra) * 19, rey = -6 + Math.sin(ra) * 21;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#111111'; ctx.lineWidth = 15;
-  ctx.beginPath(); ctx.moveTo(34, -2); ctx.lineTo(rex, rey); ctx.stroke();
-  ctx.beginPath(); ctx.arc(rex, rey, 8, 0, TAU);
-  ctx.fillStyle = '#111111'; ctx.fill();
-  ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
+  /* ---- 左臂：叉腰。注意必须画在身体【左侧】（x 为负）——
+       之前两条胳膊都在右侧，左侧是空的，看着就像少一只手。
+       叉腰要画出「肘向外撑、手按回腰侧」的折角，才一眼认得出。 ---- */
+  const elbowOut = 52 + q.arm * 3;
+  const hipX = -30, hipY = 20 + q.arm * 2;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = LINE; ctx.lineWidth = 17;
+  ctx.beginPath();
+  ctx.moveTo(-32, -6);
+  ctx.lineTo(-elbowOut, 8);
+  ctx.lineTo(hipX, hipY);
+  ctx.stroke();
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 13.5;
+  ctx.beginPath();
+  ctx.moveTo(-32, -6);
+  ctx.lineTo(-elbowOut, 8);
+  ctx.lineTo(hipX, hipY);
+  ctx.stroke();
+  /* 按在腰上的手 */
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.ellipse(hipX, hipY, 9, 7.5, -0.25, 0, TAU); ctx.fill();
+  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 手指缝，让它一眼是「手」而不是一坨 */
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(hipX - 5, hipY - 3); ctx.lineTo(hipX + 4, hipY - 5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(hipX - 5, hipY + 1); ctx.lineTo(hipX + 5, hipY - 1); ctx.stroke();
 
   /* ---- 左手：抬到嘴边掐着烟 ---- */
   const ha = -1.45 - q.arm * 0.35;
