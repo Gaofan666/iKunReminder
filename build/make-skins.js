@@ -1851,18 +1851,27 @@ function drawCat(ctx, q, p, kind) {
 
   /* ---------- 尾巴（身后，向左下弯出去） ---------- */
   ctx.save();
-  ctx.translate(-20, 26);
+  ctx.translate(-20, 15);
   ctx.rotate(wag * 0.55);
-  ctx.strokeStyle = FUR; ctx.lineWidth = 12; ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(8, 4);
-  ctx.quadraticCurveTo(-8, 12, -16, 2 - wag * 10);
-  ctx.stroke();
-  ctx.strokeStyle = FUR_L; ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(6, 3);
-  ctx.quadraticCurveTo(-7, 11, -14, 2 - wag * 10);
-  ctx.stroke();
+    /* 尾巴：先描粗的褐边，再压细的黑芯 —— 就得到带描边的尾巴。
+       长度比之前长一截，弯得也更舒展。 */
+    const tailPath = function () {
+      ctx.beginPath();
+      ctx.moveTo(8, 2);
+      ctx.quadraticCurveTo(-12, 11, -23, 0 - wag * 10);
+      ctx.quadraticCurveTo(-30, -6 - wag * 10, -32, -14 - wag * 12);
+    };
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    tailPath();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 15; ctx.stroke();
+    tailPath();
+    ctx.strokeStyle = FUR; ctx.lineWidth = 11.6; ctx.stroke();
+    /* 尾身上一道浅高光 */
+    ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(5, 1);
+    ctx.quadraticCurveTo(-11, 9, -22, -2 - wag * 10);
+    ctx.stroke();
   ctx.restore();
 
   ctx.save();
@@ -1876,7 +1885,7 @@ function drawCat(ctx, q, p, kind) {
   ctx.bezierCurveTo(22, 36, -22, 36, -23, 26);
   ctx.bezierCurveTo(-24, 14, -20, 0, 0, 0);
   ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
 
 
   /* 前腿：从【胸口】直直垂到地上的两条管子。
@@ -1891,7 +1900,7 @@ function drawCat(ctx, q, p, kind) {
     ctx.lineTo(cx + halfW, topY);
     ctx.fillStyle = FUR;                          // 和身体同色
     ctx.fill();
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.2; // 只描边，把管子勾出来
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.5; // 只描边，把管子勾出来
     ctx.lineJoin = 'round';
     ctx.stroke();
   });
@@ -1905,20 +1914,20 @@ function drawCat(ctx, q, p, kind) {
     /* 基础内倾：左耳逆时针(sg=-1)、右耳顺时针(sg=+1)，
        把外根部的那个角转进头的轮廓里，接缝就不会突出去 */
     ctx.rotate(sg * (0.22 + earTw));
-    /* 根部往头里埋深、并加宽 —— 接缝要完全藏进脸的轮廓里才不会看着断开 */
+    /* 耳朵整体放大，根部依然埋深 */
     ctx.fillStyle = FUR;
     ctx.beginPath();
-    ctx.moveTo(-15, 24);
-    ctx.quadraticCurveTo(-12, -16, 2, -19);
-    ctx.quadraticCurveTo(14, -11, 14, 24);
+    ctx.moveTo(-17, 26);
+    ctx.quadraticCurveTo(-14, -20, 2, -24);
+    ctx.quadraticCurveTo(16, -14, 16, 26);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.stroke();
-    /* 内耳灰绿 */
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
+    /* 内耳绿只占【外侧一半】：左耳在左半、右耳在右半（sg<0 取左，sg>0 取右） */
     ctx.fillStyle = INNER;
     ctx.beginPath();
-    ctx.moveTo(-6, 6);
-    ctx.quadraticCurveTo(-4.5, -9, 2, -11.5);
-    ctx.quadraticCurveTo(8, -5, 7.5, 6);
+    ctx.moveTo(sg * 2 - sg * 6, 10);
+    ctx.quadraticCurveTo(sg * 2 - sg * 3.5, -9, sg * 5, -17);
+    ctx.quadraticCurveTo(sg * 2 + sg * 4, -7, sg * 2 + sg * 6, 10);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   });
@@ -1932,7 +1941,7 @@ function drawCat(ctx, q, p, kind) {
   ctx.bezierCurveTo(-26, 4, -34, -6, -34, -22);
   ctx.bezierCurveTo(-34, -36, -28, -48, 0, -48);
   ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = FUR_D; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.strokeStyle = FUR_D; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
 
   ctx.fillStyle = 'rgba(255,255,255,.05)';
   ctx.beginPath(); ctx.ellipse(-9, -38, 18, 7, -0.12, 0, TAU); ctx.fill();
@@ -1952,9 +1961,6 @@ function drawCat(ctx, q, p, kind) {
     /* 大黑瞳孔 */
     ctx.fillStyle = PUPIL;
     ctx.beginPath(); ctx.ellipse(ex, ey + ry * 0.04, rx * 0.72, ry * 0.8, 0, 0, TAU); ctx.fill();
-    /* 高光 */
-    ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.beginPath(); ctx.ellipse(ex - rx * 0.26, ey - ry * 0.32, rx * 0.17, ry * 0.13, -0.3, 0, TAU); ctx.fill();
   });
 
   /* ---------- 鼻子：很小一点 ---------- */
