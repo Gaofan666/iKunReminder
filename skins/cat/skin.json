@@ -2,12 +2,12 @@
   "name": "大眼黑猫",
   "author": "",
   "frame": {
-    "w": 314,
+    "w": 303,
     "h": 520
   },
   "fps": 10,
   "sheet": "sheet.png",
-  "bottomGap": 8,
+  "bottomGap": 7,
   "animations": {
     "idle": {
       "row": 0,

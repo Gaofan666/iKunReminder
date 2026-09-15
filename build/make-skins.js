@@ -1877,39 +1877,48 @@ function drawCat(ctx, q, p, kind) {
   ctx.bezierCurveTo(-24, 14, -20, 0, 0, 0);
   ctx.closePath(); ctx.fill();
 
-  /* 前腿：从胸口直直垂到地上的两条管子。
-     末端用圆头封口（lineCap round），圆头本身就是爪子，不再另画椭圆。 */
+  /* 前腿：从【胸口】直直垂到地上的两条管子。
+     上端用平口（butt），不封口 —— 管子是从身体里伸出来的，不是顶在脖子上；
+     下端单独补一个半圆（圆头）当爪子。 */
   [-1, 1].forEach(function (sg) {
-    ctx.strokeStyle = FUR_L; ctx.lineWidth = 11; ctx.lineCap = 'round';
+    const topY = 14, botY = 30;                 // 从胸口（不是脖子）开始
+    ctx.strokeStyle = FUR_L; ctx.lineWidth = 11; ctx.lineCap = 'butt';
     ctx.beginPath();
-    ctx.moveTo(sg * 9, 6);
-    ctx.lineTo(sg * 9, 31);
+    ctx.moveTo(sg * 9, topY);
+    ctx.lineTo(sg * 9, botY);
     ctx.stroke();
-    /* 管身左侧一道浅高光，做出圆柱的转折 */
-    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 3;
+    /* 下端补半圆 = 爪子 */
+    ctx.fillStyle = FUR_L;
     ctx.beginPath();
-    ctx.moveTo(sg * 6.5, 9);
-    ctx.lineTo(sg * 6.5, 30);
+    ctx.arc(sg * 9, botY, 5.5, 0, Math.PI); ctx.fill();
+    /* 管身左侧一道浅高光，做出圆柱的转折 */
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 3; ctx.lineCap = 'butt';
+    ctx.beginPath();
+    ctx.moveTo(sg * 6.5, topY + 3);
+    ctx.lineTo(sg * 6.5, botY - 1);
     ctx.stroke();
   });
 
   /* ---------- 耳朵（先画，压在头下） ---------- */
   [-1, 1].forEach(function (sg) {
     ctx.save();
-    ctx.translate(sg * 20, -40);
+    /* 支点放在【耳朵根部】：这样转动时只有耳尖摆，根部始终贴着脸的曲线，
+       不会一转就裂开。根部位置贴着头顶的圆弧（x=±20 处头顶约 y=-42）。 */
+    ctx.translate(sg * 20, -41);
     ctx.rotate(sg * earTw);
-    /* 耳朵整体往里收，外沿不超过脸的半宽（34），否则会支棱出脸外显得断开 */
+    /* 根部画在支点下方一点，保证转动时根部仍压在头里 */
     ctx.fillStyle = FUR;
     ctx.beginPath();
-    ctx.moveTo(-11, 15);
-    ctx.quadraticCurveTo(-9, -12, 2, -15);
-    ctx.quadraticCurveTo(11, -7, 11, 15);
+    ctx.moveTo(-13, 8);
+    ctx.quadraticCurveTo(-11, -16, 2, -19);
+    ctx.quadraticCurveTo(13, -11, 13, 8);
     ctx.closePath(); ctx.fill();
+    /* 内耳灰绿 */
     ctx.fillStyle = INNER;
     ctx.beginPath();
-    ctx.moveTo(-5, 11);
-    ctx.quadraticCurveTo(-3.5, -6, 2, -8.5);
-    ctx.quadraticCurveTo(7, -2, 6.5, 11);
+    ctx.moveTo(-6, 5);
+    ctx.quadraticCurveTo(-4.5, -9, 2, -11.5);
+    ctx.quadraticCurveTo(8, -5, 7.5, 5);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   });
