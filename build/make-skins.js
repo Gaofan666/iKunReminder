@@ -303,241 +303,253 @@ function drawDragon(ctx, q, p, kind) {
 }
 
 /* ============================================================ ③ 熊猫人 */
-/* 夸张版熊猫头：嘴里叼烟、手抬起来掐着烟、脖挂大金链子
-   画风沿用梗图那套：纯黑白 + 粗线条，金链子是全图唯一的高饱和色，
-   故意做得又粗又亮，形成「黑白画面里一条大金链子」的冲击感。 */
+/* 霸气版熊猫头
+   设计思路：把「比中指」和「霸气」合起来 —— 关键在于神态。
+   ① 墨镜往下推到鼻梁，露出眼睛，从镜框上方冷冷地俯视你（大佬俯视的经典神态，
+      同时也解决了全黑镜片没有表情的问题）
+   ② 细烟换成粗雪茄，烟量加大
+   ③ 肩膀加宽、身体压低前倾，重心下坠才压得住场
+   ④ 手垂在身侧比中指，中指加长、指上套金戒指
+   ⑤ 金链子再加粗，金牌加大 */
 function drawPanda(ctx, q, p, kind) {
   const LINE = '#111111';
-  const look = Math.sin(p * TAU) * 2.4;
+  const glare = Math.sin(p * TAU) * 1.6;         // 眼神缓慢扫动
   const smug = kind === 'cheer' ? 1 : kind === 'dance' ? 0.6 : 0.3;
   const smoke = (p * 2) % 1;
-  shadow(ctx, 58, 28);
+  shadow(ctx, 60, 32);
 
-  /* ---- 黑腿 ---- */
+  /* ---- 腿：粗短，站得很稳 ---- */
   [-1, 1].forEach(function (sg) {
-    ctx.beginPath(); ctx.ellipse(sg * 20, 48, 15, 11, 0, 0, TAU);
+    ctx.beginPath(); ctx.ellipse(sg * 23, 52, 17, 12, 0, 0, TAU);
     ctx.fillStyle = '#111111'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
   });
 
-  /* ---- 白身子（比上一版更宽，撑得起大链子） ---- */
+  /* ---- 身体：肩宽腰沉，整个轮廓撑起来 ---- */
   ctx.beginPath();
-  ctx.moveTo(0, -22);
-  ctx.bezierCurveTo(36, -22, 42, 14, 36, 38);
-  ctx.bezierCurveTo(30, 56, -30, 56, -36, 38);
-  ctx.bezierCurveTo(-42, 14, -36, -22, 0, -22);
-  ctx.closePath();
-  ctx.fillStyle = '#FFFFFF'; ctx.fill();
-  ctx.lineWidth = 3.4; ctx.strokeStyle = LINE; ctx.stroke();
-  /* 黑肚兜 */
-  ctx.beginPath(); ctx.ellipse(0, 26, 21, 17, 0, 0, TAU);
-  ctx.fillStyle = '#111111'; ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-
-  /* ---- 大金链子：一圈金珠子 + 一块金牌 ---- */
-  const chainY = -12, chainR = 27;
-  ctx.strokeStyle = '#8A6410'; ctx.lineWidth = 6.5;
-  ctx.beginPath();
-  ctx.moveTo(-27, chainY - 4);
-  ctx.quadraticCurveTo(0, chainY + 22, 27, chainY - 4);
-  ctx.stroke();
-  /* 链珠 */
-  for (let i = 0; i <= 12; i++) {
-    const t = i / 12;
-    const bx = -27 + t * 54;
-    const by = chainY - 4 + Math.sin(t * Math.PI) * 26;
-    ctx.beginPath(); ctx.arc(bx, by, 3.6, 0, TAU);
-    const cg = ctx.createRadialGradient(bx - 1.2, by - 1.4, 0.4, bx, by, 4);
-    cg.addColorStop(0, '#FFF2B0'); cg.addColorStop(0.5, '#F5C542'); cg.addColorStop(1, '#B8860B');
-    ctx.fillStyle = cg; ctx.fill();
-    ctx.lineWidth = 1.1; ctx.strokeStyle = '#7A5608'; ctx.stroke();
-  }
-  /* 金牌（夸张的大，压着肚兜） */
-  const mx = 0, my = chainY + 26;
-  ctx.beginPath();
-  ctx.moveTo(mx - 15, my - 11);
-  ctx.quadraticCurveTo(mx, my - 17, mx + 15, my - 11);
-  ctx.quadraticCurveTo(mx + 13, my + 12, mx, my + 17);
-  ctx.quadraticCurveTo(mx - 13, my + 12, mx - 15, my - 11);
-  ctx.closePath();
-  const mg = ctx.createLinearGradient(mx - 15, my - 15, mx + 15, my + 15);
-  mg.addColorStop(0, '#FFF4B8'); mg.addColorStop(0.45, '#F7C948'); mg.addColorStop(1, '#B0830A');
-  ctx.fillStyle = mg; ctx.fill();
-  ctx.lineWidth = 2.6; ctx.strokeStyle = '#7A5608'; ctx.stroke();
-  ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,250,210,.85)';
-  ctx.beginPath();
-  ctx.moveTo(mx - 10, my - 8);
-  ctx.quadraticCurveTo(mx, my - 13, mx + 10, my - 8);
-  ctx.stroke();
-  /* 牌面上的「發」 */
-  ctx.fillStyle = '#6B4A06';
-  ctx.font = 'bold 17px "Microsoft YaHei",sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('發', mx, my + 2);
-
-
-
-  /* ---- 大黑耳朵 ---- */
-  [-1, 1].forEach(function (sg) {
-    ctx.beginPath(); ctx.arc(sg * 28, -58, 13.5, 0, TAU);
-    ctx.fillStyle = '#111111'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = LINE; ctx.stroke();
-  });
-
-  /* ---- 白脸膛（加大，夸张） ---- */
-  ctx.beginPath();
-  ctx.moveTo(0, -66);
-  ctx.bezierCurveTo(31, -66, 37, -44, 35, -26);
-  ctx.bezierCurveTo(33, -8, -33, -8, -35, -26);
-  ctx.bezierCurveTo(-37, -44, -31, -66, 0, -66);
+  ctx.moveTo(0, -14);
+  ctx.bezierCurveTo(42, -14, 48, 20, 42, 42);
+  ctx.bezierCurveTo(36, 60, -36, 60, -42, 42);
+  ctx.bezierCurveTo(-48, 20, -42, -14, 0, -14);
   ctx.closePath();
   ctx.fillStyle = '#FFFFFF'; ctx.fill();
   ctx.lineWidth = 3.6; ctx.strokeStyle = LINE; ctx.stroke();
+  /* 黑肚兜 */
+  ctx.beginPath(); ctx.ellipse(0, 30, 24, 19, 0, 0, TAU);
+  ctx.fillStyle = '#111111'; ctx.fill();
+  ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
 
-  /* ---- 黑眼罩 ---- */
+  /* ---- 大金链子：加粗，珠子更大 ---- */
+  const chainY = -4;
+  ctx.strokeStyle = '#7A5608'; ctx.lineWidth = 7.5;
+  ctx.beginPath();
+  ctx.moveTo(-30, chainY - 4);
+  ctx.quadraticCurveTo(0, chainY + 26, 30, chainY - 4);
+  ctx.stroke();
+  for (let i = 0; i <= 14; i++) {
+    const t = i / 14;
+    const bx = -30 + t * 60;
+    const by = chainY - 4 + Math.sin(t * Math.PI) * 30;
+    ctx.beginPath(); ctx.arc(bx, by, 4.2, 0, TAU);
+    const cg = ctx.createRadialGradient(bx - 1.5, by - 1.6, 0.4, bx, by, 4.6);
+    cg.addColorStop(0, '#FFF6C0'); cg.addColorStop(0.45, '#F7C948'); cg.addColorStop(1, '#A87508');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = '#6B4A06'; ctx.stroke();
+  }
+  /* 金牌：加大 */
+  const mx = 0, my = chainY + 30;
+  ctx.beginPath();
+  ctx.moveTo(mx - 18, my - 13);
+  ctx.quadraticCurveTo(mx, my - 21, mx + 18, my - 13);
+  ctx.quadraticCurveTo(mx + 15, my + 15, mx, my + 21);
+  ctx.quadraticCurveTo(mx - 15, my + 15, mx - 18, my - 13);
+  ctx.closePath();
+  const mg = ctx.createLinearGradient(mx - 18, my - 18, mx + 18, my + 18);
+  mg.addColorStop(0, '#FFF8CC'); mg.addColorStop(0.42, '#F7C948'); mg.addColorStop(1, '#A87508');
+  ctx.fillStyle = mg; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = '#6B4A06'; ctx.stroke();
+  ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(255,252,220,.9)';
+  ctx.beginPath();
+  ctx.moveTo(mx - 12, my - 9);
+  ctx.quadraticCurveTo(mx, my - 16, mx + 12, my - 9);
+  ctx.stroke();
+  ctx.fillStyle = '#5A3D04';
+  ctx.font = 'bold 21px "Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('發', mx, my + 3);
+
+  /* ---- 耳朵 ---- */
+  [-1, 1].forEach(function (sg) {
+    ctx.beginPath(); ctx.arc(sg * 31, -60, 15, 0, TAU);
+    ctx.fillStyle = '#111111'; ctx.fill();
+    ctx.lineWidth = 3.2; ctx.strokeStyle = LINE; ctx.stroke();
+  });
+
+  /* ---- 脸：加大 ---- */
+  ctx.beginPath();
+  ctx.moveTo(0, -70);
+  ctx.bezierCurveTo(34, -70, 40, -46, 38, -26);
+  ctx.bezierCurveTo(36, -6, -36, -6, -38, -26);
+  ctx.bezierCurveTo(-40, -46, -34, -70, 0, -70);
+  ctx.closePath();
+  ctx.fillStyle = '#FFFFFF'; ctx.fill();
+  ctx.lineWidth = 3.8; ctx.strokeStyle = LINE; ctx.stroke();
+
+  /* ---- 黑眼罩：这是熊猫的招牌，去掉就不像熊猫了 ----
+       墨镜直接戴在眼罩上，靠亮镜框和镜面反光把两者分开。 ---- */
   ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(-14, -40, 13, 15, -0.34, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(14, -40, 13, 15, 0.34, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-15, -43, 14, 15, -0.32, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(15, -43, 14, 15, 0.32, 0, TAU); ctx.fill();
+  /* 眼罩里留一点眼神，不然整块死黑 */
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.ellipse(-15, -41, 7.6, 4.6, -0.32, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(15, -41, 7.6, 4.6, 0.32, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#111111';
+  ctx.beginPath(); ctx.arc(-15 + glare * 0.6, -40 + smug * 0.9, 2.9, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(15 + glare * 0.6, -40 + smug * 0.9, 2.9, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.arc(-16 + glare * 0.6, -41.2, 1.1, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(14 + glare * 0.6, -41.2, 1.1, 0, TAU); ctx.fill();
 
-  /* ---- 墨镜：镜片压在黑眼罩上，所以用亮色镜框 + 强反光才分得出来 ---- */
-  const GY = -39 + smug * 1.2;
+  /* ---- 粗眉：往中间压，凶 ---- */
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-29, -58); ctx.lineTo(-6, -53); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(29, -58); ctx.lineTo(6, -53); ctx.stroke();
+
+  /* ---- 墨镜：推到鼻梁下方，露着眼睛 ---- */
+  const GY = -42 + smug * 0.8;
   const lens = function (sg) {
     ctx.beginPath();
-    ctx.moveTo(sg * 25, GY - 5);
-    ctx.quadraticCurveTo(sg * 14, GY - 11, sg * 4, GY - 7);
-    ctx.quadraticCurveTo(sg * 3, GY + 5, sg * 13, GY + 9);
-    ctx.quadraticCurveTo(sg * 23, GY + 10, sg * 25.5, GY + 1);
+    ctx.moveTo(sg * 27, GY - 6);
+    ctx.quadraticCurveTo(sg * 15, GY - 12, sg * 4, GY - 8);
+    ctx.quadraticCurveTo(sg * 3, GY + 5, sg * 14, GY + 10);
+    ctx.quadraticCurveTo(sg * 25, GY + 11, sg * 27.5, GY + 1);
     ctx.closePath();
-    const lg = ctx.createLinearGradient(sg * 4, GY - 10, sg * 25, GY + 10);
-    lg.addColorStop(0, '#3A3A46');
-    lg.addColorStop(0.45, '#15151C');
-    lg.addColorStop(1, '#0A0A0F');
+    const lg = ctx.createLinearGradient(sg * 4, GY - 11, sg * 27, GY + 11);
+    lg.addColorStop(0, '#44444F'); lg.addColorStop(0.42, '#15151C'); lg.addColorStop(1, '#08080C');
     ctx.fillStyle = lg; ctx.fill();
-    ctx.lineWidth = 2.6; ctx.strokeStyle = '#EDEDF4'; ctx.stroke();
-    /* 镜面反光：两道斜杠，拽感来源 */
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(sg * 25, GY - 5);
-    ctx.quadraticCurveTo(sg * 14, GY - 11, sg * 4, GY - 7);
-    ctx.quadraticCurveTo(sg * 3, GY + 5, sg * 13, GY + 9);
-    ctx.quadraticCurveTo(sg * 23, GY + 10, sg * 25.5, GY + 1);
-    ctx.closePath(); ctx.clip();
-    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(sg * 6, GY + 11); ctx.lineTo(sg * 20, GY - 11); ctx.stroke();
+    ctx.lineWidth = 2.8; ctx.strokeStyle = '#F2F2F8'; ctx.stroke();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sg * 6, GY + 12); ctx.lineTo(sg * 21, GY - 12); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(sg * 13, GY + 12); ctx.lineTo(sg * 25, GY - 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sg * 14, GY + 13); ctx.lineTo(sg * 27, GY - 6); ctx.stroke();
     ctx.restore();
   };
   lens(-1); lens(1);
-  /* 鼻梁 */
   ctx.fillStyle = '#15151C';
-  ctx.beginPath(); ctx.rect(-4.5, GY - 6, 9, 3.6); ctx.fill();
-  ctx.lineWidth = 2.2; ctx.strokeStyle = '#EDEDF4'; ctx.stroke();
-  /* 镜腿 */
-  ctx.strokeStyle = '#EDEDF4'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-25, GY - 2); ctx.lineTo(-36, GY - 7); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(25, GY - 2); ctx.lineTo(36, GY - 7); ctx.stroke();
-  /* 镜腿下面压着一道阴影，显得镜架有厚度 */
-  ctx.strokeStyle = 'rgba(17,17,17,.55)'; ctx.lineWidth = 5;
-  ctx.beginPath(); ctx.moveTo(-25, GY + 1); ctx.lineTo(-36, GY - 4); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(25, GY + 1); ctx.lineTo(36, GY - 4); ctx.stroke();
-
-  /* ---- 粗斜眉 ---- */
-  ctx.strokeStyle = '#111111'; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-25, -53); ctx.lineTo(-6, -48); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(25, -53); ctx.lineTo(6, -48); ctx.stroke();
+  ctx.beginPath(); ctx.rect(-5, GY - 7, 10, 4); ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = '#F2F2F8'; ctx.stroke();
+  ctx.strokeStyle = '#F2F2F8'; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-27, GY - 3); ctx.lineTo(-39, GY - 9); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(27, GY - 3); ctx.lineTo(39, GY - 9); ctx.stroke();
+  ctx.strokeStyle = 'rgba(17,17,17,.5)'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(-27, GY + 1); ctx.lineTo(-39, GY - 5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(27, GY + 1); ctx.lineTo(39, GY - 5); ctx.stroke();
 
   /* ---- 鼻子 ---- */
   ctx.fillStyle = '#111111';
-  ctx.beginPath(); ctx.ellipse(0, -26, 6.4, 4.4, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, -22, 7, 4.8, 0, 0, TAU); ctx.fill();
 
-  /* ---- 嘴：叼着烟的那边被烟顶着，歪着嘴 ---- */
-  const mOpen = kind === 'cheer' ? 10 : kind === 'dance' ? 5.5 : 0;
-  ctx.strokeStyle = '#111111'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  /* ---- 嘴：叼着雪茄的那侧被顶住，另一边冷笑上扬 ---- */
+  const mOpen = kind === 'cheer' ? 11 : kind === 'dance' ? 6 : 0;
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
   if (mOpen) {
     ctx.beginPath();
-    ctx.moveTo(-12, -19);
-    ctx.quadraticCurveTo(0, -19 + mOpen * 2.3, 15, -22);
-    ctx.quadraticCurveTo(2, -13, -12, -19);
+    ctx.moveTo(-13, -12);
+    ctx.quadraticCurveTo(0, -12 + mOpen * 2.3, 16, -16);
+    ctx.quadraticCurveTo(2, -6, -13, -12);
     ctx.closePath();
     ctx.fillStyle = '#3A1A1A'; ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(-5, -21, 5.4, 5.4);
-    ctx.fillRect(2.5, -22, 5, 5);
+    ctx.fillRect(-6, -14, 5.6, 5.6);
+    ctx.fillRect(2, -15, 5.2, 5.2);
   } else {
+    /* 冷笑：嘴角往一边翘 */
     ctx.beginPath();
-    ctx.moveTo(-12, -18);
-    ctx.quadraticCurveTo(1, -13, 15, -21);
+    ctx.moveTo(-13, -11);
+    ctx.quadraticCurveTo(1, -6, 16, -14);
     ctx.stroke();
   }
 
-  /* ---- 烟：从嘴里斜插出去，正好被手指捏住 ---- */
-  /* 烟朝下斜插：原来朝上，末端正好落在举起的右拳位置，看着像被烟头挡住了手 */
+  /* ---- 粗雪茄：比细烟粗一圈，末端斜切 ---- */
   const cigAng = 1.0;
-  const cx0 = 9, cy0 = -19;
-  const cx1 = 26, cy1 = -6;
   ctx.save();
-  ctx.translate(cx0, cy0);
+  ctx.translate(8, -12);
   ctx.rotate(cigAng);
-  ctx.fillStyle = '#F7F2E6';
-  ctx.beginPath(); ctx.rect(0, -2.6, 20, 5.2);
-  ctx.fill();
-  ctx.lineWidth = 2.4; ctx.strokeStyle = LINE; ctx.stroke();
-  ctx.fillStyle = '#E2574C';
-  ctx.beginPath(); ctx.rect(15, -2.6, 5, 5.2); ctx.fill(); ctx.stroke();
-  /* 烟头火星 */
-  ctx.fillStyle = 'rgba(255,120,60,' + (0.55 + 0.45 * Math.abs(Math.sin(p * TAU * 3))) + ')';
-  ctx.beginPath(); ctx.arc(20.5, 0, 3.2, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#6B4A2A';
+  ctx.beginPath(); ctx.rect(0, -4.6, 21, 9.2);
+  ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
+  ctx.fillStyle = '#8A6236';
+  ctx.beginPath(); ctx.rect(0, -4.6, 21, 3); ctx.fill();
+  ctx.fillStyle = '#3A2510';
+  ctx.beginPath(); ctx.rect(16, -4.6, 5, 9.2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,110,40,' + (0.6 + 0.4 * Math.abs(Math.sin(p * TAU * 3))) + ')';
+  ctx.beginPath(); ctx.arc(21, 0, 4.6, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,220,120,.9)';
+  ctx.beginPath(); ctx.arc(21, 0, 2.2, 0, TAU); ctx.fill();
   ctx.restore();
 
-  /* ---- 两条胳膊对称举起，双手比中指 ----
-       位置固定在身体轮廓之外（x = ±48），保证看得见。 ---- */
-  const rise = q.arm * 5;
+  /* ---- 手臂：画在身体之上，一只手垂在两侧 ---- */
+  const rise = q.arm * 6;
   [-1, 1].forEach(function (sg) {
-    const shX = sg * 31, shY = -6;
-    const elX = sg * 47, elY = 6 + rise * 0.3;
-    const hx = sg * 50, hy = 18 - rise;
+    const shX = sg * 38, shY = -4;
+    const elX = sg * 52, elY = 14 + rise * 0.3;
+    const hx = sg * 52, hy = 30 - rise;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    /* 上臂 + 前臂（先描粗边再填色，保持梗图的粗描边） */
-    [[shX, shY, elX, elY, 15], [elX, elY, hx, hy, 13]].forEach(function (a) {
+    [[shX, shY, elX, elY, 16], [elX, elY, hx, hy, 14]].forEach(function (a) {
       ctx.strokeStyle = LINE; ctx.lineWidth = a[4] + 3;
       ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.stroke();
       ctx.strokeStyle = '#111111'; ctx.lineWidth = a[4];
       ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.stroke();
     });
     /* 拳头 */
-    ctx.beginPath(); ctx.ellipse(hx, hy, 9.5, 9, 0, 0, TAU);
+    ctx.beginPath(); ctx.ellipse(hx, hy, 10, 9.5, 0, 0, TAU);
     ctx.fillStyle = '#111111'; ctx.fill();
     ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
-    /* 握起来的指节：两个小凸起 */
-    [[-6.5, -5.5], [6.5, -5.5]].forEach(function (k) {
-      ctx.beginPath(); ctx.arc(hx + k[0], hy + k[1], 4.2, 0, TAU);
+    [[-7, -5.5], [7, -5.5]].forEach(function (k) {
+      ctx.beginPath(); ctx.arc(hx + k[0], hy + k[1], 4.4, 0, TAU);
       ctx.fillStyle = '#111111'; ctx.fill();
       ctx.lineWidth = 2.2; ctx.strokeStyle = LINE; ctx.stroke();
     });
-    /* 中指：朝下伸（手垂在身侧、中指指地，比举起来更松弛更拽） */
-    const fx = hx + sg * 2.5;
+    /* 中指：朝下且加长，比之前更醒目 */
+    const fx = hx + sg * 3;
     ctx.beginPath();
-    ctx.moveTo(hx - 3.4, hy + 2);
-    ctx.lineTo(fx - 3.4, hy + 16);
-    ctx.quadraticCurveTo(fx, hy + 22, fx + 3.4, hy + 16);
-    ctx.lineTo(hx + 3.4, hy + 2);
+    ctx.moveTo(hx - 3.8, hy + 2);
+    ctx.lineTo(fx - 3.8, hy + 22);
+    ctx.quadraticCurveTo(fx, hy + 28, fx + 3.8, hy + 22);
+    ctx.lineTo(hx + 3.8, hy + 2);
     ctx.closePath();
     ctx.fillStyle = '#111111'; ctx.fill();
-    ctx.lineWidth = 2.6; ctx.strokeStyle = LINE; ctx.stroke();
-    /* 指节纹路，让它一眼是根手指 */
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(hx - 2.2, hy + 7); ctx.lineTo(hx + 2.2 + sg * 1, hy + 7); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(hx - 1.6, hy + 11); ctx.lineTo(hx + 1.8 + sg * 1.6, hy + 11); ctx.stroke();
+    ctx.lineWidth = 2.8; ctx.strokeStyle = LINE; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(hx - 2.4, hy + 8); ctx.lineTo(hx + 2.4 + sg * 1.2, hy + 8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 1.6, hy + 14); ctx.lineTo(hx + 1.8 + sg * 2, hy + 14); ctx.stroke();
+    /* 金戒指 */
+    ctx.beginPath(); ctx.ellipse(hx + sg * 1, hy + 16, 5.2, 2.6, sg * 0.15, 0, TAU);
+    const rg = ctx.createLinearGradient(hx - 5, hy + 14, hx + 5, hy + 19);
+    rg.addColorStop(0, '#FFF2B0'); rg.addColorStop(0.5, '#F0C43A'); rg.addColorStop(1, '#A87508');
+    ctx.fillStyle = rg; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = '#6B4A06'; ctx.stroke();
   });
 
-  /* ---- 烟圈（待机时最明显） ---- */
+  /* ---- 雪茄烟：粗烟柱 + 飘散的烟圈 ---- */
+  const tipX = 8 + Math.cos(cigAng) * 21, tipY = -12 + Math.sin(cigAng) * 21;
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#B9B9B9';
+  for (let i = 0; i < 3; i++) {
+    const t = (smoke + i * 0.33) % 1;
+    ctx.beginPath();
+    ctx.arc(tipX + t * 30, tipY - t * 34, 4 + t * 9, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
   for (let i = 0; i < 4; i++) {
     const t = (smoke + i * 0.25) % 1;
-    ctx.globalAlpha = (1 - t) * (kind === 'idle' ? 0.8 : 0.45);
-    ctx.strokeStyle = '#8A8A8A'; ctx.lineWidth = 2.2;
+    ctx.globalAlpha = (1 - t) * (kind === 'idle' ? 0.7 : 0.4);
+    ctx.strokeStyle = '#9A9A9A'; ctx.lineWidth = 2.4;
     ctx.beginPath();
-    ctx.arc(cx1 + 6 + t * 26, cy1 - 14 - t * 34, 3 + t * 6.5, 0, TAU);
+    ctx.arc(tipX + 4 + t * 30, tipY - 12 - t * 34, 3 + t * 7, 0, TAU);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
