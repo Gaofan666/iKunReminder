@@ -459,7 +459,9 @@
     if (!a || !m.frame) return false;
     const fw = m.frame.w, fh = m.frame.h;
     const count = Math.max(1, a.count || 1);
-    const idx = Math.floor(t * (m.fps || 10)) % count;
+    /* 每种状态可以有自己的帧率：待机慢一点才不烦，跳舞/欢呼才需要快 */
+    const fps = a.fps || m.fps || 10;
+    const idx = Math.floor(t * fps) % count;
     const row = a.row || 0;
     /* 与手绘角色对齐：底边落在原点、横向居中，整体高度约 278 个本地单位 */
     const k = 278 / fh;

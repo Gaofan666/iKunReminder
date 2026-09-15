@@ -74,12 +74,14 @@ function teeth(ctx, x, y, w, h, n) {
   ctx.fillStyle = '#ffffff';
   for (let i = 0; i < (n || 2); i++) ctx.fillRect(x + i * (w + 1), y, w, h);
 }
-/* 三种状态的通用姿态（角色可以在此基础上自己加戏） */
+/* 三种状态的通用姿态。
+   待机刻意画得「稳」：几乎不上下弹，只留极轻微的呼吸；
+   动感交给角色手里的道具去挥 —— 整体一直跳会让人看着心烦。 */
 function poseFor(kind, p) {
   const s = Math.sin(p * TAU);
-  if (kind === 'idle') return { bob: s * 3, tilt: s * 0.03, squash: 1 + s * 0.03, arm: 0.12, open: 0, p: p };
-  if (kind === 'dance') return { bob: -Math.abs(Math.sin(p * TAU)) * 14, tilt: s * 0.16, squash: 1, arm: 0.75, open: 1, p: p };
-  return { bob: -7, tilt: 0, squash: 1.05, arm: 1, open: 2, p: p };
+  if (kind === 'idle') return { bob: s * 1.5, tilt: s * 0.012, squash: 1 + s * 0.014, arm: 0.34, open: 0, p: p };
+  if (kind === 'dance') return { bob: -Math.abs(s) * 11, tilt: s * 0.13, squash: 1, arm: 0.8, open: 1, p: p };
+  return { bob: -5, tilt: 0, squash: 1.04, arm: 1, open: 2, p: p };
 }
 
 /* ============================================================ ① 海盗狗 */
@@ -115,8 +117,8 @@ function drawDog(ctx, q, p, kind) {
   ctx.moveTo(2, 2); ctx.bezierCurveTo(26, 6, 24, 34, 6, 38);
   ctx.bezierCurveTo(-8, 34, -8, 8, 2, 2); ctx.fill();
 
-  /* ---- 右手：海盗砍刀 ---- */
-  const sa = -0.15 - q.arm * 1.75 + swing * (kind === 'dance' ? 0.55 : 0.12);
+  /* ---- 右手：海盗砍刀（待机时也在挥，只是幅度小一点） ---- */
+  const sa = -0.15 - q.arm * 1.15 + swing * (kind === 'dance' ? 0.62 : 0.42);
   const hx = 26 + Math.cos(sa) * 22, hy = -6 + Math.sin(sa) * 22;
   limb(ctx, 26, -6, hx, hy, 10, '#f7f4ee');
   ctx.fillStyle = '#26262b'; circle(ctx, hx, hy, 5.4);
@@ -145,7 +147,7 @@ function drawDog(ctx, q, p, kind) {
   ctx.restore();
 
   /* ---- 左手：铁钩 ---- */
-  const ha = -0.2 - q.arm * 1.9 - swing * (kind === 'dance' ? 0.4 : 0.1);
+  const ha = -0.2 - q.arm * 1.25 - swing * (kind === 'dance' ? 0.5 : 0.36);
   const ex = -26 - Math.cos(ha) * 22, ey = -6 + Math.sin(ha) * 22;
   limb(ctx, -26, -6, ex, ey, 10, '#f7f4ee');
   ctx.fillStyle = '#26262b'; circle(ctx, ex, ey, 5.4);
@@ -237,41 +239,72 @@ function drawDragon(ctx, q, p, kind) {
   ctx.fill();
   ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(190,130,10,.5)'; ctx.stroke();
 
-  /* 肚皮 */
-  const bellyG = ctx.createLinearGradient(0, 0, 0, 40);
-  bellyG.addColorStop(0, 'rgba(255,253,225,.95)');
-  bellyG.addColorStop(1, 'rgba(255,244,190,.9)');
+  /* 肚皮（绷紧时整体鼓一点） */
+  const bellyRy = 22 * (1 + (flex - 1) * 0.13);
+  const bellyRx = 26 * (1 + (flex - 1) * 0.07);
+  const bellyG = ctx.createLinearGradient(0, 20 - bellyRy, 0, 20 + bellyRy);
+  bellyG.addColorStop(0, 'rgba(255,253,225,.96)');
+  bellyG.addColorStop(1, 'rgba(252,238,175,.92)');
   ctx.fillStyle = bellyG;
-  oval(ctx, 0, 14, 26, 22, 0);
-  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(210,170,40,.35)';
-  ctx.beginPath(); ctx.ellipse(0, 14, 26, 22, 0, 0, TAU); ctx.stroke();
+  oval(ctx, 0, 20, bellyRx, bellyRy, 0);
+  ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(210,170,40,.4)';
+  ctx.beginPath(); ctx.ellipse(0, 20, bellyRx, bellyRy, 0, 0, TAU); ctx.stroke();
 
-  /* ---- 腹肌：两列三排，尺寸随 flex 变 ---- */
-  const abW = 7 * flex, abH = 5.4 * flex, gapX = 8.4 * flex, gapY = 8.4 * flex;
-  const abTop = 4 - (flex - 1) * 3;
-  for (let row = 0; row < 3; row++) {
-    for (let col = -1; col <= 1; col += 2) {
-      const ax = col * gapX * 0.55, ay = abTop + row * gapY;
-      const gg = ctx.createRadialGradient(ax - abW * 0.3, ay - abH * 0.4, 1, ax, ay, abW);
-      gg.addColorStop(0, 'rgba(255,255,255,.95)');
-      gg.addColorStop(0.55, 'rgba(240,200,90,.75)');
-      gg.addColorStop(1, 'rgba(214,160,35,.55)');
-      ctx.fillStyle = gg;
-      oval(ctx, ax, ay, abW, abH, col * 0.12);
-      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(196,142,22,.45)';
-      ctx.beginPath(); ctx.ellipse(ax, ay, abW, abH, col * 0.12, 0, TAU); ctx.stroke();
+  /* ---- 腹肌：靠「沟」和「隆起」画，不是贴六个椭圆 ----
+     真实腹肌 = 一道竖沟 + 两条横沟把腹直肌分成六块。
+     所以先铺隆起，再压沟，最后给每块加高光；绷得越紧对比越强。 */
+  const abGrow = 1 + (flex - 1) * 0.55;
+  const abW = 7.4 * abGrow, abH = 4.2 * abGrow;
+  const rowH = 2 * abH + 2.2;
+  const abMid = 22;                       // 腹肌中心（在肚皮中间，不再被嘴压住）
+  const abTop = abMid - rowH * 1.5;
+
+  /* 整片隆起 */
+  const mg = ctx.createRadialGradient(-3, abTop + rowH * 1.1, 2, 0, abMid, abW * 2.6);
+  mg.addColorStop(0, 'rgba(255,255,255,.75)');
+  mg.addColorStop(0.6, 'rgba(247,206,92,.5)');
+  mg.addColorStop(1, 'rgba(230,180,50,0)');
+  ctx.fillStyle = mg;
+  oval(ctx, 0, abMid, abW * 2.2, rowH * 1.75, 0);
+
+  /* 沟（对比度给足，否则看不出是肌肉） */
+  ctx.lineCap = 'round';
+  const gAlpha = Math.min(0.8, 0.45 + flex * 0.22);
+  ctx.strokeStyle = 'rgba(163,108,14,' + gAlpha + ')';
+  ctx.lineWidth = 1.4 + flex * 0.7;
+  ctx.beginPath();
+  ctx.moveTo(0, abTop - abH * 0.45);
+  ctx.lineTo(0, abTop + rowH * 2 + abH * 0.45);
+  ctx.stroke();
+  for (let r = 1; r <= 2; r++) {
+    const gy = abTop + r * rowH - rowH * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(-abW * 0.98, gy + 1.9);
+    ctx.quadraticCurveTo(0, gy - 1.9, abW * 0.98, gy + 1.9);
+    ctx.stroke();
+  }
+  /* 每块上面的高光，和下面的暗边，做出立体感 */
+  for (let r = 0; r < 3; r++) {
+    for (let c = -1; c <= 1; c += 2) {
+      const ax = c * abW * 0.5, ay = abTop + r * rowH;
+      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.85, 0.4 + flex * 0.28) + ')';
+      oval(ctx, ax - abW * 0.16, ay - abH * 0.26, abW * 0.42, abH * 0.36, c * 0.08);
+      ctx.fillStyle = 'rgba(178,124,20,' + Math.min(0.4, 0.14 + flex * 0.14) + ')';
+      oval(ctx, ax + abW * 0.1, ay + abH * 0.34, abW * 0.4, abH * 0.2, c * 0.06);
     }
   }
-  /* 中间那道腹白线 */
-  ctx.strokeStyle = 'rgba(200,150,30,.35)'; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.moveTo(0, abTop - abH); ctx.lineTo(0, abTop + 3 * gapY); ctx.stroke();
-  /* 绷到最大时来点高光 */
-  if (flex > 1.2) {
-    ctx.globalAlpha = Math.min(0.75, (flex - 1.2) * 1.4);
-    ctx.fillStyle = '#ffffff';
-    oval(ctx, -13, abTop + 2, 3.4, 8, -0.3);
-    oval(ctx, 13, abTop + 2, 3.4, 8, 0.3);
-    ctx.globalAlpha = 1;
+  /* 绷到最大时，两侧再压两道外轮廓 */
+  if (flex > 1.1) {
+    ctx.strokeStyle = 'rgba(170,116,16,' + Math.min(0.62, (flex - 1.1) * 1.1) + ')';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(-abW * 1.16, abTop - abH * 0.15);
+    ctx.quadraticCurveTo(-abW * 1.3, abMid, -abW * 0.92, abTop + rowH * 2.85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(abW * 1.16, abTop - abH * 0.15);
+    ctx.quadraticCurveTo(abW * 1.3, abMid, abW * 0.92, abTop + rowH * 2.85);
+    ctx.stroke();
   }
 
   /* 头顶小角 */
@@ -287,27 +320,33 @@ function drawDragon(ctx, q, p, kind) {
   ctx.fillStyle = 'rgba(255,130,90,.5)';
   oval(ctx, -29, -10, 8, 6, 0); oval(ctx, 29, -10, 8, 6, 0);
 
-  /* 嘴 */
-  ctx.fillStyle = '#f9c22e'; oval(ctx, 0, -4, 15, 11, 0);
-  if (q.open) mouthOpen(ctx, 0, -2, 11, q.open === 2 ? 8 : 5, '#a8610f');
+  /* 嘴（上移到脸下半部，别压到腹肌） */
+  ctx.fillStyle = '#f9c22e'; oval(ctx, 0, -12, 15, 10, 0);
+  if (q.open) mouthOpen(ctx, 0, -10, 11, q.open === 2 ? 8 : 5, '#a8610f');
   else {
     ctx.strokeStyle = '#a8610f'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(0, -3, 10, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -11, 10, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
   }
-  if (q.open) teeth(ctx, -6, -7, 5, 5, 2);
-  ctx.fillStyle = '#c98a1a'; circle(ctx, -4, -7, 1.6); circle(ctx, 4, -7, 1.6);
+  if (q.open) teeth(ctx, -6, -15, 5, 5, 2);
+  ctx.fillStyle = '#c98a1a'; circle(ctx, -4, -15, 1.6); circle(ctx, 4, -15, 1.6);
 
-  /* ---- 手臂：绷腹肌时顺带秀二头肌 ---- */
-  const a = -0.4 - q.arm * 1.9;
-  const bulge = 5 + flex * 3.4;
+  /* ---- 手臂 + 二头肌：二头肌和手臂同色，才连成一条胳膊而不是浮在旁边的球 ---- */
+  const a = -0.35 - q.arm * 1.1 + Math.sin(p * TAU) * (kind === 'dance' ? 0.45 : 0.3);
+  const bulge = 5.5 + flex * 3.6;
   [-1, 1].forEach(function (sgn) {
-    const ex = sgn * (34 + Math.cos(a) * 16), ey = 8 + Math.sin(a) * 16;
-    limb(ctx, sgn * 34, 8, ex, ey, 9, '#f7b52c');
-    ctx.fillStyle = '#ffd45c';
-    circle(ctx, sgn * 34 - sgn * 3, 6, bulge * 0.62);   // 二头肌
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(190,130,10,.4)';
-    ctx.beginPath(); ctx.arc(sgn * 34 - sgn * 3, 6, bulge * 0.62, 0, TAU); ctx.stroke();
-    ctx.fillStyle = '#f7b52c'; circle(ctx, ex, ey, 5.5);
+    /* 肩点要落在身体轮廓外（身体半宽约 40），否则胳膊只剩个圆点露出来 */
+    const sx = sgn * 39, sy = 8;
+    const mx = sgn * (39 + Math.cos(a) * 9), my = sy + Math.sin(a) * 9;      // 肘
+    const ex = sgn * (39 + Math.cos(a) * 19), ey = sy + Math.sin(a) * 19;    // 手
+    limb(ctx, sx, sy, mx, my, 10, '#f7b52c');                               // 上臂
+    ctx.fillStyle = '#f7b52c';
+    circle(ctx, (sx + mx) / 2, (sy + my) / 2 - 1.5, bulge * 0.66);          // 二头肌
+    ctx.fillStyle = 'rgba(255,255,255,.45)';                                // 肌肉高光
+    circle(ctx, (sx + mx) / 2 - sgn * 2.5, (sy + my) / 2 - bulge * 0.42, bulge * 0.28);
+    limb(ctx, mx, my, ex, ey, 8, '#f7b52c');                                // 前臂
+    ctx.fillStyle = '#f7b52c'; circle(ctx, ex, ey, 5.6);                    // 手
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(190,130,10,.35)';
+    ctx.beginPath(); ctx.arc(ex, ey, 5.6, 0, TAU); ctx.stroke();
   });
 }
 
@@ -444,8 +483,8 @@ function drawSponge(ctx, q, p, kind) {
   ctx.beginPath(); ctx.moveTo(0, 9); ctx.lineTo(-5, 15); ctx.lineTo(0, 20); ctx.lineTo(5, 15); ctx.closePath(); ctx.fill();
   ctx.beginPath(); ctx.moveTo(0, 19); ctx.lineTo(-4, 24); ctx.lineTo(0, 32); ctx.lineTo(4, 24); ctx.closePath(); ctx.fill();
 
-  /* ---- 网兜（抓水母用）：先画杆，再画网圈 ---- */
-  const na = -0.5 - q.arm * 1.5 + swing * (kind === 'dance' ? 0.5 : 0.15);
+  /* ---- 网兜：待机时也在轻轻晃，像在找水母 ---- */
+  const na = -0.55 - q.arm * 1.05 + swing * (kind === 'dance' ? 0.55 : 0.4);
   const nx = 30 + Math.cos(na) * 26, ny = -12 + Math.sin(na) * 26;
   limb(ctx, 30, -12, nx, ny, 3.6, '#b98b52');
   const hoopX = nx + Math.cos(na) * 12, hoopY = ny + Math.sin(na) * 12;
@@ -759,7 +798,12 @@ app.whenReady().then(async () => {
       fs.writeFileSync(path.join(dir, 'skin.json'), JSON.stringify({
         name: s.name, author: s.author,
         frame: { w: fw, h: FH }, fps: 10, sheet: 'sheet.png',
-        animations: { idle: { row: 0, count: 4 }, dance: { row: 1, count: 6 }, cheer: { row: 2, count: 6 } }
+        animations: {
+          /* 待机放慢：帧率太高会一直在抖，看久了很烦 */
+          idle: { row: 0, count: 4, fps: 3.5 },
+          dance: { row: 1, count: 6, fps: 12 },
+          cheer: { row: 2, count: 6, fps: 10 }
+        }
       }, null, 2) + '\n', 'utf8');
 
       /* ---- 自检 ---- */

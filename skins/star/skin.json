@@ -2,7 +2,7 @@
   "name": "粉海星",
   "author": "自带",
   "frame": {
-    "w": 119,
+    "w": 115,
     "h": 140
   },
   "fps": 10,
@@ -10,15 +10,18 @@
   "animations": {
     "idle": {
       "row": 0,
-      "count": 4
+      "count": 4,
+      "fps": 3.5
     },
     "dance": {
       "row": 1,
-      "count": 6
+      "count": 6,
+      "fps": 12
     },
     "cheer": {
       "row": 2,
-      "count": 6
+      "count": 6,
+      "fps": 10
     }
   }
 }
