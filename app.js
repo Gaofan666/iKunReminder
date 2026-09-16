@@ -414,11 +414,12 @@
             let k = kinds[Math.floor(Math.random() * kinds.length)];
             if (this.act && k === this.act.kind) k = kinds[(kinds.indexOf(k) + 2) % kinds.length];
             this.act = (k === 'none') ? null
-              : { kind: k, from: t, until: t + 6 + Math.random() * 3.5 };
+              : { kind: k, from: t, until: t + 6 + Math.random() * 3.5, u: 0 };
           }
         } else {
           this.act = null;
         }
+        if (this.act) this.act.u = Math.max(0, Math.min(1, (t - this.act.from) / (this.act.until - this.act.from)));
         drawFigure(ctx, t, mood, energy, this.act);
         if (!this.plain) this.drawOrbits(ctx, t, mood);
 
@@ -637,7 +638,7 @@
       const v = (u % 0.5) * 2;                       // 单程进度 0..1
       const fromX = toRight ? bShX - 34 : fShX + 34;
       const toX   = toRight ? fShX + 34 : bShX - 34;
-      const handTop = -128, groundY = -21;           // 手的高度 / 地面
+      const handTop = -126, groundY = -42;           // 手的高度 / 触地点（抬高，免得贴到窗口底边）
       const HIT = 0.42;                              // 触地时刻（小于 0.5 = 下坠更快）
       let yy;
       if (v < HIT) {
@@ -649,7 +650,10 @@
       }
       ballX = fromX + (toX - fromX) * v;
       ballY = yy;
-      handY = Math.min(ballY, handTop) - 22;
+      /* 手不去追球：真人运球时球是离手的，手只在自己够得着的范围内起落。
+         手臂总长 24+24=48，所以把手的目标点夹在肩膀上下 42 之内 ——
+         否则 IK 反解不出位置，左手会整个消失。 */
+      handY = Math.max(bShY - 45, Math.min(ballY - 22, bShY + 45));
     } else if (act && act.kind === 'spin') {
       /* ---- 右手把球扔到头顶，球在头顶变大叫并旋转 ---- */
       const u = act.u;
@@ -658,7 +662,7 @@
       ballX = fShX + 30 + (headX - (fShX + 30)) * throwUp + Math.sin(t * 2.2) * 4;
       ballY = (shY - 20) * (1 - throwUp) + (headY - 86) * throwUp
               + Math.sin(t * 5) * 2.5 + dropBack * 60;
-      handY = ballY + 26;
+      handY = Math.max(bShY - 45, Math.min(ballY + 26, bShY + 45));
     } else {
       ballX = bShX - 36; ballY = hipY - 8 + Math.sin(beat) * 2;
       handY = ballY - 22;
