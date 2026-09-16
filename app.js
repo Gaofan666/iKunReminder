@@ -406,22 +406,20 @@
       /* 选了自定义皮肤就用皮肤精灵图；没选或还没加载好就走代码手绘 */
       if (!drawSkin(ctx, t, mood)) {
         if (!this.plain) this.drawGround(ctx, t, mood);
-        /* 宠物模式待机时轮换两个小动作，交给 drawFigure 去驱动那颗球：
-           每 7 秒换一个：0=原样待机  1=左右手来回拍球  2=顶球转 */
-        let act = null;
+        /* 宠物模式待机时随机播小动作，交给 drawFigure 去驱动那颗球：
+           'drib' = 左右手来回运球   'spin' = 扔到头顶转 */
         if (this.plain && mood === 'idle') {
-          const CYCLE = 7;
-          const k = Math.floor(t / CYCLE) % 3;
-          if (k !== 0) {
-            const u0 = t % CYCLE;
-            act = {
-              kind: k === 1 ? 'drib' : 'spin',
-              u: u0 / CYCLE,
-              fade: Math.max(0, Math.min(1, u0 / 0.35, (CYCLE - u0) / 0.35))
-            };
+          if (!this.act || t >= this.act.until) {
+            const kinds = ['drib', 'spin', 'none', 'drib', 'spin'];
+            let k = kinds[Math.floor(Math.random() * kinds.length)];
+            if (this.act && k === this.act.kind) k = kinds[(kinds.indexOf(k) + 2) % kinds.length];
+            this.act = (k === 'none') ? null
+              : { kind: k, from: t, until: t + 6 + Math.random() * 3.5 };
           }
+        } else {
+          this.act = null;
         }
-        drawFigure(ctx, t, mood, energy, act);
+        drawFigure(ctx, t, mood, energy, this.act);
         if (!this.plain) this.drawOrbits(ctx, t, mood);
 
       }
@@ -627,23 +625,40 @@
       ballY = -22 - Math.abs(Math.sin(beat * 2)) * 36;
       handY = ballY - 22;
     } else if (act && act.kind === 'drib') {
-      /* 拍球：左手 → 地面 → 右手 → 地面 → 左手。
-         u 走完一轮，球走两条抛物线（落地那一下贴住地面 y=-21）。 */
+      /* ---- 左右手来回运球 ----
+         一个来回 = 两次「拍下去、弹起来」。单程里：
+           前半段：球被手拍下 → 受重力【加速】下落（抛物线段）
+           后半段：触地反弹 → 速度被重力消耗、【减速】上升
+         用顶点在地面的抛物线，而不是正弦，才有真实的拍球感；
+         另外把触地时刻提前到 42%（手往下拍的力 > 自由落体），
+         所以下坠比上升快，这就是「拍」的感觉。 */
       const u = act.u;
       const toRight = u < 0.5;
       const v = (u % 0.5) * 2;                       // 单程进度 0..1
       const fromX = toRight ? bShX - 34 : fShX + 34;
-      const toX = toRight ? fShX + 34 : bShX - 34;
-      const arc = Math.sin(v * Math.PI);             // 0 两端 → 1 中间
+      const toX   = toRight ? fShX + 34 : bShX - 34;
+      const handTop = -128, groundY = -21;           // 手的高度 / 地面
+      const HIT = 0.42;                              // 触地时刻（小于 0.5 = 下坠更快）
+      let yy;
+      if (v < HIT) {
+        const k = v / HIT;
+        yy = handTop + (groundY - handTop) * k * k;  // 加速下落
+      } else {
+        const k = (v - HIT) / (1 - HIT);
+        yy = groundY + (handTop - groundY) * k * k;  // 减速上升
+      }
       ballX = fromX + (toX - fromX) * v;
-      ballY = -21 - arc * 104;                       // -21=贴地，-125=手上
-      handY = ballY - 22;
+      ballY = yy;
+      handY = Math.min(ballY, handTop) - 22;
     } else if (act && act.kind === 'spin') {
-      /* 顶球转：球升到头顶上方旋转，身体轻微晃 */
-      const up = Math.min(1, act.u * 6);             // 前 1/6 时间把球顶上去
-      ballX = headX + Math.sin(t * 2.6) * 5;
-      ballY = headY - 20 - up * 72 + Math.sin(t * 5) * 3;
-      handY = headY - 40;
+      /* ---- 右手把球扔到头顶，球在头顶变大叫并旋转 ---- */
+      const u = act.u;
+      const throwUp = Math.min(1, u / 0.18);         // 前 18%：从右手扔上去
+      const dropBack = u > 0.85 ? (u - 0.85) / 0.15 : 0;  // 最后 15%：落回手里
+      ballX = fShX + 30 + (headX - (fShX + 30)) * throwUp + Math.sin(t * 2.2) * 4;
+      ballY = (shY - 20) * (1 - throwUp) + (headY - 86) * throwUp
+              + Math.sin(t * 5) * 2.5 + dropBack * 60;
+      handY = ballY + 26;
     } else {
       ballX = bShX - 36; ballY = hipY - 8 + Math.sin(beat) * 2;
       handY = ballY - 22;
@@ -716,8 +731,13 @@
     /* --- 篮球 --- */
     ctx.save();
     ctx.translate(ballX, ballY);
+    /* 顶球时球会变大（用户要求），运球时保持原大小 */
+    const ballGrow = (act && act.kind === 'spin')
+      ? 1 + 0.65 * Math.min(1, act.u / 0.2)
+      : 1;
+    ctx.scale(ballGrow, ballGrow);
     ctx.rotate(t * 2.2 * (0.4 + energy) +
-      (act ? (act.kind === 'spin' ? 6.5 : 3.2) * act.u * 7 : 0));
+      (act ? (act.kind === 'spin' ? 9 : 4.5) * (act.u * 7) : 0));
     ctx.shadowColor = 'rgba(255,139,31,.85)';
     ctx.shadowBlur = 14;
     ctx.fillStyle = C.ball;
