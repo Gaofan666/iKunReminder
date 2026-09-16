@@ -615,6 +615,7 @@
 
     /* --- 篮球位置（画面左手边） --- */
     let ballX, ballY, handY;
+    let ballHandX = 0, ballHandY = 0;   // 手画在哪（动作中不追球）
     const cheer = (mood === 'cheer');
     if (mood === 'dance') {
       const ph = (Math.sin(beat * 1.5) + 1) / 2;      // 0..1 运球节拍
@@ -638,7 +639,9 @@
       const v = (u % 0.5) * 2;                       // 单程进度 0..1
       const fromX = toRight ? bShX - 34 : fShX + 34;
       const toX   = toRight ? fShX + 34 : bShX - 34;
-      const handTop = -126, groundY = -42;           // 手的高度 / 触地点（抬高，免得贴到窗口底边）
+      /* 球心的高度：手里约 -57（手在 -78，球半径 21），
+         落地时 -21 —— 半径正好 21，所以球底边刚好贴住地面 y=0 */
+      const handTop = -57, groundY = -21;
       const HIT = 0.42;                              // 触地时刻（小于 0.5 = 下坠更快）
       let yy;
       if (v < HIT) {
@@ -650,10 +653,12 @@
       }
       ballX = fromX + (toX - fromX) * v;
       ballY = yy;
-      /* 手不去追球：真人运球时球是离手的，手只在自己够得着的范围内起落。
-         手臂总长 24+24=48，所以把手的目标点夹在肩膀上下 42 之内 ——
-         否则 IK 反解不出位置，左手会整个消失。 */
-      handY = Math.max(bShY - 45, Math.min(ballY - 22, bShY + 45));
+      /* 手【不去追球】：真人运球时球是离手的。
+         之前用 IK 让手追着球跑，球落到地面时目标点超出手臂长度，
+         解算失败 → 手整个消失。改成手只做简单的上下挥动。 */
+      const hsw = Math.sin(beat * 2.2);
+      ballHandX = bShX - 10 - hsw * 5;
+      ballHandY = bShY + 30 + hsw * 11;
     } else if (act && act.kind === 'spin') {
       /* ---- 右手把球扔到头顶，球在头顶变大叫并旋转 ---- */
       const u = act.u;
@@ -662,10 +667,13 @@
       ballX = fShX + 30 + (headX - (fShX + 30)) * throwUp + Math.sin(t * 2.2) * 4;
       ballY = (shY - 20) * (1 - throwUp) + (headY - 86) * throwUp
               + Math.sin(t * 5) * 2.5 + dropBack * 60;
-      handY = Math.max(bShY - 45, Math.min(ballY + 26, bShY + 45));
+      const hsw2 = Math.sin(beat * 2.6);
+      ballHandX = bShX - 8 - hsw2 * 6;
+      ballHandY = bShY + 12 - Math.abs(hsw2) * 16;      // 举手抛球的动作
     } else {
       ballX = bShX - 36; ballY = hipY - 8 + Math.sin(beat) * 2;
       handY = ballY - 22;
+      ballHandX = ballX; ballHandY = handY;
     }
     ballX = clamp(ballX, -190, 190);
 
@@ -722,7 +730,7 @@
     if (cheer) {
       wingArm(ctx, bShX, bShY, Math.PI / 2 + 0.42 + 2.05, Math.PI / 2 + 0.42 + 2.4);
     } else {
-      ikArm(ctx, bShX, bShY, ballX, handY, 24, 22, 17, C.hoodie, C.chick);
+      ikArm(ctx, bShX, bShY, ballHandX, ballHandY, 24, 22, 17, C.hoodie, C.chick);
     }
 
     /* --- 头 --- */
