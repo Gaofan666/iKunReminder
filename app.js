@@ -406,23 +406,8 @@
       /* 选了自定义皮肤就用皮肤精灵图；没选或还没加载好就走代码手绘 */
       if (!drawSkin(ctx, t, mood)) {
         if (!this.plain) this.drawGround(ctx, t, mood);
-        /* 宠物模式待机时随机播小动作，交给 drawFigure 去驱动那颗球：
-           'drib' = 左右手来回运球   'spin' = 扔到头顶转 */
-        if (this.plain && mood === 'idle') {
-          if (!this.act || t >= this.act.until) {
-            const kinds = ['drib', 'spin', 'none', 'drib', 'spin'];
-            let k = kinds[Math.floor(Math.random() * kinds.length)];
-            if (this.act && k === this.act.kind) k = kinds[(kinds.indexOf(k) + 2) % kinds.length];
-            this.act = (k === 'none') ? null
-              : { kind: k, from: t, until: t + 6 + Math.random() * 3.5, u: 0 };
-          }
-        } else {
-          this.act = null;
-        }
-        if (this.act) this.act.u = Math.max(0, Math.min(1, (t - this.act.from) / (this.act.until - this.act.from)));
-        drawFigure(ctx, t, mood, energy, this.act);
+        drawFigure(ctx, t, mood, energy);
         if (!this.plain) this.drawOrbits(ctx, t, mood);
-
       }
 
       ctx.restore();
@@ -581,7 +566,7 @@
   /* 绘制角色（本地坐标：脚底为原点，向上为负 y）
      造型照着参考图来：黄色小鸡 + 银灰中分乱发 + 半眯大眼 + 橙鸭嘴 + 红脸蛋
      + 黑卫衣（拉链 + 浅色背带）+ 浅灰背带裤 + 黑鞋，篮球拿在画面左手边 */
-  function drawFigure(ctx, t, mood, energy, act) {
+  function drawFigure(ctx, t, mood, energy) {
     const beat = t * (2.0 + energy * 2.6);
     const swing = Math.sin(beat);
     const hop = Math.max(0, Math.sin(beat * 2)) * 13 * energy;
@@ -615,7 +600,6 @@
 
     /* --- 篮球位置（画面左手边） --- */
     let ballX, ballY, handY;
-    let ballHandX = 0, ballHandY = 0;   // 手画在哪（动作中不追球）
     const cheer = (mood === 'cheer');
     if (mood === 'dance') {
       const ph = (Math.sin(beat * 1.5) + 1) / 2;      // 0..1 运球节拍
@@ -626,54 +610,9 @@
       ballX = bShX - 46;                             // 欢呼时球在身边弹跳，双手举起
       ballY = -22 - Math.abs(Math.sin(beat * 2)) * 36;
       handY = ballY - 22;
-    } else if (act && act.kind === 'drib') {
-      /* ---- 左右手来回运球 ----
-         一个来回 = 两次「拍下去、弹起来」。单程里：
-           前半段：球被手拍下 → 受重力【加速】下落（抛物线段）
-           后半段：触地反弹 → 速度被重力消耗、【减速】上升
-         用顶点在地面的抛物线，而不是正弦，才有真实的拍球感；
-         另外把触地时刻提前到 42%（手往下拍的力 > 自由落体），
-         所以下坠比上升快，这就是「拍」的感觉。 */
-      const u = act.u;
-      const toRight = u < 0.5;
-      const v = (u % 0.5) * 2;                       // 单程进度 0..1
-      const fromX = toRight ? bShX - 34 : fShX + 34;
-      const toX   = toRight ? fShX + 34 : bShX - 34;
-      /* 球心的高度：手里约 -57（手在 -78，球半径 21），
-         落地时 -21 —— 半径正好 21，所以球底边刚好贴住地面 y=0 */
-      const handTop = -57, groundY = -21;
-      const HIT = 0.42;                              // 触地时刻（小于 0.5 = 下坠更快）
-      let yy;
-      if (v < HIT) {
-        const k = v / HIT;
-        yy = handTop + (groundY - handTop) * k * k;  // 加速下落
-      } else {
-        const k = (v - HIT) / (1 - HIT);
-        yy = groundY + (handTop - groundY) * k * k;  // 减速上升
-      }
-      ballX = fromX + (toX - fromX) * v;
-      ballY = yy;
-      /* 手【不去追球】：真人运球时球是离手的。
-         之前用 IK 让手追着球跑，球落到地面时目标点超出手臂长度，
-         解算失败 → 手整个消失。改成手只做简单的上下挥动。 */
-      const hsw = Math.sin(beat * 2.2);
-      ballHandX = bShX - 10 - hsw * 5;
-      ballHandY = bShY + 30 + hsw * 11;
-    } else if (act && act.kind === 'spin') {
-      /* ---- 右手把球扔到头顶，球在头顶变大叫并旋转 ---- */
-      const u = act.u;
-      const throwUp = Math.min(1, u / 0.18);         // 前 18%：从右手扔上去
-      const dropBack = u > 0.85 ? (u - 0.85) / 0.15 : 0;  // 最后 15%：落回手里
-      ballX = fShX + 30 + (headX - (fShX + 30)) * throwUp + Math.sin(t * 2.2) * 4;
-      ballY = (shY - 20) * (1 - throwUp) + (headY - 86) * throwUp
-              + Math.sin(t * 5) * 2.5 + dropBack * 60;
-      const hsw2 = Math.sin(beat * 2.6);
-      ballHandX = bShX - 8 - hsw2 * 6;
-      ballHandY = bShY + 12 - Math.abs(hsw2) * 16;      // 举手抛球的动作
     } else {
       ballX = bShX - 36; ballY = hipY - 8 + Math.sin(beat) * 2;
       handY = ballY - 22;
-      ballHandX = ballX; ballHandY = handY;
     }
     ballX = clamp(ballX, -190, 190);
 
@@ -730,7 +669,7 @@
     if (cheer) {
       wingArm(ctx, bShX, bShY, Math.PI / 2 + 0.42 + 2.05, Math.PI / 2 + 0.42 + 2.4);
     } else {
-      ikArm(ctx, bShX, bShY, ballHandX, ballHandY, 24, 22, 17, C.hoodie, C.chick);
+      ikArm(ctx, bShX, bShY, ballX, handY, 24, 22, 17, C.hoodie, C.chick);
     }
 
     /* --- 头 --- */
@@ -743,13 +682,7 @@
     /* --- 篮球 --- */
     ctx.save();
     ctx.translate(ballX, ballY);
-    /* 顶球时球会变大（用户要求），运球时保持原大小 */
-    const ballGrow = (act && act.kind === 'spin')
-      ? 1 + 0.65 * Math.min(1, act.u / 0.2)
-      : 1;
-    ctx.scale(ballGrow, ballGrow);
-    ctx.rotate(t * 2.2 * (0.4 + energy) +
-      (act ? (act.kind === 'spin' ? 9 : 4.5) * (act.u * 7) : 0));
+    ctx.rotate(t * 2.2 * (0.4 + energy));
     ctx.shadowColor = 'rgba(255,139,31,.85)';
     ctx.shadowBlur = 14;
     ctx.fillStyle = C.ball;
