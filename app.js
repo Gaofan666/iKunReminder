@@ -406,8 +406,24 @@
       /* 选了自定义皮肤就用皮肤精灵图；没选或还没加载好就走代码手绘 */
       if (!drawSkin(ctx, t, mood)) {
         if (!this.plain) this.drawGround(ctx, t, mood);
-        drawFigure(ctx, t, mood, energy);
+        /* 宠物模式待机时轮换两个小动作，交给 drawFigure 去驱动那颗球：
+           每 7 秒换一个：0=原样待机  1=左右手来回拍球  2=顶球转 */
+        let act = null;
+        if (this.plain && mood === 'idle') {
+          const CYCLE = 7;
+          const k = Math.floor(t / CYCLE) % 3;
+          if (k !== 0) {
+            const u0 = t % CYCLE;
+            act = {
+              kind: k === 1 ? 'drib' : 'spin',
+              u: u0 / CYCLE,
+              fade: Math.max(0, Math.min(1, u0 / 0.35, (CYCLE - u0) / 0.35))
+            };
+          }
+        }
+        drawFigure(ctx, t, mood, energy, act);
         if (!this.plain) this.drawOrbits(ctx, t, mood);
+
       }
 
       ctx.restore();
@@ -566,7 +582,7 @@
   /* 绘制角色（本地坐标：脚底为原点，向上为负 y）
      造型照着参考图来：黄色小鸡 + 银灰中分乱发 + 半眯大眼 + 橙鸭嘴 + 红脸蛋
      + 黑卫衣（拉链 + 浅色背带）+ 浅灰背带裤 + 黑鞋，篮球拿在画面左手边 */
-  function drawFigure(ctx, t, mood, energy) {
+  function drawFigure(ctx, t, mood, energy, act) {
     const beat = t * (2.0 + energy * 2.6);
     const swing = Math.sin(beat);
     const hop = Math.max(0, Math.sin(beat * 2)) * 13 * energy;
@@ -610,6 +626,24 @@
       ballX = bShX - 46;                             // 欢呼时球在身边弹跳，双手举起
       ballY = -22 - Math.abs(Math.sin(beat * 2)) * 36;
       handY = ballY - 22;
+    } else if (act && act.kind === 'drib') {
+      /* 拍球：左手 → 地面 → 右手 → 地面 → 左手。
+         u 走完一轮，球走两条抛物线（落地那一下贴住地面 y=-21）。 */
+      const u = act.u;
+      const toRight = u < 0.5;
+      const v = (u % 0.5) * 2;                       // 单程进度 0..1
+      const fromX = toRight ? bShX - 34 : fShX + 34;
+      const toX = toRight ? fShX + 34 : bShX - 34;
+      const arc = Math.sin(v * Math.PI);             // 0 两端 → 1 中间
+      ballX = fromX + (toX - fromX) * v;
+      ballY = -21 - arc * 104;                       // -21=贴地，-125=手上
+      handY = ballY - 22;
+    } else if (act && act.kind === 'spin') {
+      /* 顶球转：球升到头顶上方旋转，身体轻微晃 */
+      const up = Math.min(1, act.u * 6);             // 前 1/6 时间把球顶上去
+      ballX = headX + Math.sin(t * 2.6) * 5;
+      ballY = headY - 20 - up * 72 + Math.sin(t * 5) * 3;
+      handY = headY - 40;
     } else {
       ballX = bShX - 36; ballY = hipY - 8 + Math.sin(beat) * 2;
       handY = ballY - 22;
@@ -682,7 +716,8 @@
     /* --- 篮球 --- */
     ctx.save();
     ctx.translate(ballX, ballY);
-    ctx.rotate(t * 2.2 * (0.4 + energy));
+    ctx.rotate(t * 2.2 * (0.4 + energy) +
+      (act ? (act.kind === 'spin' ? 6.5 : 3.2) * act.u * 7 : 0));
     ctx.shadowColor = 'rgba(255,139,31,.85)';
     ctx.shadowBlur = 14;
     ctx.fillStyle = C.ball;
