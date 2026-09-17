@@ -131,7 +131,10 @@
 
 **方式一：GitHub Releases（推荐）**
 
-> **v3.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.0.0
+> **v3.2.0（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.0
+> 直接下载：[`iKunReminder-setup-v3.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.0/iKunReminder-setup-v3.2.0.exe)（约 110 MB，安装版）
+>
+> 历史版本 **v3.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.0.0
 > 直接下载：[`iKunReminder-setup-v3.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.0.0/iKunReminder-setup-v3.0.0.exe)（约 110 MB，安装版）
 
 **方式二：百度网盘**

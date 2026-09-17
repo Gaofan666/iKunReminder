@@ -18,3 +18,9 @@ desktop.ini
 
 # DPI 自检的临时产物（截图 / 轨迹 / 汇总）
 .diag/
+
+# 发版脚本（本机用的发布工具，含仓库地址与接口调用，不入库）
+.release/
+
+# 早期误留的临时文件
+codebase_analysis.txt
