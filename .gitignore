@@ -24,3 +24,6 @@ desktop.ini
 
 # 早期误留的临时文件
 codebase_analysis.txt
+
+# 打包上传流程说明（本机文档，不入库）
+打包上传流程.txt

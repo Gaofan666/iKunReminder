@@ -76,7 +76,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "iKunReminder",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "iKunReminder-安装版.exe"
+      "artifactName": "iKunReminder-setup-v${version}.exe"
     },
     "portable": {
       "artifactName": "iKunReminder-便携版.exe",

@@ -151,13 +151,13 @@
 
 | 形式 | 产物 | 首次启动 | 之后每次启动 | 适合 |
 | --- | --- | --- | --- | --- |
-| 🏆 **安装版** | `dist\iKunReminder-安装版.exe`（100 MB） | 3.2 秒 | **0.87 ～ 1.06 秒** | 日常用、发给别人 |
+| 🏆 **安装版** | `dist\iKunReminder-setup-v<版本号>.exe`（100 MB） | 3.2 秒 | **0.87 ～ 1.06 秒** | 日常用、发给别人 |
 | 🏆 **绿色解压版** | `dist\win-unpacked\` 或 `dist\iKunReminder-绿色版.zip`（139 MB） | 3.4 秒 | **0.68 ～ 0.75 秒** | 免安装、放 U 盘 |
 | 🐢 **单文件便携版** | `iKunReminder.exe`（98 MB） | 10.4 秒 | **10.4 ～ 11.7 秒** | 应急携带，不建议日常用 |
 
 ### 推荐一：安装版（单文件，装一次就快）
 
-双击 `dist\iKunReminder-安装版.exe`，会走一个**三步向导**：
+双击 `dist\iKunReminder-setup-v<版本号>.exe`，会走一个**三步向导**：
 
 1. **安装选项** —— 选「仅为我安装」（默认，不需要管理员权限）还是给所有人装；
 2. **选定安装位置** —— 默认 `%LOCALAPPDATA%\Programs\iKunReminder`，
@@ -171,7 +171,7 @@
 > **安装后的名字**：安装目录、exe、开始菜单/桌面快捷方式、控制面板里的条目
 > 都叫 **iKunReminder**。
 >
-> 静默安装（`安装版.exe /S`）会跳过向导，按默认值走：装到默认目录、创建桌面图标。
+> 静默安装（`iKunReminder-setup-v<版本号>.exe /S`）会跳过向导，按默认值走：装到默认目录、创建桌面图标。
 > 想静默装到指定目录可以加 `/D=路径`（NSIS 的规矩：`/D` 必须放在最后且不加引号）。
 
 ### 推荐二：绿色解压版（不装、最快）
@@ -196,10 +196,18 @@ electron-builder 的便携版 NSIS 模板（`portable.nsi`）每次启动都会
 
 ```
 npm install              # 第一次
-npm run build            # 安装版  → dist\iKunReminder-安装版.exe
+npm run build            # 安装版  → dist\iKunReminder-setup-v<版本号>.exe
 npm run build:fast       # 绿色版  → dist\win-unpacked\
 npm run build:portable   # 便携版  → dist\iKunReminder-便携版.exe
 ```
+
+> **安装版产物命名**：固定为 `iKunReminder-setup-v<版本号>.exe`，版本号取自 `package.json`
+> 的 `version` 字段，由 `nsis.artifactName` 里的 `${version}` 宏自动填入 ——
+> **改版本只改 `package.json` 一处**，产物名跟着变，不用手动改名。
+> 名字**必须是纯 ASCII**：GitHub Release 的附件名不支持中文，会把中文部分静默吃掉
+> （`iKunReminder-安装版.exe` 会变成 `iKunReminder-.exe`，接口还返回 200 不报错）。
+> 完整的打包 + 上传流程见仓库根目录 `打包上传流程.txt`。
+> 绿色版 / 便携版仍是中文名，它们只在本机用、不上传，所以不受这个限制。
 
 > 打包配置里写死了 `"signAndEditExecutable": false`。原因是 electron-builder 默认会下载一个
 > 含 macOS 符号链接的 `winCodeSign` 工具包，普通（非管理员）Windows 账户解压时会报
@@ -298,10 +306,10 @@ npm run build:portable   # 便携版  → dist\iKunReminder-便携版.exe
 ```
 kunkun-reminder/
 ├─ dist/
-│  ├─ iKunReminder-安装版.exe       ← 推荐：装一次，之后 1 秒开
-│  ├─ iKunReminder-绿色版.zip       ← 推荐：免安装，0.7 秒开
-│  ├─ win-unpacked/                  ← 上面那个 zip 的解压态，可直接运行
-│  └─ iKunReminder.exe               ← 单文件便携版（每次启动要解压 10 秒）
+│  ├─ iKunReminder-setup-v<版本号>.exe  ← 推荐：装一次，之后 1 秒开
+│  ├─ iKunReminder-绿色版.zip           ← 推荐：免安装，0.7 秒开
+│  ├─ win-unpacked/                     ← 上面那个 zip 的解压态，可直接运行
+│  └─ iKunReminder.exe                  ← 单文件便携版（每次启动要解压 10 秒）
 ├─ 启动.cmd          ← 源码方式启动
 ├─ build/
 │  └─ installer.nsh  自定义安装向导页（桌面快捷方式勾选框）
