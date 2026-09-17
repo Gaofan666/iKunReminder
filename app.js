@@ -6,10 +6,30 @@
 (function () {
   'use strict';
 
+  /* ---------------- 角色绘制 / 皮肤 / 音效：都在 pet-draw.js 里（桌面宠物窗共用同一份） */
+  const PETDRAW = window.kunkunPet;
+  const Kunkun = PETDRAW.Kunkun;
+  const Sound = PETDRAW.Sound;
+  const skinState = PETDRAW.skin;
+  const drawFigure = PETDRAW.drawFigure;
+  const drawLeg = PETDRAW.drawLeg;
+  const drawChickHead = PETDRAW.drawChickHead;
+  const linGrad = PETDRAW.linGrad;
+  const roundRect = PETDRAW.roundRect;
+  const segment = PETDRAW.segment;
+  const ikArm = PETDRAW.ikArm;
+  /* 皮肤「取列表 / 载入」要调主进程桥，放在 skin-picker.js */
+  const SKINPICK = window.kunkunSkinPicker;
+
   /* ------------------------------------------------------------------ 常量 */
   const RING_C = 2 * Math.PI * 52;          // 进度环周长
   const SNOOZE_SEC = 5 * 60;                // 稍后提醒 = 5 分钟
-  const STORE_KEY = { settings: 'kunkun.settings.v1', stats: 'kunkun.stats.v1' };
+  const STORE_KEY = {
+    settings: 'kunkun.settings.v1',
+    stats: 'kunkun.stats.v1',
+    todos: 'kunkun.todos.v1',               // 备忘录 + 待办（一次存，省得两套版本号）
+    ui: 'kunkun.ui.v1'                      // 界面偏好（当前标签页、设置项）
+  };
 
   /* 提醒事项的候选配色（夏日：晴空蓝 / 草绿 / 阳光黄 / 湖水青 …） */
   const PALETTE = ['#4A9BD4', '#6FB56B', '#E8B843', '#3E9AA8', '#7FA8D9', '#8FBF6A', '#D9A15F', '#5FB3A8'];
@@ -155,7 +175,8 @@
     items: defaultItems(),     // 提醒事项列表（用户可增删改）
     sound: true,
     speech: true,
-    petSize: 'max',            // 宠物默认大小：max 迷你 / mid 小小 / min 超小
+    petSize: 'max',            // 桌面宠物大小：max 迷你 / mid 小小 / min 超小
+    petOn: false,              // 桌面宠物是否显示（独立小窗，可与主界面同时存在）
     skin: '__default',         // 宠物形象：__default = 代码手绘，其余为 skins/ 里的皮肤
   };
   const PET_SIZE_KEYS = ['max', 'mid', 'min'];
@@ -169,6 +190,24 @@
 
   let stats = { date: '', counts: {} };
   let moodTimer = null;
+
+  /* ------------------------------------------------ 备忘 / 待办 / 界面偏好
+     memos：{ id, text, done, at }
+     todos：{ id, text, done, at, dueAt, notify, remindAt }
+       dueAt    用户设的提醒时间（毫秒时间戳）
+       remindAt 下次该弹提醒的时间；snooze 会把它往后推，程序重开时它可能已经过期
+     两者都存在 STORE_KEY.todos 里，一次读写。 */
+  let memos = [];
+  let todos = [];
+  const ui = {
+    tab: 'home',               // home | todo | settings
+    todoGrabFront: true,       // 待办到点是否抢前台
+    todoCatchUp: true          // 重开程序时是否补提醒过期待办
+  };
+  /* 提醒弹层当前弹的是哪一类：'item'（喝水/休息那种循环提醒）或 'todo' */
+  let alertKind = 'item';
+  let alertTodoId = null;
+  let alertTodo = null;
 
   /* --------------------------------------------------------------- 小工具 */
   const $ = (s, root) => (root || document).querySelector(s);
@@ -189,105 +228,6 @@
     return h > 0 ? `${h}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
   }
 
-  function roundRect(ctx, x, y, w, h, r) {
-    r = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
-
-  function segment(ctx, x1, y1, x2, y2, w, color) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = w;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-
-  /* 两段式手臂 IK：从肩(sx,sy)伸向目标(tx,ty)
-     肘部有两个解，这里取"更靠下"的那个，手臂看起来自然下垂而不是横向外翻 */
-  function ikArm(ctx, sx, sy, tx, ty, upper, lower, w, color, color2) {
-    let dx = tx - sx, dy = ty - sy;
-    let dist = Math.hypot(dx, dy) || 0.001;
-    const maxD = (upper + lower) * 0.97;
-    if (dist > maxD) { const k = maxD / dist; dx *= k; dy *= k; dist = maxD; }
-    const base = Math.atan2(dy, dx);
-    const cosA = clamp((upper * upper + dist * dist - lower * lower) / (2 * upper * dist), -1, 1);
-    const da = Math.acos(cosA);
-    const c1 = base - da, c2 = base + da;
-    const a1 = (sy + Math.sin(c1) * upper) >= (sy + Math.sin(c2) * upper) ? c1 : c2;
-    const ex = sx + Math.cos(a1) * upper;
-    const ey = sy + Math.sin(a1) * upper;
-    const hx = sx + dx, hy = sy + dy;
-    segment(ctx, sx, sy, ex, ey, w, color);
-    segment(ctx, ex, ey, hx, hy, w * 0.9, color2 || color);
-    ctx.fillStyle = color2 || color;
-    ctx.beginPath(); ctx.arc(hx, hy, w * 0.55, 0, Math.PI * 2); ctx.fill();
-    return { x: hx, y: hy, ex, ey };
-  }
-
-  /* --------------------------------------------------------------- 音效器 */
-  const Sound = {
-    ctx: null,
-    ensure() {
-      if (!this.ctx) {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (AC) this.ctx = new AC();
-      }
-      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
-      return this.ctx;
-    },
-    tone(freq, at, dur, type, vol) {
-      const ctx = this.ctx;
-      if (!ctx) return;
-      const t0 = ctx.currentTime + at;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = type || 'square';
-      osc.frequency.setValueAtTime(freq, t0);
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(vol || 0.09, t0 + 0.012);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      osc.connect(g).connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + dur + 0.03);
-    },
-    /* 提醒：原创 8-bit 上行小旋律 */
-    alert() {
-      if (!settings.sound) return;
-      this.ensure();
-      if (!this.ctx) return;
-      const melody = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50, 1318.51];
-      melody.forEach((f, i) => this.tone(f, i * 0.11, 0.19, 'square', 0.075));
-      [130.81, 196.00, 261.63].forEach((f, i) => this.tone(f, i * 0.26, 0.5, 'triangle', 0.06));
-    },
-    /* 完成：轻快两声 */
-    confirm() {
-      if (!settings.sound) return;
-      this.ensure();
-      if (!this.ctx) return;
-      [783.99, 1046.50, 1318.51].forEach((f, i) => this.tone(f, i * 0.07, 0.16, 'square', 0.07));
-    },
-    /* 点击：短促电子音 */
-    click() {
-      if (!settings.sound) return;
-      this.ensure();
-      if (!this.ctx) return;
-      this.tone(880, 0, 0.06, 'square', 0.045);
-      this.tone(1320, 0.05, 0.06, 'square', 0.03);
-    }
-  };
-
   /* --------------------------------------------------------------- 语音播报 */
   function speak(text) {
     if (!settings.speech || !('speechSynthesis' in window)) return;
@@ -305,576 +245,6 @@
      Canvas：别感冒
      ========================================================================= */
   /* 配色照着参考图取 */
-  const C = {
-    chick: '#ffd84a',    // 小鸡黄
-    chickL: '#ffe98d',
-    chickD: '#e6b722',
-    hair: '#c2c6ce',     // 银灰中分头发
-    hairD: '#959ba7',
-    hairL: '#e4e8ef',
-    bill: '#ff9a3c',     // 鸭嘴橙
-    billD: '#c2640f',
-    blush: '#ef4530',    // 红脸蛋
-    ink: '#241f1b',      // 描边
-    hoodie: '#17171d',   // 黑卫衣
-    hoodieD: '#2b2b35',
-    strap: '#b7beb2',    // 浅灰绿背带
-    pants: '#d9dbd5',    // 浅灰背带裤
-    pantsD: '#c0c3bc',
-    shoe: '#191920',     // 黑鞋
-    ball: '#f0801a',
-    ballD: '#a8451a'
-  };
-
-  class Kunkun {
-    constructor(canvas, opts) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext('2d');
-      this.mood = 'idle';
-      this.moodAt = performance.now();
-      this.fit = (opts && opts.fit) || 330;   // 数值越小，角色在画布里越大
-      this.w = 1; this.h = 1;
-      this.resize();
-      if (window.ResizeObserver) {
-        this.ro = new ResizeObserver(() => this.resize());
-        this.ro.observe(canvas);
-      } else {
-        window.addEventListener('resize', () => this.resize());
-      }
-    }
-
-    resize() {
-      const el = this.canvas;
-      const w = el.offsetWidth, h = el.offsetHeight;   // 布局尺寸（不含外层 transform）
-      if (!w || !h) return;
-      // 外层 #app 是等比缩放的，按最终显示尺寸分配像素，缩放后才不会发虚
-      const r = el.getBoundingClientRect();
-      const vis = r.width ? clamp(r.width / w, 0.05, 4) : 1;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const k = dpr * vis;
-      const nw = Math.round(w * k);
-      const nh = Math.round(h * k);
-      /* 给 canvas 赋 width/height 会立刻清空画布，所以尺寸没变时绝不能碰，
-         否则会出现「有一帧是空的」——点宠物时闪一下就是这么来的 */
-      if (el.width === nw && el.height === nh && this.w === w && this.h === h) return;
-      el.width = nw;
-      el.height = nh;
-      this.ctx.setTransform(k, 0, 0, k, 0, 0);
-      this.w = w;
-      this.h = h;
-    }
-
-    setMood(m) {
-      if (this.mood !== m) { this.mood = m; this.moodAt = performance.now(); }
-    }
-
-    frame(now) {
-      const ctx = this.ctx;
-      const w = this.w, h = this.h;
-      if (!w || !h) return;
-      ctx.clearRect(0, 0, w, h);
-
-      const t = now / 1000;
-      const mood = this.mood;
-      const energy = mood === 'dance' ? 1 : mood === 'cheer' ? 0.9 : 0.3;
-      /* 手绘角色用统一的 fit；皮肤要按帧的实际宽高比算，
-         否则宽幅皮肤（树 + 躺椅那种）横向会超出画布被裁掉。 */
-      let s = Math.min(w / this.fit, h / this.fit);
-      if (skinState.ready && skinState.meta) {
-        const fh2 = skinState.meta.frame.h;
-        const drawW = skinState.meta.frame.w * (310 / fh2);   // 帧在本地坐标下的宽度
-        s = Math.min(w / Math.max(this.fit, drawW), h / this.fit);
-      }
-
-      ctx.save();
-      /* 主界面：放在画布 94% 高度处（底部留一点，视觉上居中）。
-         宠物模式：直接贴住窗口底边 —— 但不能用画布底边，
-         因为生成的精灵图在格子底部还留了 5px 余量，
-         要按「宠物真实边界」往上退这 5px，脚才能真的踩到桌面底边。 */
-      let baseY = h * 0.94;
-      if (this.plain) {
-        const bg = skinState.meta && skinState.meta.bottomGap != null ? skinState.meta.bottomGap : 0;
-        const gapPx = skinState.ready ? bg * (310 / skinState.meta.frame.h) * s : 0;
-        baseY = h + gapPx;   // 内容底边在原点【上方】gapPx 处，所以原点要放到画布下方 gapPx，脚才落在底边
-      }
-      ctx.translate(w / 2, baseY);
-      ctx.scale(s, s);
-
-      /* plain = 宠物模式：桌面上只要角色本身，不要地面光圈和环绕粒子 */
-      PLAIN = !!this.plain;
-
-      /* 选了自定义皮肤就用皮肤精灵图；没选或还没加载好就走代码手绘 */
-      if (!drawSkin(ctx, t, mood)) {
-        if (!this.plain) this.drawGround(ctx, t, mood);
-        drawFigure(ctx, t, mood, energy);
-        if (!this.plain) this.drawOrbits(ctx, t, mood);
-      }
-
-      ctx.restore();
-    }
-
-    drawGround(ctx, t, mood) {
-      const pulse = mood === 'idle' ? 1 + Math.sin(t * 1.6) * 0.04 : 1 + Math.sin(t * 8) * 0.12;
-      const g = ctx.createRadialGradient(0, 0, 4, 0, 0, 150 * pulse);
-      const a = mood === 'idle' ? 0.30 : 0.55;
-      g.addColorStop(0, `rgba(62,154,168,${a})`);
-      g.addColorStop(0.5, `rgba(138,92,255,${a * 0.45})`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 165 * pulse, 34 * pulse, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 地面光环虚线
-      ctx.save();
-      ctx.strokeStyle = 'rgba(62,154,168,.45)';
-      ctx.lineWidth = 1.4;
-      ctx.setLineDash([10, 12]);
-      ctx.lineDashOffset = -t * 34;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 118, 24, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    drawOrbits(ctx, t, mood) {
-      if (mood === 'idle') return;
-      const n = 7;
-      for (let i = 0; i < n; i++) {
-        const a = t * 1.6 + (i / n) * Math.PI * 2;
-        const rx = 150, ry = 30;
-        const x = Math.cos(a) * rx;
-        const y = -160 + Math.sin(a * 1.3) * 72 + Math.sin(a) * ry;
-        const size = 2 + (i % 3);
-        ctx.fillStyle = i % 2 ? '#6FB56B' : '#4A9BD4';
-        ctx.shadowColor = ctx.fillStyle;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(x, y, size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-    }
-  }
-
-  /* ------------------------------------------------------------ 皮肤系统
-     用户可以自己换宠物形象：在 exe 同级的 skins/<名字>/ 里放 skin.json + 一张精灵图。
-     这里只负责把主进程读来的图按 mood 切帧画出来。 */
-  const skinState = { id: '__default', img: null, meta: null, ready: false };
-
-  function skinAnimFor(mood) {
-    const m = skinState.meta;
-    if (!m || !m.animations) return null;
-    return m.animations[mood] || m.animations.idle || null;
-  }
-
-  /* 返回 true 表示这一帧由皮肤画掉了；false 表示该走代码手绘 */
-  function drawSkin(ctx, t, mood) {
-    if (!skinState.ready || !skinState.img || !skinState.meta) return false;
-    const m = skinState.meta;
-    const a = skinAnimFor(mood);
-    if (!a || !m.frame) return false;
-    const fw = m.frame.w, fh = m.frame.h;
-    const count = Math.max(1, a.count || 1);
-    /* 每种状态可以有自己的帧率：待机慢一点才不烦，跳舞/欢呼才需要快 */
-    const fps = a.fps || m.fps || 10;
-    const idx = Math.floor(t * fps) % count;
-    const row = a.row || 0;
-    /* 与手绘角色对齐：底边落在原点、横向居中，整体高度约 278 个本地单位 */
-    /* 帧高映射成多少本地单位。调大 = 宠物在界面上更大。
-     之前缩小下边界的做法是让内容下移，视觉上宠物反而往下跑了；
-     正确做法是把它整体放大，下边界的占比自然就小了。 */
-    const k = 310 / fh;
-    const dw = fw * k, dh = fh * k;
-    try {
-      ctx.drawImage(skinState.img, idx * fw, row * fh, fw, fh, -dw / 2, -dh, dw, dh);
-    } catch (e) { return false; }
-    return true;
-  }
-
-  function applySkin(data) {
-    if (!data || data.builtin || data.error) {
-      skinState.id = '__default';
-      skinState.img = null;
-      skinState.meta = null;
-      skinState.ready = false;
-      if (data && data.error) setCaption('皮肤加载失败，已用回默认形象：' + data.error);
-      return;
-    }
-    const img = new Image();
-    img.onload = function () {
-      skinState.id = data.id;
-      skinState.img = img;
-      skinState.meta = data.meta;
-      skinState.ready = true;
-      setCaption('已换上新形象：<b>' + (data.name || data.id) + '</b>');
-    };
-    img.onerror = function () {
-      setCaption('皮肤图片读不出来，已用回默认形象');
-    };
-    img.src = data.sheet;
-  }
-
-  function loadSkin(id) {
-    if (!native || !native.skinLoad) return;
-    native.skinLoad(id).then(function (d) {
-      applySkin(d);
-    }).catch(function () { });
-  }
-
-  function fillSkinPicker() {
-    if (!native || !native.skinsList || !el.skinSel) return;
-    native.skinsList().then(function (list) {
-      el.skinSel.innerHTML = '';
-      (list || []).forEach(function (s) {
-        const o = document.createElement('option');
-        o.value = s.id;
-        o.textContent = s.name;                 // 只显示名字，不带作者后缀
-        el.skinSel.appendChild(o);
-      });
-      /* 存的皮肤没了就退回默认 */
-      const ids = (list || []).map(function (s) { return s.id; });
-      if (ids.indexOf(settings.skin) < 0) settings.skin = '__default';
-      el.skinSel.value = settings.skin;
-    }).catch(function () { });
-  }
-
-  /* --------------------------------------------------------------- 绘制开关 */
-  /* 宠物模式（plain）下：不画地面光圈、不画环绕粒子，角色也不加发光。
-     桌面上只要角色本体，其余全部透明。 */
-  let PLAIN = false;
-
-  /* 渐变缓存：脸和头发那几个渐变每帧重建，但坐标和颜色根本不变，
-     重建纯属浪费（每个 CanvasGradient 都要重新分配 + 上传给合成器）。
-     按 canvas 上下文分组缓存，画出来的东西一模一样。 */
-  const gradCache = new WeakMap();
-  function linGrad(ctx, x0, y0, x1, y1, stops) {
-    let m = gradCache.get(ctx);
-    if (!m) { m = new Map(); gradCache.set(ctx, m); }
-    const key = x0 + ',' + y0 + ',' + x1 + ',' + y1 + '|' + stops.map(function (s) {
-      return s[0] + ':' + s[1];
-    }).join(';');
-    let g = m.get(key);
-    if (!g) {
-      g = ctx.createLinearGradient(x0, y0, x1, y1);
-      stops.forEach(function (s) { g.addColorStop(s[0], s[1]); });
-      m.set(key, g);
-    }
-    return g;
-  }
-
-  /* 绘制角色（本地坐标：脚底为原点，向上为负 y）
-     造型照着参考图来：黄色小鸡 + 银灰中分乱发 + 半眯大眼 + 橙鸭嘴 + 红脸蛋
-     + 黑卫衣（拉链 + 浅色背带）+ 浅灰背带裤 + 黑鞋，篮球拿在画面左手边 */
-  function drawFigure(ctx, t, mood, energy) {
-    const beat = t * (2.0 + energy * 2.6);
-    const swing = Math.sin(beat);
-    const hop = Math.max(0, Math.sin(beat * 2)) * 13 * energy;
-
-    /* 挤压拉伸 + 呼吸：腾空拉长、落地压扁，静息时轻微呼吸 */
-    const stretch = 1 + Math.cos(beat * 2) * 0.055 * energy;
-    const breath = 1 + Math.sin(t * 1.7) * 0.012;
-
-    ctx.save();
-    ctx.translate(0, -hop);
-    ctx.scale(breath / stretch, breath * stretch);
-
-    /* --- 骨架定位：头大身子小，越夸张越对味 --- */
-    const hipX = Math.sin(beat) * 6 * energy;
-    const hipY = -46;
-    const lean = Math.sin(beat * 0.5) * 0.15 * energy;
-    const torsoLen = 32;
-    const shX = hipX + Math.sin(lean) * torsoLen;
-    const shY = hipY - Math.cos(lean) * torsoLen;
-
-    const px = Math.cos(lean), py = Math.sin(lean);   // 躯干右方向单位向量
-    const bShX = shX - px * 24, bShY = shY - py * 24; // 持球手（画面左）
-    const fShX = shX + px * 24, fShY = shY + py * 24; // 另一只手（画面右）
-
-    /* 头发比身体晚半拍，做出跟随甩动 */
-    const lag = Math.sin(beat - 0.5) * 0.09 * energy;
-    const lag2 = Math.sin(beat - 0.95) * 0.14 * energy;
-
-    const headX = shX + Math.sin(lean) * 72;
-    const headY = shY - Math.cos(lean) * 72 + Math.sin(beat * 2) * 2.6 * energy;
-
-    /* --- 篮球位置（画面左手边） --- */
-    let ballX, ballY, handY;
-    const cheer = (mood === 'cheer');
-    if (mood === 'dance') {
-      const ph = (Math.sin(beat * 1.5) + 1) / 2;      // 0..1 运球节拍
-      handY = -68 - ph * 26;                         // 手随节拍上下推球
-      ballX = bShX - 38;
-      ballY = handY + 24 + (1 - ph) * (1 - ph) * 46; // 球落到地面再弹回手里
-    } else if (cheer) {
-      ballX = bShX - 46;                             // 欢呼时球在身边弹跳，双手举起
-      ballY = -22 - Math.abs(Math.sin(beat * 2)) * 36;
-      handY = ballY - 22;
-    } else {
-      ballX = bShX - 36; ballY = hipY - 8 + Math.sin(beat) * 2;
-      handY = ballY - 22;
-    }
-    ballX = clamp(ballX, -190, 190);
-
-    /* --- 画面右侧的手臂（后层） --- */
-    ctx.save();
-    ctx.globalAlpha = 0.96;
-    if (cheer) {
-      wingArm(ctx, fShX, fShY, Math.PI / 2 - 0.42 - 2.05, Math.PI / 2 - 0.42 - 2.4);
-    } else {
-      const wave = (0.5 + 0.5 * swing);
-      const a1 = Math.PI / 2 - 0.22 - wave * (mood === 'idle' ? 0.08 : 1.18);
-      wingArm(ctx, fShX, fShY, a1, a1 - 0.16 - wave * 0.3);
-    }
-    ctx.restore();
-
-    /* --- 腿 --- */
-    const liftL = Math.max(0, swing) * energy;
-    const liftR = Math.max(0, -swing) * energy;
-    drawLeg(ctx, hipX - 12, hipY, liftL);
-    drawLeg(ctx, hipX + 12, hipY, liftR);
-
-    /* --- 躯干：小小的黑卫衣（拉链 + 浅色背带） --- */
-    ctx.save();
-    ctx.translate(hipX, hipY);
-    ctx.rotate(lean);
-    ctx.shadowColor = 'rgba(62,154,168,.5)';
-    ctx.shadowBlur = PLAIN ? 0 : (mood === 'idle' ? 8 : 16);
-    ctx.fillStyle = C.hoodie;
-    roundRect(ctx, -27, -38, 54, 42, 16);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    // 兜帽领口
-    ctx.fillStyle = C.hoodieD;
-    roundRect(ctx, -17, -40, 34, 12, 6);
-    ctx.fill();
-    // 拉链
-    ctx.strokeStyle = 'rgba(198,204,214,.55)';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 0); ctx.stroke();
-    ctx.fillStyle = '#cdd3da';
-    roundRect(ctx, -2.8, -21, 5.6, 10, 3);
-    ctx.fill();
-    // 背带 V 字
-    ctx.strokeStyle = C.strap;
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-19, -31); ctx.lineTo(-6, -4);
-    ctx.moveTo(19, -31); ctx.lineTo(6, -4);
-    ctx.stroke();
-    ctx.restore();
-
-    /* --- 持球手（画面左侧，前层） --- */
-    if (cheer) {
-      wingArm(ctx, bShX, bShY, Math.PI / 2 + 0.42 + 2.05, Math.PI / 2 + 0.42 + 2.4);
-    } else {
-      ikArm(ctx, bShX, bShY, ballX, handY, 24, 22, 17, C.hoodie, C.chick);
-    }
-
-    /* --- 头 --- */
-    ctx.save();
-    ctx.translate(headX, headY);
-    ctx.rotate(lean * 1.4 + Math.sin(beat) * 0.05 * energy + lag);
-    drawChickHead(ctx, t, mood, swing, energy, lag2);
-    ctx.restore();
-
-    /* --- 篮球 --- */
-    ctx.save();
-    ctx.translate(ballX, ballY);
-    ctx.rotate(t * 2.2 * (0.4 + energy));
-    ctx.shadowColor = 'rgba(255,139,31,.85)';
-    ctx.shadowBlur = 14;
-    ctx.fillStyle = C.ball;
-    ctx.beginPath(); ctx.arc(0, 0, 21, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = C.ballD;
-    ctx.lineWidth = 2.2;
-    ctx.beginPath(); ctx.arc(0, 0, 21, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-21, 0); ctx.lineTo(21, 0); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, -21); ctx.lineTo(0, 21); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(0, 0, 9.5, 21, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.restore();
-
-    ctx.restore();   // 收掉最外层的挤压拉伸变换
-
-    return { headX, headY, hipX, hipY };
-  }
-
-  /* 手臂：上臂黑卫衣袖，手是小鸡黄 */
-  function wingArm(ctx, sx, sy, a1, a2) {
-    const ex = sx + Math.cos(a1) * 24, ey = sy + Math.sin(a1) * 24;
-    segment(ctx, sx, sy, ex, ey, 17, C.hoodie);
-    segment(ctx, ex, ey, ex + Math.cos(a2) * 22, ey + Math.sin(a2) * 22, 15, C.hoodie);
-    ctx.fillStyle = C.chick;
-    ctx.beginPath();
-    ctx.arc(ex + Math.cos(a2) * 22, ey + Math.sin(a2) * 22, 10, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  /* 鸡头：故意画得歪一点、糊涂一点 —— 头是歪的，眼睛一大一小，眼珠各看各的 */
-  function drawChickHead(ctx, t, mood, swing, energy, lag2) {
-    const TILT = -0.06;                                // 脑袋天生歪一点
-
-    // ---- 脸：不对称的歪蛋 ----
-    const g = linGrad(ctx, 0, -70, 0, 66, [[0, C.chickL], [0.5, C.chick], [1, C.chickD]]);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(-70, -8);
-    ctx.bezierCurveTo(-78, -58, -28, -72, 10, -67);
-    ctx.bezierCurveTo(54, -62, 84, -36, 77, 6);
-    ctx.bezierCurveTo(70, 48, 30, 70, -12, 63);
-    ctx.bezierCurveTo(-54, 56, -64, 32, -70, -8);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(170,115,0,.28)';
-    ctx.lineWidth = 2.4;
-    ctx.stroke();
-
-    // ---- 银灰中分乱发：又大又乱，一撮一撮 ----
-    ctx.save();
-    ctx.rotate(lag2);
-    const hg = linGrad(ctx, 0, -96, 0, 24, [[0, C.hairL], [0.55, C.hair], [1, C.hairD]]);
-    ctx.fillStyle = hg;
-    ctx.beginPath();
-    ctx.moveTo(-92, 18);
-    ctx.quadraticCurveTo(-112, -30, -84, -56);
-    ctx.quadraticCurveTo(-80, -78, -58, -66);
-    ctx.quadraticCurveTo(-50, -94, -26, -76);
-    ctx.quadraticCurveTo(-12, -100, 12, -78);
-    ctx.quadraticCurveTo(30, -96, 48, -72);
-    ctx.quadraticCurveTo(70, -84, 76, -58);
-    ctx.quadraticCurveTo(104, -34, 90, 18);
-    // 刘海内缘：两侧压到脸颊，中间劈出中分
-    ctx.bezierCurveTo(84, 34, 66, 16, 48, -2);
-    ctx.bezierCurveTo(32, -18, 16, -30, 5, -37);
-    ctx.quadraticCurveTo(0, -40, -5, -37);
-    ctx.bezierCurveTo(-20, -28, -34, -18, -48, -2);
-    ctx.bezierCurveTo(-66, 16, -86, 34, -92, 18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(88,94,108,.45)';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
-    // 中分缝
-    ctx.strokeStyle = 'rgba(110,116,130,.8)';
-    ctx.lineWidth = 2.6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, -40);
-    ctx.quadraticCurveTo(4, -60, 6, -80);
-    ctx.stroke();
-    // 发丝纹路
-    ctx.strokeStyle = 'rgba(146,152,166,.45)';
-    ctx.lineWidth = 2;
-    const strands = [
-      [-70, -50, -80, -22], [-48, -58, -56, -28], [-22, -66, -28, -40],
-      [10, -70, 14, -44], [36, -60, 44, -32], [64, -50, 74, -22]
-    ];
-    for (let i = 0; i < strands.length; i++) {
-      const s = strands[i];
-      ctx.beginPath();
-      ctx.moveTo(s[0], s[1]);
-      ctx.quadraticCurveTo((s[0] + s[2]) / 2 + 5, (s[1] + s[3]) / 2, s[2], s[3]);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // ---- 一大一小、各看各的近视眼 ----
-    ctx.save();
-    ctx.rotate(TILT);
-    const cycle = t % 4.6;
-    const blink = cycle > 4.32 && cycle < 4.46;
-    const happy = (mood === 'cheer');
-    // [中心x, 中心y, 半径, 眼珠偏移x, 眼珠偏移y, 眼皮厚薄]
-    const eyes = [
-      [-26, 2, 25, 5, 7, 0.95],
-      [25, 6, 19, -4, -5, 0.55]
-    ];
-    for (let i = 0; i < eyes.length; i++) {
-      const e = eyes[i];
-      const ex = e[0], ey = e[1], ER = e[2];
-      if (blink || happy) {
-        ctx.strokeStyle = C.ink;
-        ctx.lineWidth = 5;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.arc(ex, ey + 6, ER * 0.7, Math.PI * 1.08, Math.PI * 1.92);
-        ctx.stroke();
-        continue;
-      }
-      // 眼白
-      ctx.fillStyle = '#fffdf3';
-      ctx.beginPath(); ctx.arc(ex, ey, ER, 0, Math.PI * 2); ctx.fill();
-      ctx.save();
-      ctx.beginPath(); ctx.arc(ex, ey, ER, 0, Math.PI * 2); ctx.clip();
-      // 眼珠：小、乱瞟
-      ctx.fillStyle = '#2b2620';
-      ctx.beginPath(); ctx.arc(ex + e[3], ey + e[4], ER * 0.30, 0, Math.PI * 2); ctx.fill();
-      // 很厚的上眼皮，压出那股没睡醒的拽劲
-      ctx.fillStyle = '#3a3a44';
-      ctx.beginPath();
-      ctx.ellipse(ex, ey - ER * (1 + e[5] * 0.35), ER * 1.25, ER * (0.6 + e[5] * 0.4), 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      // 描边
-      ctx.strokeStyle = C.ink;
-      ctx.lineWidth = 3.4;
-      ctx.beginPath(); ctx.arc(ex, ey, ER, 0, Math.PI * 2); ctx.stroke();
-    }
-    ctx.restore();
-
-    // ---- 大小不一的红脸蛋 ----
-    ctx.fillStyle = 'rgba(239,69,48,.88)';
-    ctx.beginPath(); ctx.ellipse(-52, 30, 15, 12, -0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(48, 34, 12, 10, 0.2, 0, Math.PI * 2); ctx.fill();
-
-    // ---- 歪嘴鸭嘴 ----
-    const open = mood !== 'idle';
-    ctx.save();
-    ctx.translate(4, 46);
-    ctx.rotate(TILT + 0.05);
-    ctx.fillStyle = C.bill;
-    ctx.beginPath(); ctx.ellipse(0, 0, 30, 17 + (open ? 3 : 0), 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = C.billD;
-    ctx.lineWidth = 3.2;
-    ctx.stroke();
-    if (open) {
-      ctx.fillStyle = '#8d3a0d';
-      ctx.beginPath();
-      ctx.ellipse(0, 3, 17, 10 + Math.abs(swing) * 4 + energy * 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.strokeStyle = C.billD;
-    ctx.lineWidth = 3.2;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-20, -5);
-    ctx.quadraticCurveTo(0, open ? 16 : 11, 20, -4);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawLeg(ctx, hx, hy, lift) {
-    const thighA = Math.PI / 2 - lift * 0.6;
-    const shinA = Math.PI / 2 + lift * 1.0;
-    const kx = hx + Math.cos(thighA) * 24;
-    const ky = hy + Math.sin(thighA) * 24;
-    const fx = kx + Math.cos(shinA) * 22;
-    const fy = ky + Math.sin(shinA) * 22;
-    segment(ctx, hx, hy, kx, ky, 24, C.pants);      // 浅灰背带裤
-    segment(ctx, kx, ky, fx, fy, 21, C.pantsD);
-    // 黑鞋（憨一点）
-    ctx.save();
-    ctx.translate(fx, fy);
-    ctx.fillStyle = C.shoe;
-    ctx.shadowColor = 'rgba(62,154,168,.4)';
-    ctx.shadowBlur = PLAIN ? 0 : 8;
-    roundRect(ctx, -16, -9, 32, 14, 7);
-    ctx.fill();
-    ctx.restore();
-  }
-
   /* =========================================================================
      DOM & 交互
      ========================================================================= */
@@ -882,7 +252,7 @@
   const alertStage = new Kunkun($('#alertStage'), { fit: 300 });
 
   const el = {
-    clock: $('#digitalClock'),
+    clock: $('#tbClock'),        // 顶栏时间（HH:MM:SS）
     date: $('#dateLine'),
     caption: $('#stageCaption'),
     overlay: $('#overlay'),
@@ -894,7 +264,6 @@
     floatWords: $('#floatWords'),
     btnToggle: $('#btnToggle'),
     btnResetAll: $('#btnResetAll'),
-    btnPet: $('#btnPet'),
     btnTray: $('#btnTray'),
     btnAddItem: $('#btnAddItem'),
     panelList: $('#panelList'),
@@ -924,10 +293,48 @@
     itMinutes: $('#itMinutes'),
     itSave: $('#itSave'),
     itCancel: $('#itCancel'),
-    itClose: $('#itClose')
+    itClose: $('#itClose'),
+    /* 标签页 */
+    tabbar: $('#tabbar'),
+    tabHome: $('#tabHome'),
+    tabTodo: $('#tabTodo'),
+    tabSettings: $('#tabSettings'),
+    todoBadge: $('#todoBadge'),
+    /* 备忘 / 待办 */
+    memoList: $('#memoList'),
+    todoList: $('#todoList'),
+    btnAddMemo: $('#btnAddMemo'),
+    btnAddTodo: $('#btnAddTodo'),
+    memoOverlay: $('#memoOverlay'),
+    memoTitle: $('#memoTitle'),
+    memoText: $('#memoText'),
+    memoSave: $('#memoSave'),
+    memoCancel: $('#memoCancel'),
+    memoClose: $('#memoClose'),
+    todoOverlay: $('#todoOverlay'),
+    tdTitle: $('#tdTitle'),
+    tdText: $('#tdText'),
+    tdDate: $('#tdDate'),
+    tdTime: $('#tdTime'),
+    tdQuick: $('#tdQuick'),
+    tdSave: $('#tdSave'),
+    tdCancel: $('#tdCancel'),
+    tdClose: $('#tdClose'),
+    /* 设置 */
+    chkDesktopPet: $('#chkDesktopPet'),
+    desktopPetRow: $('#desktopPetRow'),
+    pageTodo: $('#pageTodo'),
+    chkAutoLaunch: $('#chkAutoLaunch'),
+    chkAutoLaunchTodo: $('#chkAutoLaunchTodo'),
+    chkTodoCatchUp: $('#chkTodoCatchUp'),
+    btnOpenDataDir: $('#btnOpenDataDir'),
+    setAbout: $('#setAbout')
   };
 
   /* 桌面版（Electron）才有：抢前台 / 托盘 / 宠物模式 / 电源事件 */
+
+  /* 桌面版（Electron）才有：抢前台 / 托盘 / 宠物模式 / 电源事件。
+     放在最前面声明：下面的皮肤初始化、屏幕缩放适配都要用它。 */
   const native = window.kunkunNative || null;
   if (native) document.body.classList.add('desktop');
 
@@ -980,11 +387,18 @@
     if (!native || !native.syncState) return;
     native.syncState({
       running: rt.running,
-      petMode: document.body.classList.contains('pet'),
+      petOn: !!settings.petOn,
+      petSound: settings.sound,
+      skin: settings.skin,
       items: settings.items.map(function (it) {
         return { id: it.id, name: it.name, emoji: it.emoji, minutes: it.minutes };
       })
     });
+  }
+
+  /* 主进程让「主界面出来」时用（托盘菜单点「待办 / 设置」） */
+  function showWindowSelf() {
+    if (native && native.showWindow) native.showWindow();
   }
 
   /* ---------------------------------------------------------- 宠物模式 */
@@ -1002,37 +416,33 @@
     saveSettings();
     updatePetSizeUI();
     Sound.click();
-    if (native && native.setPetSize) native.setPetSize(name);
-    /* 主进程那边改完窗口尺寸之后，重新量一次宠物本体大小 */
-    setTimeout(syncPetBox, 260);
+    if (native && native.setPetSize) native.setPetSize(name);   // 主进程负责改宠物窗尺寸
     const txt = { max: '迷你 150×170', mid: '小小 118×134', min: '超小 92×104' }[name];
-    setCaption('宠物默认大小已设为 <b>' + txt + '</b>');
+    setCaption('宠物大小已设为 <b>' + txt + '</b>');
   }
 
-  function setPetMode(on, fromMain) {
-    if (!on) endTalk();                    // 退出宠物模式时把气泡收掉
-    document.body.classList.toggle('pet', on);
-    el.btnPet.textContent = on ? '🐣 退出宠物模式' : '🐣 宠物模式';
-    el.btnPet.classList.toggle('primary', on);
-    stage.fit = on ? 268 : 330;
-    stage.plain = on;                      // 宠物模式：去掉地面光圈、环绕粒子、角色发光
-    if (on) setCaption('宠物模式 · 点我一下，我告诉你现在是什么时辰');
-    else setCaption('待机中 · 到点会提醒你');
-    pushState();
+  /* 桌面宠物已经拆成独立窗口（pet.html + pet.js），主界面不再变形。
+     这里只保留「切换宠物大小 / 形象」这些与主界面控件有关的事。 */
 
-    const settle = function () {
-      if (!fromMain && native && native.setPetMode) native.setPetMode(on);
-      fitApp();
-      syncPetBox();
-      stage.resize();
-      alertStage.resize();
-    };
-
-    /* 进宠物模式：先把「只剩小鸡」这一版画出来，再让窗口缩成宠物大小。
-       反过来的话，窗口缩小那一帧会拿主界面去裁切，看起来就是主界面向
-       宠物那块矩形缩了一下、闪一下。 */
-    if (on) afterPaint(settle);
-    else setTimeout(settle, 80);
+  /* ---------------------------------------------------------- 皮肤（主界面侧）
+     绘制与皮肤状态在 pet-draw.js，取列表/载入在 skin-picker.js；
+     这里只把两边接起来，并把「皮肤提示」写到舞台下方的说明文字里。 */
+  function initSkin() {
+    PETDRAW.setCaptionHandler(function (html) { setCaption(html); });
+    PETDRAW.setSoundOn(settings.sound);
+    SKINPICK.init(native, PETDRAW, {});
+    if (!native || !native.skinsList || !el.skinRow) return;
+    el.skinRow.hidden = false;
+    SKINPICK.fillSkinPicker(el.skinSel, function (list) {
+      /* 存着的皮肤已经不存在了 → 退回默认（顺手存一下，免得每次启动都白找） */
+      var ids = (list || []).map(function (s) { return s.id; });
+      if (ids.indexOf(settings.skin) < 0) {
+        settings.skin = '__default';
+        saveSettings();
+      }
+      return settings.skin;
+    });
+    if (settings.skin && settings.skin !== '__default') SKINPICK.loadSkin(settings.skin);
   }
 
   /* ---------------------------------------------------------- 本地存储 */
@@ -1060,6 +470,7 @@
         if (typeof s.sound === 'boolean') settings.sound = s.sound;
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
+        if (typeof s.petOn === 'boolean') settings.petOn = s.petOn;
         if (typeof s.skin === 'string' && s.skin) settings.skin = s.skin;
       }
     } catch (e) { /* 忽略损坏数据 */ }
@@ -1131,6 +542,8 @@
     const it = itemById(id);
     if (!it) return;
     rt.alertId = id;
+    alertKind = 'item';
+    alertTodoId = null;
     const info = opts || {};
     const title = info.title || it.title || ('该' + it.name + '啦！');
 
@@ -1138,6 +551,7 @@
     el.alertTitle.dataset.text = title;
     el.alertDesc.textContent = info.desc || it.desc || '';
     el.alertDone.textContent = info.done || it.done || '我完成了';
+    el.alertSnooze.textContent = '5 分钟后再说';
     el.overlay.style.setProperty('--accent', it.color || '#4A9BD4');
     el.overlay.hidden = false;
 
@@ -1155,8 +569,44 @@
     try { el.alertDone.focus(); } catch (e) { }
   }
 
+  /* 待办到点：复用同一套提醒弹层，只是内容来自待办那条 */
+  function fireTodo(todo, late) {
+    if (rt.alertId) return;
+    if (!todo) return;
+    rt.alertId = todo.id;
+    alertKind = 'todo';
+    alertTodoId = todo.id;
+    alertTodo = todo;
+
+    const title = late ? '这条待办已经过期啦' : '到点啦！';
+    el.alertTitle.textContent = title;
+    el.alertTitle.dataset.text = title;
+    el.alertDesc.textContent = todo.text + '\n提醒时间：' + fmtTodoTime(todo.dueAt);
+    el.alertDone.textContent = '完成 ✓';
+    el.alertSnooze.textContent = '10 分钟后再说';
+    el.overlay.style.setProperty('--accent', '#D9A15F');
+    el.overlay.hidden = false;
+
+    alertStage.setMood('dance');
+    alertStage.resize();
+    spawnWords();
+    stage.setMood('dance');
+    setCaption('<b>⏰ 待办到点：' + escapeHtml(todo.text) + '</b>');
+
+    Sound.alert();
+    speak(late ? '有一条待办已经过期了' : '待办时间到了');
+    notify(title, todo.text);
+    flashTitle(true);
+    /* 用户可以在设置里关掉「抢前台」 —— 关掉就只弹窗 + 系统通知，不打断工作 */
+    if (native && ui.todoGrabFront) native.alert(todo.id);
+    try { el.alertDone.focus(); } catch (e) { }
+  }
+
   function closeAlert() {
     rt.alertId = null;
+    alertKind = 'item';
+    alertTodoId = null;
+    alertTodo = null;
     el.overlay.hidden = true;
     el.floatWords.innerHTML = '';
     flashTitle(false);
@@ -1167,6 +617,20 @@
   function completeAlert() {
     const id = rt.alertId;
     if (!id) return;
+    /* 待办：勾掉完成，不动「每日次数」统计（那是喝水/休息的目标计数） */
+    if (alertKind === 'todo') {
+      const td = todoById(id);
+      if (td) {
+        td.done = true;
+        td.doneAt = Date.now();
+        td.remindAt = 0;
+        saveTodoStore();
+        renderTodos();
+      }
+      Sound.confirm();
+      closeAlert();
+      return;
+    }
     if (stats.date !== todayKey()) stats = { date: todayKey(), counts: {} };
     stats.counts[id] = (stats.counts[id] || 0) + 1;
     saveStats();
@@ -1179,6 +643,18 @@
   function snoozeAlert() {
     const id = rt.alertId;
     if (!id) return;
+    /* 待办：把下次提醒时间往后推 10 分钟 */
+    if (alertKind === 'todo') {
+      const td = todoById(id);
+      if (td) {
+        td.remindAt = Date.now() + 10 * 60 * 1000;
+        saveTodoStore();
+        renderTodos();
+        setCaption('待办 <b>' + escapeHtml(td.text) + '</b> 已延后 10 分钟');
+      }
+      closeAlert();
+      return;
+    }
     const t = rt.timers[id] || { total: SNOOZE_SEC };
     rt.timers[id] = { remaining: SNOOZE_SEC, total: Math.max(t.total, SNOOZE_SEC) };
     const it = itemById(id);
@@ -1269,40 +745,137 @@
     }
   }
 
+  /* ---------------------------------------------------------- 屏幕缩放适配
+     ui-scale.js 给出纯函数，主进程给出「当前屏缩放 / 基准屏缩放」。
+     页面只负责把内容乘上这个系数 —— 窗口逻辑尺寸由主进程改，两边各管一半，
+     不会互相打架（页面改窗口会导致抖动，主进程改内容会跨进程来回）。
+     浏览器模式下没有主进程，回落到 devicePixelRatio（基准 1），也能自适应。 */
+  const UI_SCALE = window.kunkunUiScale || null;
+  const uiScale = (function () {
+    let cur = 1;          // 当前界面的缩放系数 k（主进程权威值）
+    let real = 1;         // 同 k，但用「真实」显示器缩放算：宠物窗/气泡窗按它定尺寸
+    let dpr = 1;          // 当前屏的缩放比例
+    let baseDpr = 1;
+    let authoritative = false;   // 是否已经拿到主进程给的权威值
+    let lastSig = '';
+
+    function fromInfo(info) {
+      if (!info) return cur;
+      dpr = Number(info.pixelRatio) || dpr;
+      baseDpr = Number(info.basePixelRatio) || baseDpr;
+      cur = UI_SCALE
+        ? UI_SCALE.computeUiScale(dpr, baseDpr)
+        : (Number(info.scale) > 0 ? Number(info.scale) : cur);
+      real = UI_SCALE
+        ? UI_SCALE.computeUiScale(info.realPixelRatio || dpr, baseDpr)
+        : cur;
+      authoritative = true;      // 之后本地推算不再覆盖它
+      return cur;
+    }
+    /* 兜底：拿不到主进程信息时（浏览器模式/首帧），用本页 devicePixelRatio 推算。
+       一旦拿到权威值就只做「是否真的变了」的判断，不再改写 k ——
+       否则每次窗口 resize 都会用本地像素比把主进程的结论覆盖掉，
+       而跨屏时窗口尺寸先变、devicePixelRatio 后变，这一瞬间覆盖就会算出错的缩放。 */
+    function localFallback() {
+      if (!UI_SCALE) return cur;
+      const p = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+      dpr = p;
+      if (authoritative) return cur;
+      const n = UI_SCALE.computeUiScale(p, 1);
+      if (Math.abs(n - cur) > 0.001) { cur = n; real = n; }
+      return cur;
+    }
+    return {
+      get: function () { return cur; },
+      /* 宠物窗/气泡窗是「按物理尺寸摆放的独立窗口」，它们的尺寸只能由真实像素比决定 */
+      real: function () { return real; },
+      dpr: function () { return dpr; },
+      set: fromInfo,
+      sync: localFallback,
+      attach: function (onChange) {
+        if (!native || !native.onDisplayInfo) return;
+        native.onDisplayInfo(function (info) {
+          const before = cur;
+          fromInfo(info);
+          /* 只在真的变了的时候重排，避免每次跨屏移动都白跑一次布局 */
+          const sig = cur.toFixed(4) + '|' + (window.innerWidth || 0) + 'x' + (window.innerHeight || 0);
+          if (sig === lastSig && Math.abs(before - cur) < 0.001) return;
+          lastSig = sig;
+          onChange();
+        });
+      }
+    };
+  })();
+
   /* ---------------------------------------------------------- 等比缩放 */
-  const DESIGN_W = 1180, DESIGN_H = 842;
+  const DESIGN_W = 1180, DESIGN_H = 801;   // 内容设计高（主界面实测，删掉顶部品牌区后的布局高）
+  const TITLEBAR_H = 46;                   // 顶部一条（标题栏+标签栏合并）的布局高（见 style.css）
+  const MAX_SCALE = 4;
+
+  /* 内容设计高：老版写死 842，实测布局高 862（多出的 20px 是老版就在的余量，
+     基准屏上 scale 正好 1.0）。所以这里只做「下限保护」：量出来的比 842 还大就抬高，
+     保证以后往界面里加东西不会被裁掉；不然仍旧用 842 ——
+     这样基准屏上的观感与老版【完全一致】，跨屏也精确恒定。 */
+  let layoutH = DESIGN_H;
+  let measured = false;
+  function measureLayout() {
+    const app = $('#app');
+    if (!app) return;
+    const saved = app.style.transform;
+    app.style.transform = 'none';            // 量的是布局尺寸，必须先把缩放摘掉
+    const natural = app.scrollHeight || app.offsetHeight || 0;
+    app.style.transform = saved;
+    if (natural > DESIGN_H + 24) layoutH = natural;   // 只是变高才采用（含 24px 容差）
+  }
 
   /* 宠物本体那一块的尺寸：只在「进入宠物模式」和「改宠物大小」时量一次。
      不在 resize 里量 —— 说话窗口缩放会让 Windows 把尺寸取整成 1px 的偏差，
      重量一次小鸡就会跟着动一下，看着就是闪。 */
-  function syncPetBox() {
-    if (!document.body.classList.contains('pet')) return;
-    const w = Math.max(40, Math.round(window.innerWidth));
-    const h = Math.max(40, Math.round(window.innerHeight));
-    document.documentElement.style.setProperty('--pet-w', w + 'px');
-    document.documentElement.style.setProperty('--pet-h', h + 'px');
-  }
+  /* 宠物本体那一块的尺寸变量（--pet-w/--pet-h）以前给「主窗口变形」用，
+     现在宠物是独立窗口（pet.js 自己按 innerWidth 算），主界面不再需要。 */
 
   function fitApp() {
-    const app = $('#app');
-    if (!app) return;
-    if (document.body.classList.contains('pet')) {
-      app.style.transform = '';
-      app.style.left = '0px';
-      app.style.top = '0px';
-      syncPetBox();          // 宠物窗尺寸一变就重新量（说话不再改窗口，所以这里很安全）
-      stage.resize();
-      return;
-    }
+    const view = $('#view');
+    if (!view) return;
+    const k = uiScale.get();
+    if (!measured) { measured = true; measureLayout(); }
+    /* 设计尺寸是「物理像素」，按 k 换算到本屏的逻辑尺寸后，内容才会在
+       不同分辨率/缩放的屏幕上保持一样的物理大小。 */
+    const designW = DESIGN_W * k;
+    document.documentElement.style.setProperty('--ui-scale', String(k));
+
     const tb = $('#titlebar');
-    const tbH = (tb && getComputedStyle(tb).display !== 'none') ? tb.offsetHeight : 0;
+    /* 顶栏布局高按 1/k 缩，但留 24 DIP 的地板（里面的字和按钮不能无限小）。 */
+    const tbH = Math.max(24, Math.round(TITLEBAR_H / k));
+    document.documentElement.style.setProperty('--tb-h', tbH + 'px');
+    const tbShown = !!(tb && getComputedStyle(tb).display !== 'none');
+    if (tb) tb.style.transform = tbShown ? 'scale(' + (1 / k).toFixed(4) + ')' : '';
+
+    /* 顶部只有一条顶栏（标签页并入标题栏了），内容可用高度 = 窗口高 − 顶栏 */
+    const topChrome = tbShown ? tbH : 0;
     const availW = Math.max(1, window.innerWidth);
-    const availH = Math.max(1, window.innerHeight - tbH);
-    const designH = Math.max(DESIGN_H, app.offsetHeight || 0);
-    const s = Math.min(availW / DESIGN_W, availH / designH);
-    app.style.top = tbH + 'px';
-    app.style.left = Math.max(0, (availW - DESIGN_W * s) / 2) + 'px';
-    app.style.transform = 'scale(' + s + ')';
+    const availH = Math.max(1, window.innerHeight - topChrome);
+    /* 待办页要「填满窗口剩余高度」：它比主界面高，用 JS 把可用高度写进 CSS 变量，
+       比在 CSS 里拿 vh ÷ ui-scale 可靠（缩放容器里的 vh 语义容易算歪）。 */
+    document.documentElement.style.setProperty('--page-min-h', Math.round(availH) + 'px');
+
+    /* 内容高：主界面用实测的设计高；待办/设置页更高，就按当前实际布局高来算，
+       这样切到长列表页面也不会被压扁。 */
+    const natural = Math.max(1, view.scrollHeight || view.offsetHeight || 0);
+    const designContentH = Math.max(layoutH, natural) * k;
+
+    let s;
+    if (UI_SCALE && UI_SCALE.computeContentScale) {
+      s = UI_SCALE.computeContentScale(availW, availH, k, designW, designContentH);
+    } else {
+      s = Math.min(availW / designW, availH / designContentH, 1) * k;
+    }
+    if (!isFinite(s) || s <= 0) s = 1;
+    s = Math.max(0.35, Math.min(MAX_SCALE, s));
+
+    view.style.top = topChrome + 'px';
+    view.style.left = Math.max(0, (availW - designW * s) / 2) + 'px';
+    view.style.transform = 'scale(' + s + ')';
     stage.resize();
     alertStage.resize();
   }
@@ -1313,9 +886,571 @@
     fitPending = true;
     requestAnimationFrame(function () { fitPending = false; fitApp(); });
   }
-  window.addEventListener('resize', requestFit);
 
-  /* ============================================================ 十二时辰 */
+  /* 换屏 / 改系统缩放：先在本地核对一次 devicePixelRatio（主进程的通知可能还没到），
+     再重排。跨屏拖动时 Windows 会先送来 resize，所以这里同时兜住「没收到 IPC」的情况。 */
+  let dpiCheckTimer = null;
+  function onViewportChanged() {
+    uiScale.sync();                 // 只在 devicePixelRatio 真的变了时才改 k
+    requestFit();
+    /* 有些切屏场景下 resize 送得早、devicePixelRatio 更新得晚，补一次核对 */
+    if (dpiCheckTimer) clearTimeout(dpiCheckTimer);
+    dpiCheckTimer = setTimeout(function () {
+      dpiCheckTimer = null;
+      const before = uiScale.get();
+      uiScale.sync();
+      if (Math.abs(uiScale.get() - before) > 0.001) requestFit();
+    }, 150);
+  }
+
+  window.addEventListener('resize', onViewportChanged);
+
+  /* ==========================================================================
+     备忘 / 待办 / 标签页 / 设置
+     --------------------------------------------------------------------------
+     · memos：随手记，可勾完成，随时改
+     · todos：带「提醒日期 + 时间」，到点弹提醒（复用上面那套提醒弹层）；
+       程序没开时错过的，下次打开补提醒一次（可在设置里关掉）
+     · 两者都存在 localStorage 的 STORE_KEY.todos 里，一次读写
+     ========================================================================== */
+
+  /* ---------------------------------------------------------------- 小工具 */
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function newLocalId(prefix) {
+    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  /* 时间戳 → “8月17日 15:30” / 跨年时带上年份 */
+  function fmtTodoTime(ms) {
+    if (!ms) return '未设置';
+    const d = new Date(ms);
+    const now = new Date();
+    const p = n => String(n).padStart(2, '0');
+    const ymd = (d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '年') +
+      (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return ymd + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /* 距现在多久：用于待办列表里的「还有 2 小时」/「已过期 3 小时」 */
+  function fmtFromNow(ms) {
+    const diff = ms - Date.now();
+    const abs = Math.abs(diff);
+    const mins = Math.round(abs / 60000);
+    let txt;
+    if (mins < 60) txt = mins + ' 分钟';
+    else if (mins < 60 * 24) txt = Math.round(mins / 60) + ' 小时';
+    else txt = Math.round(mins / 1440) + ' 天';
+    return diff >= 0 ? '还有 ' + txt : '已过期 ' + txt;
+  }
+
+  const pad2 = n => String(n).padStart(2, '0');
+  function localDateValue(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+  function localTimeValue(d) {
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  /* ------------------------------------------------------------ 数据读写 */
+  function loadTodoStore() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY.todos) || '{}');
+      if (Array.isArray(raw.memos)) {
+        memos = raw.memos.filter(m => m && m.text).map(function (m) {
+          return {
+            id: String(m.id || newLocalId('m')),
+            text: String(m.text).slice(0, 500),
+            done: !!m.done,
+            at: +m.at || Date.now()
+          };
+        });
+      }
+      if (Array.isArray(raw.todos)) {
+        todos = raw.todos.filter(t => t && t.text).map(function (t) {
+          return {
+            id: String(t.id || newLocalId('t')),
+            text: String(t.text).slice(0, 60),
+            done: !!t.done,
+            at: +t.at || Date.now(),
+            dueAt: +t.dueAt || 0,
+            remindAt: +t.remindAt || 0,
+            notify: t.notify !== false
+          };
+        });
+      }
+    } catch (e) { /* 坏数据就当没有 */ }
+  }
+
+  function saveTodoStore() {
+    try {
+      localStorage.setItem(STORE_KEY.todos, JSON.stringify({ memos: memos, todos: todos }));
+    } catch (e) { }
+  }
+
+  function loadUiPrefs() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY.ui) || '{}');
+      if (typeof raw.todoGrabFront === 'boolean') ui.todoGrabFront = raw.todoGrabFront;
+      if (typeof raw.todoCatchUp === 'boolean') ui.todoCatchUp = raw.todoCatchUp;
+      if (raw.tab === 'home' || raw.tab === 'todo' || raw.tab === 'settings') ui.tab = raw.tab;
+    } catch (e) { }
+  }
+
+  function saveUiPrefs() {
+    try { localStorage.setItem(STORE_KEY.ui, JSON.stringify(ui)); } catch (e) { }
+  }
+
+  function memoById(id) { return memos.filter(m => m.id === id)[0] || null; }
+  function todoById(id) { return todos.filter(t => t.id === id)[0] || null; }
+
+  /* 排序：未完成在前；待办再按提醒时间升序（过期的排最前面，最扎眼） */
+  function sortedMemos() {
+    return memos.slice().sort(function (a, b) {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return b.at - a.at;
+    });
+  }
+  function sortedTodos() {
+    return todos.slice().sort(function (a, b) {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return (a.dueAt || Infinity) - (b.dueAt || Infinity);
+    });
+  }
+
+  /* -------------------------------------------------------------- 渲染 */
+  function renderMemos() {
+    if (!el.memoList) return;
+    const list = sortedMemos();
+    el.memoList.innerHTML = '';
+    if (!list.length) {
+      el.memoList.innerHTML = '<div class="empty-tip">还没有备忘。<br>点右上角「＋ 新增备忘」写第一条吧。</div>';
+      return;
+    }
+    list.forEach(function (m) {
+      const row = document.createElement('div');
+      row.className = 'memo-item' + (m.done ? ' done' : '');
+      row.dataset.id = m.id;
+      row.innerHTML =
+        '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>' +
+        '<div class="item-body">' +
+          '<div class="item-text"></div>' +
+          '<div class="item-meta"></div>' +
+        '</div>' +
+        '<div class="item-tools">' +
+          '<button data-role="edit" title="编辑">编辑</button>' +
+          '<button data-role="del" class="del" title="删除">删除</button>' +
+        '</div>';
+      row.querySelector('.item-text').textContent = m.text;
+      row.querySelector('.item-meta').textContent = '记于 ' + fmtTodoTime(m.at);
+      el.memoList.appendChild(row);
+    });
+  }
+
+  function renderTodos() {
+    if (!el.todoList) return;
+    const list = sortedTodos();
+    el.todoList.innerHTML = '';
+    const pending = list.filter(t => !t.done).length;
+    if (el.todoBadge) {
+      el.todoBadge.hidden = pending === 0;
+      el.todoBadge.textContent = String(pending);
+    }
+    if (!list.length) {
+      el.todoList.innerHTML = '<div class="empty-tip">还没有待办。<br>点右上角「＋ 新增待办」，设好日期和时间就行。</div>';
+      return;
+    }
+    list.forEach(function (t) {
+      const late = !t.done && t.dueAt && t.dueAt < Date.now();
+      const row = document.createElement('div');
+      row.className = 'todo-item' + (t.done ? ' done' : '');
+      row.dataset.id = t.id;
+      row.innerHTML =
+        '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>' +
+        '<div class="item-body">' +
+          '<div class="item-text"></div>' +
+          '<div class="item-meta"></div>' +
+        '</div>' +
+        '<div class="item-tools">' +
+          '<button data-role="edit" title="编辑">编辑</button>' +
+          '<button data-role="del" class="del" title="删除">删除</button>' +
+        '</div>';
+      row.querySelector('.item-text').textContent = t.text;
+      const meta = row.querySelector('.item-meta');
+      meta.innerHTML = '⏰ <b></b> <span class="' + (late ? 'late' : '') + '"></span>';
+      meta.querySelector('b').textContent = fmtTodoTime(t.dueAt);
+      meta.querySelector('span').textContent = t.done ? '（已完成）' : fmtFromNow(t.dueAt);
+      el.todoList.appendChild(row);
+    });
+  }
+
+  /* ------------------------------------------------------------ 备忘弹层 */
+  let editingMemoId = null;
+
+  function openMemoModal(id) {
+    editingMemoId = id || null;
+    const m = id ? memoById(id) : null;
+    el.memoTitle.textContent = m ? '修改备忘' : '新增备忘';
+    el.memoText.value = m ? m.text : '';
+    el.memoOverlay.hidden = false;
+    setTimeout(function () { try { el.memoText.focus(); } catch (e) { } }, 50);
+  }
+  function closeMemoModal() { el.memoOverlay.hidden = true; editingMemoId = null; }
+
+  function saveMemoModal() {
+    const text = el.memoText.value.trim();
+    if (!text) { try { el.memoText.focus(); } catch (e) { } return; }
+    if (editingMemoId) {
+      const m = memoById(editingMemoId);
+      if (m) m.text = text.slice(0, 500);
+    } else {
+      memos.unshift({ id: newLocalId('m'), text: text.slice(0, 500), done: false, at: Date.now() });
+    }
+    saveTodoStore();
+    renderMemos();
+    closeMemoModal();
+    Sound.click();
+    requestFit();
+  }
+
+  function deleteMemo(id) {
+    const m = memoById(id);
+    if (!m) return;
+    if (!window.confirm('删除这条备忘？\n\n' + m.text)) return;
+    memos = memos.filter(x => x.id !== id);
+    saveTodoStore();
+    renderMemos();
+    requestFit();
+  }
+
+  /* ------------------------------------------------------------ 待办弹层 */
+  let editingTodoId = null;
+
+  function openTodoModal(id) {
+    editingTodoId = id || null;
+    const t = id ? todoById(id) : null;
+    el.tdTitle.textContent = t ? '修改待办' : '新增待办';
+    el.tdText.value = t ? t.text : '';
+    const due = t && t.dueAt ? new Date(t.dueAt) : (function () {
+      const d = new Date(Date.now() + 60 * 60 * 1000);   // 默认「一小时后」
+      d.setSeconds(0, 0);
+      return d;
+    })();
+    el.tdDate.value = localDateValue(due);
+    el.tdTime.value = localTimeValue(due);
+    el.todoOverlay.hidden = false;
+    setTimeout(function () { try { el.tdText.focus(); } catch (e) { } }, 50);
+  }
+  function closeTodoModal() { el.todoOverlay.hidden = true; editingTodoId = null; }
+
+  /* 快捷档位：几分钟后 / 今天 18:00 / 明天 9:00 */
+  function applyTodoQuick(btn) {
+    const mins = btn.dataset.min;
+    const at = btn.dataset.at;
+    let d = new Date();
+    if (mins) {
+      d = new Date(Date.now() + (+mins) * 60000);
+    } else if (at === 'today-1800') {
+      d.setHours(18, 0, 0, 0);
+      if (d.getTime() < Date.now()) d.setTime(Date.now() + 60000);
+    } else if (at === 'tomorrow-0900') {
+      d.setDate(d.getDate() + 1);
+      d.setHours(9, 0, 0, 0);
+    }
+    d.setSeconds(0, 0);
+    el.tdDate.value = localDateValue(d);
+    el.tdTime.value = localTimeValue(d);
+  }
+
+  function saveTodoModal() {
+    const text = el.tdText.value.trim();
+    if (!text) { try { el.tdText.focus(); } catch (e) { } return; }
+    const dv = el.tdDate.value, tv = el.tdTime.value || '09:00';
+    const parts = dv.split('-');
+    if (parts.length !== 3) { try { el.tdDate.focus(); } catch (e) { } return; }
+    const hm = tv.split(':');
+    const due = new Date(+parts[0], +parts[1] - 1, +parts[2], +hm[0] || 0, +hm[1] || 0, 0, 0);
+    const dueAt = due.getTime();
+    if (!isFinite(dueAt)) return;
+
+    if (editingTodoId) {
+      const t = todoById(editingTodoId);
+      if (t) {
+        t.text = text.slice(0, 60);
+        t.dueAt = dueAt;
+        /* 改了时间就把「下次提醒」重置到新时间；已经完成的重新变回未完成 */
+        t.remindAt = dueAt;
+        if (t.done) { t.done = false; t.doneAt = 0; }
+      }
+    } else {
+      todos.unshift({
+        id: newLocalId('t'),
+        text: text.slice(0, 60),
+        done: false, at: Date.now(),
+        dueAt: dueAt,
+        remindAt: dueAt,          // 到点就提醒（过期的会在很短时间内被 tick 抓到）
+        notify: true
+      });
+    }
+    saveTodoStore();
+    renderTodos();
+    closeTodoModal();
+    Sound.click();
+    requestFit();
+    const late = dueAt < Date.now();
+    setCaption(late ? '待办已保存（时间已过，马上会提醒你）' : '待办已保存，到点会提醒你');
+  }
+
+  function deleteTodo(id) {
+    const t = todoById(id);
+    if (!t) return;
+    if (!window.confirm('删除这条待办？\n\n' + t.text)) return;
+    todos = todos.filter(x => x.id !== id);
+    saveTodoStore();
+    renderTodos();
+    requestFit();
+  }
+
+  function toggleTodoDone(id) {
+    const t = todoById(id);
+    if (!t) return;
+    t.done = !t.done;
+    t.doneAt = t.done ? Date.now() : 0;
+    if (t.done) t.remindAt = 0;                  // 完成了就别再提醒
+    else if (t.dueAt && t.dueAt < Date.now()) t.remindAt = Date.now() + 60000;
+    else t.remindAt = t.dueAt;
+    saveTodoStore();
+    renderTodos();
+    Sound.click();
+    if (t.done) setCaption('待办已完成：<b>' + escapeHtml(t.text) + '</b>');
+  }
+
+  /* -------------------------------------------------------- 待办到点调度 */
+  /* 每轮 tick 调一次：到点的弹提醒；程序重开时错过的补一次。
+     过期很久的不再打扰（超过 12 小时只标记为过期，不弹），避免半夜开机炸一屏。 */
+  const TODO_LATE_GRACE = 12 * 60 * 60 * 1000;
+
+  function checkTodoDue() {
+    if (rt.alertId) return;                      // 已有提醒在进行
+    const now = Date.now();
+    const due = sortedTodos().filter(function (t) {
+      return !t.done && t.remindAt && t.remindAt <= now;
+    });
+    if (!due.length) return;
+    const t = due[0];
+    const late = !!(t.dueAt && t.dueAt < now - 60000);
+    /* 补提醒：只要还没超过宽限期就弹；超了就把提醒位清掉，只在列表里标过期 */
+    if (late && (now - t.dueAt) > TODO_LATE_GRACE) {
+      t.remindAt = 0;
+      saveTodoStore();
+      renderTodos();
+      return;
+    }
+    fireTodo(t, late);
+  }
+
+  /* 启动时补提醒：程序没开的时候错过的那些（用户可在设置里关掉） */
+  function catchUpTodos() {
+    if (!ui.todoCatchUp) return;
+    const now = Date.now();
+    let changed = false;
+    todos.forEach(function (t) {
+      if (t.done || !t.dueAt) return;
+      if (t.dueAt > now) return;                 // 还没到点
+      if (!t.remindAt) t.remindAt = t.dueAt;     // 上次因为超期被清掉了，这里恢复一次
+      if ((now - t.dueAt) <= TODO_LATE_GRACE) t.remindAt = Math.min(t.remindAt || t.dueAt, now);
+      changed = true;
+    });
+    if (changed) { saveTodoStore(); setTimeout(checkTodoDue, 1200); }
+  }
+
+  /* ------------------------------------------------------------ 标签页 */
+  const TAB_PAGES = { home: '#app', todo: '#pageTodo', settings: '#pageSettings' };
+
+  function openTab(name) {
+    if (!TAB_PAGES[name]) name = 'home';
+    ui.tab = name;
+    Object.keys(TAB_PAGES).forEach(function (key) {
+      const node = $(TAB_PAGES[key]);
+      if (node) node.hidden = (key !== name);
+    });
+    ['home', 'todo', 'settings'].forEach(function (key) {
+      const btn = document.getElementById('tab' + key.charAt(0).toUpperCase() + key.slice(1));
+      if (btn) btn.classList.toggle('on', key === name);
+    });
+    if (name !== 'home') { renderMemos(); renderTodos(); }
+    saveUiPrefs();
+    /* 切页后内容高度变了（待办页更高），重新按当前页排版 */
+    requestAnimationFrame(function () { fitApp(); });
+  }
+
+  /* ------------------------------------------------------------ 设置项 */
+  function bindSettings() {
+    if (el.chkAutoLaunch) {
+      /* 初始值以主进程为准（注册表才是真源，localStorage 只当缓存） */
+      if (native && native.getAutoLaunch) {
+        native.getAutoLaunch().then(function (on) {
+          el.chkAutoLaunch.checked = !!on;
+        }).catch(function () { });
+      }
+      el.chkAutoLaunch.addEventListener('change', function (e) {
+        const want = e.target.checked;
+        if (!native || !native.setAutoLaunch) { e.target.checked = false; return; }
+        native.setAutoLaunch(want).then(function (real) {
+          /* 以主进程实际写入的结果为准回填，避免「显示勾上了其实没写进去」 */
+          e.target.checked = !!real;
+          setCaption(real ? '已开启开机自动启动（开机后只留托盘，不弹主界面）' : '已关闭开机自动启动');
+        }).catch(function () { e.target.checked = !want; });
+      });
+    }
+
+    if (el.chkAutoLaunchTodo) {
+      el.chkAutoLaunchTodo.checked = ui.todoGrabFront;
+      el.chkAutoLaunchTodo.addEventListener('change', function (e) {
+        ui.todoGrabFront = e.target.checked;
+        saveUiPrefs();
+      });
+    }
+
+    if (el.chkTodoCatchUp) {
+      el.chkTodoCatchUp.checked = ui.todoCatchUp;
+      el.chkTodoCatchUp.addEventListener('change', function (e) {
+        ui.todoCatchUp = e.target.checked;
+        saveUiPrefs();
+      });
+    }
+
+    if (el.btnOpenDataDir && native && native.openDataDir) {
+      el.btnOpenDataDir.addEventListener('click', function () { native.openDataDir(); });
+    } else if (el.btnOpenDataDir) {
+      el.btnOpenDataDir.hidden = true;
+    }
+
+    if (el.setAbout) {
+      el.setAbout.textContent = '别感冒提醒器 v3.1 · 数据全部存在本机，不联网、不上传。';
+    }
+  }
+
+  /* -------------------------------------------------- 备忘 / 待办 事件绑定 */
+  function bindTodoPage() {
+    /* 备忘：勾完成 / 改 / 删（事件委托，列表是动态渲染的） */
+    if (el.memoList) {
+      el.memoList.addEventListener('click', function (e) {
+        const row = e.target.closest ? e.target.closest('.memo-item') : null;
+        if (!row) return;
+        const roleEl = e.target.closest ? e.target.closest('[data-role]') : null;
+        const role = roleEl ? roleEl.dataset.role : '';
+        const id = row.dataset.id;
+        if (role === 'done') {
+          const m = memoById(id);
+          if (m) { m.done = !m.done; saveTodoStore(); renderMemos(); Sound.click(); }
+        } else if (role === 'edit') {
+          openMemoModal(id);
+        } else if (role === 'del') {
+          deleteMemo(id);
+        }
+      });
+    }
+    if (el.btnAddMemo) el.btnAddMemo.addEventListener('click', function () { Sound.click(); openMemoModal(null); });
+    if (el.memoSave) el.memoSave.addEventListener('click', saveMemoModal);
+    if (el.memoCancel) el.memoCancel.addEventListener('click', closeMemoModal);
+    if (el.memoClose) el.memoClose.addEventListener('click', closeMemoModal);
+    if (el.memoOverlay) el.memoOverlay.addEventListener('click', function (e) {
+      if (e.target === el.memoOverlay) closeMemoModal();
+    });
+
+    /* 待办：勾完成 / 改 / 删 */
+    if (el.todoList) {
+      el.todoList.addEventListener('click', function (e) {
+        const row = e.target.closest ? e.target.closest('.todo-item') : null;
+        if (!row) return;
+        const roleEl = e.target.closest ? e.target.closest('[data-role]') : null;
+        const role = roleEl ? roleEl.dataset.role : '';
+        const id = row.dataset.id;
+        if (role === 'done') toggleTodoDone(id);
+        else if (role === 'edit') openTodoModal(id);
+        else if (role === 'del') deleteTodo(id);
+      });
+    }
+    if (el.btnAddTodo) el.btnAddTodo.addEventListener('click', function () { Sound.click(); openTodoModal(null); });
+    if (el.tdSave) el.tdSave.addEventListener('click', saveTodoModal);
+    if (el.tdCancel) el.tdCancel.addEventListener('click', closeTodoModal);
+    if (el.tdClose) el.tdClose.addEventListener('click', closeTodoModal);
+    if (el.todoOverlay) el.todoOverlay.addEventListener('click', function (e) {
+      if (e.target === el.todoOverlay) closeTodoModal();
+    });
+    if (el.tdQuick) {
+      el.tdQuick.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('button') : null;
+        if (b) { applyTodoQuick(b); Sound.click(); }
+      });
+    }
+    if (el.tdText) {
+      el.tdText.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') saveTodoModal();
+      });
+    }
+
+    /* 标签栏 */
+    if (el.tabbar) {
+      el.tabbar.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('.tab-btn') : null;
+        if (!b) return;
+        Sound.click();
+        openTab(b.dataset.tab);
+      });
+    }
+  }
+
+  /* ---------------------------------------------- 桌面宠物 / 宠物说话对接 */
+  function bindDesktopPet() {
+    /* 勾选框：主进程才是权威（托盘菜单也能改），这里只做「请求 + 跟随」 */
+    if (el.chkDesktopPet) {
+      el.chkDesktopPet.addEventListener('change', function (e) {
+        const want = e.target.checked;
+        Sound.click();
+        if (native && native.setPetOn) {
+          native.setPetOn(want).then(function (real) {
+            e.target.checked = !!real;
+            settings.petOn = !!real;
+            saveSettings();
+            pushState();
+          }).catch(function () { e.target.checked = !want; });
+        } else {
+          e.target.checked = false;
+        }
+      });
+    }
+    if (native && native.onPetOnChanged) {
+      native.onPetOnChanged(function (on) {
+        if (el.chkDesktopPet) el.chkDesktopPet.checked = !!on;
+        settings.petOn = !!on;
+        saveSettings();
+        pushState();
+      });
+    }
+
+    /* 桌面上的宠物被点了一下：主进程来要「气泡里说什么」，
+       这里用现成的时辰 + 下一次提醒文案回过去。 */
+    if (native && native.onPetTalkRequest) {
+      native.onPetTalkRequest(function () {
+        if (!native.petTalkData) return;
+        const cur = currentShichen();
+        native.petTalkData({
+          head: '现在是 ' + cur.name + '（' + cur.label + '）',
+          mer: cur.meridian + '当令 · 宜' + cur.tag,
+          tip: cur.tip,
+          next: nextReminderText()
+        });
+      });
+    }
+  }
+
+  /* ================================================================ 十二时辰 */
   function currentShichen(d) {
     const h = (d || new Date()).getHours();
     for (let i = 0; i < SHICHEN.length; i++) {
@@ -1374,9 +1509,8 @@
     el.alJi.textContent = al.jc.ji;
   }
 
-  /* ============================================ 宠物说话（点一下小鸡） */
-  let talkTimer = null;
-  let talking = false;
+  /* 桌面宠物「说话」已经搬到宠物窗那边（pet.js + 主进程的 pet-talk-data），
+     这里只留下供它使用的一句话文案。 */
 
   /* 最近要到的提醒，作为气泡最后一行 */
   function nextReminderText() {
@@ -1391,53 +1525,6 @@
     if (rt.sleeping) return '电脑睡着中 · 计时已暂停';
     const m = Math.max(1, Math.round(best / 60));
     return '再过约 ' + m + ' 分钟该' + bestIt.name + '了';
-  }
-
-  /* 气泡现已是独立的小窗（见 main.js），宠物窗说话时一动不动，
-     所以这里不再需要「等两帧再动窗口」这套补丁了。 */
-  function afterPaint(fn) {
-    requestAnimationFrame(function () {
-      requestAnimationFrame(fn);
-    });
-  }
-
-  /* 气泡默认放宠物哪一侧：宠物在桌面左半边 → 放右边，反之放左边 */
-  function talkPrefSide(screenX, winW) {
-    const scr = window.screen || {};
-    const availW = scr.availWidth || scr.width || 1920;
-    return ((screenX || 0) + winW / 2) < availW / 2 ? 'right' : 'left';
-  }
-
-  function petTalk() {
-    if (!document.body.classList.contains('pet')) return;
-
-    /* 已经开着就先收起来，等于再点一次切换 */
-    if (talking) { endTalk(); return; }
-
-    const cur = currentShichen();
-    talking = true;
-
-    /* 只把文字内容交给主进程，位置由它按桌面边界算 ——
-       宠物窗本身不缩放、不移动，所以不可能出现错位的闪烁。 */
-    if (native && native.petTalk) {
-      native.petTalk({
-        head: '现在是 ' + cur.name + '（' + cur.label + '）',
-        mer: cur.meridian + '当令 · 宜' + cur.tag,
-        tip: cur.tip,
-        next: nextReminderText(),
-        side: talkPrefSide(window.screenX, Math.max(60, window.innerWidth))
-      });
-    }
-
-    if (talkTimer) clearTimeout(talkTimer);
-    talkTimer = setTimeout(endTalk, 5000);     // 气泡显示 5 秒后自动收起
-  }
-
-  function endTalk() {
-    if (talkTimer) { clearTimeout(talkTimer); talkTimer = null; }
-    if (!talking) return;
-    talking = false;
-    if (native && native.petTalkEnd) native.petTalkEnd();
   }
 
   /* ====================================================== 添加 / 编辑事项 */
@@ -1675,9 +1762,20 @@
       }
     }
     if (almanacDate !== todayKey()) renderAlmanac();   // 跨天刷新黄历
+    /* 待办到点检查：跟循环提醒各自独立（待办是「具体某个时刻」，
+       不受「暂停计时」「睡眠暂停」影响 —— 约了几点就是几点） */
+    if (!rt.alertId) {
+      checkTodoDue();
+      /* 待办到点时如果正开着列表，顺手刷新一下「还有多久 / 已过期」 */
+      if (todoViewOpen()) renderTodos();
+    }
     /* 窗口看不见的时候不碰 DOM：倒计时照常算、到点照样弹提醒，
        但没必要每 250ms 去改一堆元素的文本和宽度。 */
     if (animRunning) render();
+  }
+
+  function todoViewOpen() {
+    return ui.tab === 'todo' && el.pageTodo && !el.pageTodo.hidden;
   }
 
   /* ------------------------------------------------- 空闲时把开销压到最低
@@ -1828,11 +1926,6 @@
 
     el.btnAddItem.addEventListener('click', function () { Sound.click(); openItemModal(null); });
 
-    el.btnPet.addEventListener('click', function () {
-      Sound.click();
-      setPetMode(!document.body.classList.contains('pet'));
-    });
-
     if (el.tbMin) el.tbMin.addEventListener('click', function () { if (native) native.minimize(); });
     if (el.tbTray) el.tbTray.addEventListener('click', function () { if (native) native.hideToTray(); });
     if (el.tbClose) el.tbClose.addEventListener('click', function () { if (native) native.hideToTray(); });
@@ -1844,48 +1937,28 @@
       });
     }
 
-    /* 手动拖窗：普通模式拖标题栏，宠物模式整个窗口都能拖
-       宠物模式下「按下没怎么动就松开」= 单击 → 让小鸡开口说话 */
+    /* 手动拖窗：主界面只拖自绘标题栏（桌面宠物是独立窗口，自己在 pet.js 里拖） */
     if (native && native.dragStart) {
       let dragging = false;
       let downX = 0, downY = 0, moved = 0;
-      let lastX = 0, lastY = 0;
-      let skipTalkOnce = false;      // 这一下是用来收起气泡的，松手时别再弹开
-      const isPet = function () { return document.body.classList.contains('pet'); };
 
       document.addEventListener('pointerdown', function (e) {
         if (e.button !== 0) return;
         const t = e.target;
-        const onButton = t && t.closest && t.closest('.pb-close, .tb-btn, .btn, .mini, .icon-btn, button, input, label, .sc-row');
+        const onButton = t && t.closest && t.closest('.pb-close, .tb-btn, .btn, .mini, .icon-btn, button, input, label, .sc-row, .tab-btn, select');
         const inTitlebar = t && t.closest && t.closest('.titlebar');
-        if (!isPet() && (!inTitlebar || onButton)) return;
-        if (isPet() && onButton) return;
+        if (!inTitlebar || onButton) return;
 
         dragging = true;
         moved = 0;
         downX = e.screenX; downY = e.screenY;
-        lastX = e.screenX; lastY = e.screenY;
         try { document.body.setPointerCapture(e.pointerId); } catch (err) { }
 
-        const beginDrag = function () {
-          native.dragStart({ x: downX, y: downY });
-        };
-
-        /* 气泡开着的话，按下鼠标就先把它收掉再拖。
-           气泡是独立小窗，收掉它一不影响宠物窗，所以这里不需要等帧、
-           也不会出现任何错位或闪烁。 */
-        if (isPet() && talking) {
-          endTalk();
-          skipTalkOnce = true;
-        } else {
-          skipTalkOnce = false;
-        }
-        beginDrag();
+        native.dragStart({ x: downX, y: downY });
         e.preventDefault();
       });
 
       document.addEventListener('pointermove', function (e) {
-        lastX = e.screenX; lastY = e.screenY;
         if (!dragging) return;
         moved = Math.max(moved, Math.abs(e.screenX - downX) + Math.abs(e.screenY - downY));
         if (moved > 6) native.dragMove({ x: e.screenX, y: e.screenY });
@@ -1896,20 +1969,10 @@
         dragging = false;
         try { document.body.releasePointerCapture(e.pointerId); } catch (err) { }
         native.dragEnd();
-        if (isPet() && moved <= 6 && !skipTalkOnce) petTalk();   // 单击 = 说话
-        skipTalkOnce = false;
       };
       document.addEventListener('pointerup', stopDrag);
       document.addEventListener('pointercancel', stopDrag);
     }
-
-    /* 宠物模式右键 → 原生菜单 */
-    document.addEventListener('contextmenu', function (e) {
-      if (!native || !native.petMenu) return;
-      if (!document.body.classList.contains('pet')) return;
-      e.preventDefault();
-      native.petMenu();
-    });
 
     /* 十二时辰弹层 */
     el.scClose.addEventListener('click', closeShichen);
@@ -1926,6 +1989,9 @@
     el.chkSound.addEventListener('change', function (e) {
       settings.sound = e.target.checked;
       saveSettings();
+      /* 音效播放器在 pet-draw.js 里（桌面宠物窗共用），开关要同步过去 */
+      PETDRAW.setSoundOn(settings.sound);
+      if (native && native.setSound) native.setSound(settings.sound);
       if (settings.sound) Sound.click();
     });
 
@@ -1951,7 +2017,7 @@
         settings.skin = el.skinSel.value || '__default';
         saveSettings();
         Sound.click();
-        loadSkin(settings.skin);
+        SKINPICK.loadSkin(settings.skin);
         if (native && native.skinChanged) native.skinChanged(settings.skin);
       });
     }
@@ -1965,7 +2031,6 @@
     if (native) {
       if (native.onTrayAlert) native.onTrayAlert(function (id) { if (itemById(id)) fire(id); });
       if (native.onTrayToggle) native.onTrayToggle(function () { el.btnToggle.click(); });
-      if (native.onPetModeChanged) native.onPetModeChanged(function (on) { setPetMode(!!on, true); });
       if (native.onSetInterval) {
         native.onSetInterval(function (d) {
           if (!d || !itemById(d.id)) return;
@@ -2028,36 +2093,68 @@
     document.addEventListener('pointerdown', unlock);
 
     /* 窗口可见性：主进程显式通知 + 网页自身的 visibilitychange 双保险 */
-    if (native && native.onWinVisible) native.onWinVisible(applyVisibility);    /* 宠物模式右键菜单里换形象 */    if (native && native.onSetSkin) {      native.onSetSkin(function (id) {        settings.skin = id || '__default';        saveSettings();        if (el.skinSel) el.skinSel.value = settings.skin;        loadSkin(settings.skin);      });    }
+    if (native && native.onWinVisible) native.onWinVisible(applyVisibility);
+    /* 右键菜单 / 托盘菜单里换形象 */
+    if (native && native.onSetSkin) {
+      native.onSetSkin(function (id) {
+        settings.skin = id || '__default';
+        saveSettings();
+        if (el.skinSel) el.skinSel.value = settings.skin;
+        SKINPICK.loadSkin(settings.skin);
+      });
+    }
+    /* 托盘 / 桌面宠物右键菜单里的入口 */
+    if (native && native.onShowTodo) native.onShowTodo(function () { showWindowSelf(); openTab('todo'); });
+    if (native && native.onShowSettings) native.onShowSettings(function () { showWindowSelf(); openTab('settings'); });
+    /* 屏幕缩放变化（换屏 / 改系统缩放）：主进程已经把窗口尺寸改好了，
+       这里只需要按新的 k 重排内容 */
+    uiScale.attach(function () { fitApp(); });
     document.addEventListener('visibilitychange', function () {
       applyVisibility(!document.hidden);
     });
+
+    /* 备忘 / 待办 / 设置 / 桌面宠物 */
+    bindTodoPage();
+    bindSettings();
+    bindDesktopPet();
   }
 
   /* ---------------------------------------------------------- 启动 */
   function init() {
     loadStore();
+    loadTodoStore();
+    loadUiPrefs();
     el.chkSound.checked = settings.sound;
     el.chkSpeech.checked = settings.speech;
     settings.items.forEach(function (it) { ensureTimer(it); });
     if ('Notification' in window && Notification.permission === 'granted') el.chkNotify.checked = true;
     if (native && el.btnTray) el.btnTray.hidden = false;
     if (native && el.petSizeRow) el.petSizeRow.hidden = false;
+    if (native && el.desktopPetRow) el.desktopPetRow.hidden = false;
+    if (el.chkDesktopPet) el.chkDesktopPet.checked = !!settings.petOn;
     updatePetSizeUI();
     if (native && native.setPetSize) native.setPetSize(settings.petSize);
 
     /* 皮肤：列出可选形象，并载入上次选的那个 */
-    if (native && native.skinsList && el.skinRow) {
-      el.skinRow.hidden = false;
-      fillSkinPicker();
-      if (settings.skin && settings.skin !== '__default') loadSkin(settings.skin);
-    }
+    initSkin();
 
     bindAll();
     renderPanels();
+    renderMemos();
+    renderTodos();
+    openTab(ui.tab);          // 恢复上次看的页面（默认主界面）
     pushState();
     render();
+    /* 先按当前（本地推算的）缩放排一次，避免出现「第一帧字很小」的闪动 */
+    uiScale.sync();
     fitApp();
+    /* 再向主进程要权威的缩放/基准缩放：拿到后重排一次 */
+    if (native && native.getUiScale) {
+      native.getUiScale().then(function (info) {
+        uiScale.set(info);
+        fitApp();
+      }).catch(function () { });
+    }
     setTimeout(fitApp, 60);
     setTimeout(capPanelList, 140);   // 等字体和布局稳定后再量一次
 
@@ -2067,6 +2164,15 @@
     renderAlmanac();
     setCaption('待机中 · 到点会提醒你');
     applyVisibility(!document.hidden);   // 启动时按当前可见性定档
+    /* 程序没开的时候错过的待办，这里补提醒一次 */
+    catchUpTodos();
+    /* 桌面宠物状态以主进程为准（它可能被托盘菜单改过） */
+    if (native && native.getPetOn) {
+      native.getPetOn().then(function (on) {
+        if (el.chkDesktopPet) el.chkDesktopPet.checked = !!on;
+        settings.petOn = !!on;
+      }).catch(function () { });
+    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

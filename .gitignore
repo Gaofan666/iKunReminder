@@ -15,3 +15,6 @@ dist/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# DPI 自检的临时产物（截图 / 轨迹 / 汇总）
+.diag/

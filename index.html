@@ -6,45 +6,46 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>别感冒 · 喝水休息提醒器</title>
 <link rel="stylesheet" href="style.css">
+<script src="ui-scale.js"></script>
+<script src="pet-draw.js"></script>
+<script src="skin-picker.js"></script>
 </head>
 <body>
 
-<!-- 自绘标题栏（无边框窗口用，仅桌面版显示） -->
+<!-- 顶部一条（合并标题栏 + 导航栏）：
+     左=软件名+版本，中=三个标签页，右=时间 + 窗口按钮 -->
 <div class="titlebar" id="titlebar">
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
+    <span class="tb-ver" id="tbVer">v3.2</span>
   </div>
+  <nav class="tabbar" id="tabbar">
+    <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
+    <button class="tab-btn" data-tab="todo" id="tabTodo">📝 待办<em class="tab-badge" id="todoBadge" hidden></em></button>
+    <button class="tab-btn" data-tab="settings" id="tabSettings">⚙ 设置</button>
+  </nav>
   <div class="tb-right">
+    <span class="tb-date" id="dateLine">加载中…</span>
+    <span class="tb-clock" id="tbClock">--:--:--</span>
     <button class="tb-btn" id="tbMin" title="最小化">─</button>
     <button class="tb-btn" id="tbTray" title="收进右下角托盘（后台继续计时）">▣</button>
     <button class="tb-btn tb-close" id="tbClose" title="收进托盘，程序不退出">✕</button>
   </div>
 </div>
 
-<!-- 宠物模式：整窗都可以按住拖动，右键出菜单 -->
-
-<!-- 背景装饰层 -->
+<!-- 背景装饰层（在缩放容器之外，保持铺满窗口） -->
 <div class="grid-floor"></div>
 <div class="aurora"></div>
 <div class="scanlines"></div>
 
+<!-- 缩放容器：#app 与待办/设置两页一起等比缩放、一起居中。
+     顶栏在它外面（只占顶部一条），所以内容可用高度 = 窗口高 − 顶栏，
+     内容仍按原来的尺寸铺满，不会因为多了一条导航而显得四周空旷。 -->
+<div id="view">
+
 <!-- 主内容整体等比缩放（设计尺寸 1180 × 842） -->
 <div id="app">
-
-<header class="topbar">
-  <div class="brand">
-    <div class="logo">🏀</div>
-    <div class="brand-text">
-      <h1>别感冒 <span class="ver">v3.0</span></h1>
-      <p class="sub">唱 · 跳 · rap · 篮球 —— 到点了就喊你喝水 / 休息</p>
-    </div>
-  </div>
-  <div class="clock">
-    <div id="digitalClock" class="digital">--:--:--</div>
-    <div id="dateLine" class="sub">加载中…</div>
-  </div>
-</header>
 
 <main class="layout">
 
@@ -61,12 +62,18 @@
     <div class="toolbar">
       <button id="btnToggle" class="btn primary">⏸ 暂停计时</button>
       <button id="btnResetAll" class="btn">↺ 全部重置</button>
-      <button id="btnPet" class="btn ghost" title="缩成悬浮小窗，一直待在最前面">🐣 宠物模式</button>
       <button id="btnTray" class="btn ghost" hidden title="收进右下角托盘，后台继续计时">📥 收进托盘</button>
     </div>
 
+    <!-- 桌面宠物：勾上就常驻桌面的独立小窗，可以和主界面同时显示 -->
+    <div class="pet-size-row" id="desktopPetRow" hidden>
+      <label class="chk big" title="勾上后桌面上会一直有一只宠物小窗，和主界面同时存在">
+        <input type="checkbox" id="chkDesktopPet"><span>🐣 桌面宠物</span>
+      </label>
+    </div>
+
     <div class="pet-size-row" id="petSizeRow" hidden>
-      <span class="psr-label">🐣 宠物默认大小</span>
+      <span class="psr-label">🐣 宠物大小</span>
       <div class="seg" id="petSizeSeg">
         <button data-size="max" title="150 × 170">迷你</button>
         <button data-size="mid" title="118 × 134">小小</button>
@@ -107,11 +114,63 @@
     </div>
 
     <p class="tip card">💡 点「＋ 添加提醒事项」可以加自己的提醒（吃药、锻炼、站起来走走…）。
-      想看十二时辰养生，进宠物模式点一下小鸡，或者右键托盘图标选「🕰 十二时辰对照表」。</p>
+      想看十二时辰养生，点一下桌面上的小鸡，或者右键托盘图标选「🕰 十二时辰对照表」。
+      备忘与定时待办在顶部「📝 待办」页。</p>
   </section>
 </main>
 
 </div><!-- /#app -->
+
+<!-- ===================== 待办页：左备忘 / 右待办 ===================== -->
+<main class="layout page" id="pageTodo" hidden>
+  <section class="card todo-col">
+    <div class="col-head">
+      <h2>📌 备忘录</h2>
+      <button class="btn sm primary" id="btnAddMemo">＋ 新增备忘</button>
+    </div>
+    <p class="col-sub">随手记点东西，想到了就写下来；点一下可以改，前面的勾是「做完了」。</p>
+    <div class="memo-list" id="memoList"></div>
+  </section>
+
+  <section class="card todo-col">
+    <div class="col-head">
+      <h2>⏰ 待办事项</h2>
+      <button class="btn sm primary" id="btnAddTodo">＋ 新增待办</button>
+    </div>
+    <p class="col-sub">设好日期和时间，到点会自动跳出来提醒你（过期未完成的，下次打开程序时补提醒一次）。</p>
+    <div class="todo-list" id="todoList"></div>
+  </section>
+</main>
+
+<!-- ===================== 设置页 ===================== -->
+<main class="layout page" id="pageSettings" hidden>
+  <section class="card set-col">
+    <div class="col-head"><h2>⚙ 设置</h2></div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkAutoLaunch"><span>开机自动启动</span></label>
+      <p class="set-desc">勾上之后，开机时程序会<b>直接藏在右下角托盘里</b>，不会弹出主界面；
+        到点照样会跳出来提醒。用的是当前用户的注册表启动项（不需要管理员权限），
+        也能在「任务管理器 → 启动」里自己关掉。</p>
+    </div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkAutoLaunchTodo"><span>待办到点提醒时抢到最前面</span></label>
+      <p class="set-desc">关掉的话，待办到点只弹窗提醒、不抢前台（不打断你正在做的事）。</p>
+    </div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkTodoCatchUp"><span>重新打开程序时补提醒过期待办</span></label>
+      <p class="set-desc">比如约了下午 3 点，但当时程序没开；下次打开时会弹出来告诉你这条已经过期。</p>
+    </div>
+    <div class="set-row">
+      <button class="btn" id="btnOpenDataDir">📂 打开数据目录</button>
+      <p class="set-desc">提醒事项、备忘、待办这些都存在程序自己的本地存储里；点这里可以看到程序所在目录。</p>
+    </div>
+    <div class="set-row">
+      <p class="set-desc" id="setAbout"></p>
+    </div>
+  </section>
+</main>
+
+</div><!-- /#view：标签栏 + 三个页面（整体等比缩放） -->
 
 <!-- 十二时辰养生弹层 -->
 <div class="overlay modal" id="shichenOverlay" hidden>
@@ -123,7 +182,58 @@
     </div>
     <p class="sc-tip" id="scTip"></p>
     <div class="sc-list" id="scList"></div>
-    <p class="sc-foot">💡 想看的时候：在宠物模式下点一下小鸡，或者右键托盘图标。</p>
+    <p class="sc-foot">💡 想看的时候：点一下桌面上的小鸡，或者右键托盘图标。</p>
+  </div>
+</div>
+
+<!-- 添加 / 编辑备忘 -->
+<div class="overlay modal" id="memoOverlay" hidden>
+  <div class="overlay-card item-card">
+    <button class="close" id="memoClose" title="关闭">✕</button>
+    <h3 class="it-title" id="memoTitle">新增备忘</h3>
+    <div class="it-row col">
+      <span class="it-label">内容</span>
+      <textarea id="memoText" rows="4" maxlength="500" placeholder="想到什么就写什么，比如：周五交周报 / 买牛奶"></textarea>
+    </div>
+    <div class="alert-btns">
+      <button class="btn primary big" id="memoSave">保存</button>
+      <button class="btn big" id="memoCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加 / 编辑待办 -->
+<div class="overlay modal" id="todoOverlay" hidden>
+  <div class="overlay-card item-card">
+    <button class="close" id="tdClose" title="关闭">✕</button>
+    <h3 class="it-title" id="tdTitle">新增待办</h3>
+    <div class="it-row col">
+      <span class="it-label">要做的事</span>
+      <input type="text" id="tdText" maxlength="60" placeholder="例如：给客户回邮件">
+    </div>
+    <div class="it-row">
+      <span class="it-label">提醒日期</span>
+      <input type="date" id="tdDate">
+    </div>
+    <div class="it-row">
+      <span class="it-label">提醒时间</span>
+      <input type="time" id="tdTime">
+    </div>
+    <div class="it-row">
+      <span class="it-label">快捷</span>
+      <div class="quick-time" id="tdQuick">
+        <button type="button" data-min="10">10 分钟后</button>
+        <button type="button" data-min="30">30 分钟后</button>
+        <button type="button" data-min="60">1 小时后</button>
+        <button type="button" data-min="180">3 小时后</button>
+        <button type="button" data-at="today-1800">今天 18:00</button>
+        <button type="button" data-at="tomorrow-0900">明天 9:00</button>
+      </div>
+    </div>
+    <div class="alert-btns">
+      <button class="btn primary big" id="tdSave">保存</button>
+      <button class="btn big" id="tdCancel">取消</button>
+    </div>
   </div>
 </div>
 

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
+<title>desktop-pet</title>
+<style>
+  /* 桌面宠物：整窗透明，只有一个画布。窗口尺寸由主进程按「物理尺寸 ÷ 像素比」算好，
+     画布铺满窗口，角色靠 pet-draw.js 按 fit 缩放 → 在任何屏上都一样大。
+     整窗都是拖拽区（见 pet.js），右键出原生菜单。 */
+  html, body {
+    margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent;
+    user-select: none; -webkit-user-select: none; cursor: grab;
+  }
+  body.dragging { cursor: grabbing; }
+  #pet {
+    display: block; width: 100%; height: 100%;
+  }
+</style>
+</head>
+<body>
+  <canvas id="pet"></canvas>
+  <script src="ui-scale.js"></script>
+  <script src="pet-draw.js"></script>
+  <script src="pet.js"></script>
+</body>
+</html>

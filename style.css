@@ -73,25 +73,19 @@ body.anim-off *::after{animation-play-state:paused !important}
 .topbar{
   position:relative;z-index:2;
   display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
-  padding:20px 26px 12px;max-width:1240px;margin:0 auto;
+  padding:12px 26px 8px;max-width:1240px;margin:0 auto;
 }
-.brand{display:flex;align-items:center;gap:14px}
+.brand{display:flex;align-items:center;gap:12px}
 .logo{
-  width:52px;height:52px;display:grid;place-items:center;font-size:26px;
-  border-radius:16px;
+  width:44px;height:44px;display:grid;place-items:center;font-size:22px;
+  border-radius:14px;
   background:linear-gradient(150deg, rgba(217,161,95,.15), rgba(62,154,168,.13));
   border:1px solid var(--line);
   box-shadow:0 0 16px rgba(217,161,95,.16), inset 0 0 12px rgba(62,154,168,.10);
   animation:logoSpin 6s ease-in-out infinite;
 }
 @keyframes logoSpin{ 0%,100%{transform:rotate(-8deg)} 50%{transform:rotate(8deg) scale(1.05)} }
-.brand-text h1{
-  margin:0;font-size:26px;letter-spacing:3px;font-weight:800;
-  background:linear-gradient(92deg,var(--lake),var(--sky) 42%,var(--leaf));
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 10px rgba(62,154,168,.22));
-}
-.ver{font-size:11px;letter-spacing:1px;color:var(--dim);-webkit-text-fill-color:var(--dim)}
+.brand-text .sub{margin:0;color:var(--dim);font-size:12.5px;letter-spacing:.6px}
 .sub{margin:4px 0 0;color:var(--dim);font-size:12.5px;letter-spacing:.6px}
 
 .clock{text-align:right}
@@ -102,21 +96,139 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 
 /* ---------- 布局 ---------- */
-/* ---------- 主内容：整体等比缩放（设计尺寸 1180 × 842） ---------- */
-#app{
-  position:absolute;left:0;top:38px;
+/* 关键：hidden 属性必须真的隐藏。.layout 用了 display:grid，
+   优先级压过了浏览器默认的 [hidden]{display:none}，不写这条三个页面会一起显示。 */
+[hidden]{display:none !important}
+
+/* ---------- 顶部标签页（并入标题栏：软件名+版本 | 三个标签 | 时间+按钮） ----------
+   标签页现在是标题栏中间的 flex 项，不再单独占一条。 */
+.tabbar{
+  display:flex;align-items:center;gap:2px;
+  flex:1;min-width:0;
+}
+.tab-btn{
+  border:0;border-radius:9px;padding:6px 12px;
+  font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.3px;
+  color:var(--dim);background:transparent;cursor:pointer;transition:.15s;
+  white-space:nowrap;
+}
+.tab-btn:hover{background:rgba(74,120,150,.10);color:var(--text)}
+.tab-btn.on{
+  color:var(--lake);background:var(--panel);
+  box-shadow:0 1px 0 var(--lake) inset, 0 1px 6px rgba(74,120,150,.12);
+}
+.tab-badge{
+  display:inline-block;min-width:17px;margin-left:6px;padding:1px 5px;
+  border-radius:9px;background:#e5484d;color:#fff;
+  font-size:11px;font-style:normal;font-weight:700;vertical-align:1px;
+}
+.page{padding-top:2px}
+
+/* ---------- 待办 / 设置 页 ---------- */
+/* 两列保持并排（沿用 .layout 的网格），只把最小高度拉到「填满窗口可用区」，
+   这样窗口被拉高时不会下面空一大片；列表自己内部滚动。 */
+#pageTodo{
+  grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);
+  /* 高度由 app.js 按当前窗口可用区算好写进 --page-min-h，填满整屏不空一片 */
+  min-height:var(--page-min-h, 560px);
+  /* 关键：.layout 默认 align-items:start（卡片只按内容高），
+     这里改成 stretch 让两列卡片拉伸到网格行高，列表区域才能撑满 */
+  align-items:stretch;
+}
+.todo-col{display:flex;flex-direction:column;padding:14px 16px 16px}
+.col-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.col-head h2{margin:0;font-size:15px;letter-spacing:1.2px;color:var(--text)}
+.col-sub{margin:6px 2px 10px;font-size:12px;line-height:1.7;color:var(--dim)}
+
+.memo-list,.todo-list{
+  flex:1;display:flex;flex-direction:column;gap:8px;
+  overflow:auto;padding-right:4px;
+  max-height:620px;
+}
+
+.memo-item,.todo-item{
+  display:flex;gap:9px;align-items:flex-start;
+  padding:10px 12px;border-radius:14px;
+  background:linear-gradient(180deg,#ffffff,#f7fafe);
+  border:1px solid var(--line);transition:.15s;
+}
+.memo-item:hover,.todo-item:hover{border-color:rgba(74,155,212,.42)}
+.item-chk{
+  flex:none;width:19px;height:19px;margin-top:1px;border-radius:6px;
+  border:1.6px solid rgba(74,120,150,.42);background:#fff;cursor:pointer;
+  display:grid;place-items:center;font-size:12px;color:#fff;
+}
+.memo-item.done .item-chk,.todo-item.done .item-chk{background:var(--leaf);border-color:var(--leaf)}
+.memo-item.done .item-chk::after,.todo-item.done .item-chk::after{content:"✓"}
+.item-body{flex:1;min-width:0}
+.item-text{font-size:15px;line-height:1.6;color:#16242E;word-break:break-word;white-space:pre-wrap;font-weight:500}
+.memo-item.done .item-text,.todo-item.done .item-text{text-decoration:line-through;color:var(--dim)}
+.item-meta{margin-top:4px;font-size:12px;color:#3A505C;letter-spacing:.3px}
+.item-meta b{color:var(--lake)}
+.item-meta .late{color:#c0392b;font-weight:700}
+.item-tools{flex:none;display:flex;gap:4px}
+.item-tools button{
+  height:26px;padding:0 10px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--line);border-radius:8px;background:#EEF6FB;
+  color:#4E6675;font-size:12px;font-weight:600;font-family:inherit;transition:.15s;
+  white-space:nowrap;
+}
+.item-tools button:hover{color:var(--text);background:#DFEDF6;border-color:var(--lake)}
+.item-tools button.del{
+  color:#B93B2C;background:#FDECE9;border-color:rgba(185,59,44,.45);
+}
+.item-tools button.del:hover{
+  background:#D9534F;border-color:transparent;color:#fff;
+  box-shadow:0 3px 10px rgba(217,83,79,.35);
+}
+
+.empty-tip{
+  padding:26px 10px;text-align:center;font-size:12.5px;color:var(--dim);line-height:1.9;
+}
+
+.set-col{padding:16px 18px}
+.set-row{padding:14px 2px;border-bottom:1px dashed var(--line)}
+.set-row:last-child{border-bottom:0}
+.set-desc{margin:7px 0 0;font-size:12px;line-height:1.8;color:var(--dim)}
+.set-desc b{color:var(--lake)}
+.quick-time{display:flex;flex-wrap:wrap;gap:6px}
+.quick-time button{
+  border:1px solid var(--line);background:#fff;border-radius:9px;
+  padding:5px 9px;font-family:inherit;font-size:12px;color:var(--dim);cursor:pointer;
+}
+.quick-time button:hover{border-color:var(--lake);color:var(--lake)}
+
+.chk.big{font-size:13.5px;font-weight:600}
+.it-row.col{display:block}
+.it-row textarea{
+  width:100%;box-sizing:border-box;margin-top:6px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:11px;resize:vertical;
+  font-family:inherit;font-size:13.5px;line-height:1.7;color:var(--text);
+}
+.it-row input[type=date],.it-row input[type=time]{
+  padding:7px 10px;border:1px solid var(--line);border-radius:10px;
+  font-family:inherit;font-size:13.5px;color:var(--text);
+}
+
+/* ---------- 主内容：整体等比缩放（设计尺寸 1180 宽） ----------
+   #view 是缩放容器：「主界面 / 待办 / 设置」三个页面一起缩放、一起居中，
+   所以切页面时字号和比例不会跳。顶部留出标签栏那一条。 */
+#view{
+  position:absolute;left:0;
+  /* 顶栏（标题栏+标签栏合并）只占顶部一条，内容从它下方开始 */
+  top:var(--tb-h,46px);
   width:1180px;height:auto;
   transform-origin:top left;
   will-change:transform;
 }
-body.pet #app{
-  left:0;top:0;width:100%;height:100%;
-  transform:none !important;
+#app{
+  position:relative;left:0;top:0;
+  width:1180px;height:auto;
 }
 
 .layout{
   position:relative;z-index:2;
-  max-width:1240px;margin:0 auto;padding:8px 26px 34px;
+  max-width:1240px;margin:0 auto;padding:16px 26px 14px;
   display:grid;grid-template-columns:minmax(320px,1.05fr) minmax(340px,1fr);gap:18px;
   align-items:start;
 }
@@ -303,21 +415,27 @@ body.pet #app{
   padding:12px 16px;font-size:12.5px;color:var(--dim);line-height:1.7;margin:0;
 }
 
-/* ---------- 自绘标题栏（无边框窗口用） ---------- */
+/* ---------- 顶部一条（合并标题栏 + 标签页） ----------
+   左=软件名+版本，中=标签页（flex:1 占满中间），右=时间+窗口按钮。
+   高度用 --tb-h：高 DPI 屏上按 1/缩放 缩，物理高度恒定。 */
 .titlebar{
-  display:none;height:38px;flex:none;align-items:center;justify-content:space-between;
-  padding:0 6px 0 12px;position:relative;z-index:40;
+  display:none;height:var(--tb-h,46px);flex:none;align-items:center;
+  padding:0 8px 0 12px;position:relative;z-index:40;
   background:linear-gradient(180deg,#ffffff,#f4f7fd);
   border-bottom:1px solid var(--line);
   cursor:move;
+  gap:10px;
 }
-body.desktop .titlebar{display:flex}
-.tb-left{display:flex;align-items:center;gap:9px}
+body.desktop .titlebar{display:flex;transform-origin:top left}
+.tb-left{display:flex;align-items:center;gap:8px;flex:none}
 .tb-ico{font-size:16px}
-.tb-name{font-size:12.5px;letter-spacing:1.2px;color:var(--dim)}
-.tb-right{display:flex}
+.tb-name{font-size:12.5px;letter-spacing:1.2px;color:var(--text);font-weight:700}
+.tb-ver{font-size:11px;color:var(--dim);font-weight:600;background:rgba(74,120,150,.12);padding:1px 7px;border-radius:9px}
+.tb-right{display:flex;align-items:center;gap:6px;flex:none}
+.tb-date{font-size:12px;color:var(--dim);white-space:nowrap;margin-right:6px}
+.tb-clock{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
 .tb-btn{
-  width:42px;height:30px;border:0;border-radius:8px;background:transparent;
+  width:34px;height:28px;border:0;border-radius:8px;background:transparent;
   color:var(--dim);font-family:inherit;font-size:13px;cursor:pointer;transition:.15s;
 }
 .tb-btn:hover{background:rgba(74,120,150,.12);color:var(--text)}

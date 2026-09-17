@@ -1,7 +1,7 @@
 {
   "name": "kunkun-reminder",
   "productName": "iKunReminder",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "description": "喝水/休息提醒 + 电子宠物：到点自动跳到前台播放动画",
   "main": "main.js",
   "scripts": {
@@ -26,9 +26,15 @@
     "files": [
       "main.js",
       "preload.js",
+      "ui-scale.js",
+      "pet-draw.js",
+      "skin-picker.js",
       "index.html",
       "style.css",
       "app.js",
+      "pet.html",
+      "pet.js",
+      "pet-preload.js",
       "bubble.html",
       "bubble.js",
       "bubble-preload.js",

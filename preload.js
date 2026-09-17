@@ -6,19 +6,29 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   isDesktop: true,
   alert: (kind) => ipcRenderer.invoke('alert', kind),
   dismiss: () => ipcRenderer.invoke('dismiss'),
-  setPetMode: (on) => ipcRenderer.invoke('pet-mode', !!on),
-  petTalk: (need) => ipcRenderer.invoke('pet-talk', need),
-  petTalkEnd: () => ipcRenderer.invoke('pet-talk-end'),
+
+  /* 桌面宠物：一个独立小窗，可以和主界面同时显示 */
+  setPetOn: (on) => ipcRenderer.invoke('pet-on', !!on),
+  getPetOn: () => ipcRenderer.invoke('pet-on-get'),
   setPetSize: (name) => ipcRenderer.invoke('set-pet-size', name),
   getPetSize: () => ipcRenderer.invoke('get-pet-size'),
+  /* 宠物点了说话 → 主进程来要文字，页面用 petTalkData 回过去 */
+  onPetTalkRequest: (cb) => ipcRenderer.on('pet-talk-request', () => cb()),
+  petTalkData: (data) => ipcRenderer.send('pet-talk-data', data),
+  petTalk: (need) => ipcRenderer.invoke('pet-talk', need),
+  petTalkEnd: () => ipcRenderer.invoke('pet-talk-end'),
+
+  /* 开机自启动（写 HKCU 的 Run 键） */
+  getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
+  setAutoLaunch: (on) => ipcRenderer.invoke('set-auto-launch', !!on),
+
   minimize: () => ipcRenderer.invoke('minimize'),
   hideToTray: () => ipcRenderer.invoke('hide'),
+  showWindow: () => ipcRenderer.invoke('show-window'),
+  openDataDir: () => ipcRenderer.invoke('open-data-dir'),
   quit: () => ipcRenderer.invoke('quit'),
 
-  /* 宠物模式 / 托盘 右键菜单 */
-  petMenu: () => ipcRenderer.invoke('pet-menu'),
-
-  /* 手动拖窗：标题栏和宠物模式都能拖着走 */
+  /* 手动拖窗（主界面标题栏） */
   dragStart: (pt) => ipcRenderer.send('drag-start', pt),
   dragMove: (pt) => ipcRenderer.send('drag-move', pt),
   dragEnd: () => ipcRenderer.send('drag-end'),
@@ -27,16 +37,25 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onTrayAlert: (cb) => ipcRenderer.on('tray-alert', (e, id) => cb(id)),
   onTrayToggle: (cb) => ipcRenderer.on('tray-toggle', () => cb()),
   onSetInterval: (cb) => ipcRenderer.on('set-interval', (e, d) => cb(d)),
-  onPetModeChanged: (cb) => ipcRenderer.on('pet-mode-changed', (e, on) => cb(on)),
+  onPetOnChanged: (cb) => ipcRenderer.on('pet-on-changed', (e, on) => cb(on)),
   onSetPetSize: (cb) => ipcRenderer.on('pet-size-changed', (e, name) => cb(name)),
   onShowShichen: (cb) => ipcRenderer.on('show-shichen', () => cb()),
   onAddItem: (cb) => ipcRenderer.on('add-item', () => cb()),
+  onShowTodo: (cb) => ipcRenderer.on('show-todo', () => cb()),
+  onShowSettings: (cb) => ipcRenderer.on('show-settings', () => cb()),
   onPower: (cb) => ipcRenderer.on('power', (e, kind) => cb(kind)),
   onWinVisible: (cb) => ipcRenderer.on('win-visible', (e, vis) => cb(vis)),
 
   /* 皮肤：列出可选皮肤 / 载入某个皮肤的精灵图（主进程读文件，页面不碰磁盘） */
-  onSetSkin: (cb) => ipcRenderer.on('set-skin', (e, id) => cb(id)),  skinChanged: (id) => ipcRenderer.send('skin-changed', id),  skinsList: () => ipcRenderer.invoke('skins-list'),
+  onSetSkin: (cb) => ipcRenderer.on('set-skin', (e, id) => cb(id)),
+  skinChanged: (id) => ipcRenderer.send('skin-changed', id),
+  skinsList: () => ipcRenderer.invoke('skins-list'),
   skinLoad: (id) => ipcRenderer.invoke('skin-load', id),
+
+  /* 屏幕缩放（DPI）：启动时取一次，之后由主进程在换屏/改缩放时推送。
+     窗口逻辑尺寸由主进程负责，页面只拿 scale 去算内容缩放，两边不会打架。 */
+  getUiScale: () => ipcRenderer.invoke('get-ui-scale'),
+  onDisplayInfo: (cb) => ipcRenderer.on('display-info', (e, d) => cb(d)),
 
   /* 页面 → 主进程：同步运行状态与提醒列表，用于刷新托盘菜单 */
   syncState: (state) => ipcRenderer.send('state', state)

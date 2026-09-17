@@ -6,22 +6,33 @@
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
 <title>pet-bubble</title>
 <style>
-  /* 独立的透明小窗：里头只有气泡本体，四周留 10px 给小尾巴 */
+  /* 独立的透明小窗：里头只有气泡本体，四周留一点余量给小尾巴。
+     窗口逻辑尺寸和 --bubble-w/h 都由主进程按「物理尺寸 ÷ 屏幕缩放」算好传进来
+     （main.js 的 bubbleBox()），所以这里的尺寸写法对 100%~200% 缩放都成立。 */
   html,body{
     margin:0;width:100%;height:100%;overflow:hidden;background:transparent;
     font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
     -webkit-font-smoothing:antialiased;user-select:none;
   }
+  /* 外层负责入场动画，内层负责按屏幕缩放放大 —— 两个 transform 分开写，
+     否则动画的 transform 会把缩放覆盖掉（关键帧里写 var() 也不可靠）。 */
   #bubble{
-    position:absolute;left:10px;top:10px;right:10px;bottom:10px;
+    position:absolute;
+    left:var(--bubble-pad,10px);top:var(--bubble-pad,10px);
+    width:var(--bubble-w,340px);height:var(--bubble-h,176px);
+    animation:bubbleIn .18s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes bubbleIn{ from{opacity:0;transform:translateY(6px) scale(.96)} to{opacity:1;transform:none} }
+
+  #bubble-inner{
+    position:relative;width:100%;height:100%;
     display:flex;flex-direction:column;gap:7px;
     padding:12px 14px;box-sizing:border-box;overflow:hidden;
     border-radius:16px;background:#ffffff;
     border:1px solid rgba(70,95,110,.22);
-    box-shadow:0 10px 26px rgba(30,50,80,.16);
-    animation:bubbleIn .18s cubic-bezier(.2,1.4,.4,1);
+    transform-origin:top left;
+    transform:scale(var(--bubble-scale,1));
   }
-  @keyframes bubbleIn{ from{opacity:0;transform:translateY(6px) scale(.96)} to{opacity:1;transform:none} }
 
   .pb-head{font-size:16.5px;font-weight:800;letter-spacing:1px;color:#0F2027}
   .pb-mer{font-size:14px;font-weight:600;color:#1A6E80;letter-spacing:.5px}
@@ -31,25 +42,28 @@
     padding-top:7px;border-top:1px solid rgba(74,120,150,.22);
   }
 
-  /* 小尾巴：共用同一个方块，靠旋转角度指四个方向 */
-  #bubble::after{
+  /* 小尾巴：共用同一个方块，靠旋转角度指四个方向。
+     --tail 是内层坐标，内层有缩放，所以尾巴用 calc 反算回去，始终贴着气泡边。 */
+  #bubble-inner::after{
     content:"";position:absolute;width:16px;height:16px;background:#ffffff;
     border-right:1px solid rgba(70,95,110,.22);
     border-bottom:1px solid rgba(70,95,110,.22);
-    transform:rotate(45deg);
+    transform:rotate(45deg) scale(var(--bubble-inv,1));
   }
-  body.tail-bottom #bubble::after{bottom:-9px;left:var(--tail,36px)}
-  body.tail-top    #bubble::after{top:-9px;left:var(--tail,36px);transform:rotate(225deg)}
-  body.tail-left   #bubble::after{left:-9px;top:var(--tail,36px);transform:rotate(135deg)}
-  body.tail-right  #bubble::after{right:-9px;top:var(--tail,36px);transform:rotate(-45deg)}
+  body.tail-bottom #bubble-inner::after{bottom:calc(-9px / var(--bubble-scale,1));left:calc(var(--tail,36px) / var(--bubble-scale,1))}
+  body.tail-top    #bubble-inner::after{top:calc(-9px / var(--bubble-scale,1));left:calc(var(--tail,36px) / var(--bubble-scale,1));transform:rotate(225deg) scale(var(--bubble-inv,1))}
+  body.tail-left   #bubble-inner::after{left:calc(-9px / var(--bubble-scale,1));top:calc(var(--tail,36px) / var(--bubble-scale,1));transform:rotate(135deg) scale(var(--bubble-inv,1))}
+  body.tail-right  #bubble-inner::after{right:calc(-9px / var(--bubble-scale,1));top:calc(var(--tail,36px) / var(--bubble-scale,1));transform:rotate(-45deg) scale(var(--bubble-inv,1))}
 </style>
 </head>
 <body class="tail-bottom">
   <div id="bubble">
-    <div class="pb-head" id="head"></div>
-    <div class="pb-mer" id="mer"></div>
-    <div class="pb-tip" id="tip"></div>
-    <div class="pb-next" id="next"></div>
+    <div id="bubble-inner">
+      <div class="pb-head" id="head"></div>
+      <div class="pb-mer" id="mer"></div>
+      <div class="pb-tip" id="tip"></div>
+      <div class="pb-next" id="next"></div>
+    </div>
   </div>
 <script src="bubble.js"></script>
 </body>
