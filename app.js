@@ -328,7 +328,18 @@
     chkAutoLaunchTodo: $('#chkAutoLaunchTodo'),
     chkTodoCatchUp: $('#chkTodoCatchUp'),
     btnOpenDataDir: $('#btnOpenDataDir'),
-    setAbout: $('#setAbout')
+    setAbout: $('#setAbout'),
+    /* 软件更新 */
+    updCur: $('#updCur'),
+    updState: $('#updState'),
+    updBar: $('#updBar'),
+    updFill: $('#updFill'),
+    updDesc: $('#updDesc'),
+    updNote: $('#updNote'),
+    btnUpdCheck: $('#btnUpdCheck'),
+    btnUpdDownload: $('#btnUpdDownload'),
+    btnUpdInstall: $('#btnUpdInstall'),
+    chkUpdAuto: $('#chkUpdAuto')
   };
 
   /* 桌面版（Electron）才有：抢前台 / 托盘 / 宠物模式 / 电源事件 */
@@ -1331,8 +1342,138 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.1 · 数据全部存在本机，不联网、不上传。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.1 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
+  }
+
+  /* ------------------------------------------------------------ 软件更新
+     主进程负责查/下/装，这里只负责把状态画出来。
+     策略是「只提示」：查到新版不会自动下，下完也不会自动装，都要用户点。 */
+  const UPD_TEXT = {
+    unsupported: { txt: '此版本无更新器', cls: '' },
+    idle: { txt: '还没检查过', cls: '' },
+    checking: { txt: '正在检查…', cls: '' },
+    none: { txt: '已是最新版本', cls: 'ok' },
+    available: { txt: '发现新版本', cls: 'warn' },
+    downloading: { txt: '正在下载…', cls: 'warn' },
+    downloaded: { txt: '已下载完成', cls: 'ok' },
+    error: { txt: '检查失败', cls: 'err' }
+  };
+
+  const UPD_DEFAULT_DESC = '有新版本时会在这里告诉你，但不会自动下载、更不会自动安装 —— 下载和安装都要你点一下。';
+
+  function renderUpdate(s) {
+    if (!s) return;
+
+    if (el.updCur) el.updCur.textContent = 'v' + s.currentVersion;
+    if (el.chkUpdAuto) el.chkUpdAuto.checked = !!s.autoCheck;
+
+    const meta = (s.state === 'unsupported' && s.devMode)
+      ? { txt: '开发模式', cls: '' }
+      : (UPD_TEXT[s.state] || { txt: s.state, cls: '' });
+    const withVer = (s.state === 'available' || s.state === 'downloading' || s.state === 'downloaded');
+    if (el.updState) {
+      el.updState.textContent = meta.txt + (withVer && s.available ? ' v' + s.available : '');
+      el.updState.className = 'upd-state' + (meta.cls ? ' ' + meta.cls : '');
+    }
+
+    /* 进度条只在下载中 / 下载完成时出现 */
+    const showBar = (s.state === 'downloading' || s.state === 'downloaded');
+    if (el.updBar) {
+      el.updBar.hidden = !showBar;
+      if (el.updFill) el.updFill.style.width = (s.state === 'downloaded' ? 100 : (s.percent || 0)) + '%';
+    }
+
+    if (el.btnUpdCheck) {
+      el.btnUpdCheck.hidden = !s.supported;
+      el.btnUpdCheck.disabled = (s.state === 'checking' || s.state === 'downloading');
+      el.btnUpdCheck.textContent = (s.state === 'checking') ? '⏳ 检查中…' : '🔍 检查更新';
+    }
+    if (el.btnUpdDownload) el.btnUpdDownload.hidden = (s.state !== 'available');
+    if (el.btnUpdInstall) el.btnUpdInstall.hidden = (s.state !== 'downloaded');
+
+    if (el.updDesc) {
+      let d = UPD_DEFAULT_DESC;
+      if (!s.supported && s.devMode) {
+        d = '这是直接跑源码的开发模式，不检查更新。装成正式版之后这里就能一键更新了。';
+      } else if (!s.supported) {
+        d = '这个版本没有内置更新器（v3.2.1 之前的版本都是这样），只能去发布页手动下载新的安装包。'
+          + '手动装一次 v3.2.1 之后，以后就能在这里一键更新了。';
+      } else if (s.state === 'available') {
+        d = '新版本 v' + s.available + ' 已经发布。点「下载新版本」开始下载，下好再点「重启并安装」。';
+      } else if (s.state === 'downloading') {
+        d = '正在后台下载，已经完成 ' + (s.percent || 0) + '%。可以继续用软件，下好了会告诉你。';
+      } else if (s.state === 'downloaded') {
+        d = '新版本已经下载好了。点「重启并安装」会关掉软件、静默装上新版，装完自动重新打开 —— '
+          + '待办、备忘、设置和宠物位置都不会丢。';
+      } else if (s.state === 'error') {
+        d = '检查更新失败：' + (s.error || '未知错误') + '（不影响正常使用，可以稍后再试）';
+      } else if (s.state === 'none') {
+        d = '已经是最新的了，不用做任何事。';
+      }
+      el.updDesc.textContent = d;
+    }
+
+    /* Release 里的更新说明 */
+    if (el.updNote) {
+      const show = !!s.notes && withVer;
+      el.updNote.hidden = !show;
+      if (show) el.updNote.textContent = s.notes;
+    }
+  }
+
+  function bindUpdate() {
+    if (!el.updCur) return;                 // 页面里没这块 UI 就直接跳过
+
+    if (!native || !native.updateGetState) {
+      renderUpdate({
+        state: 'unsupported', supported: false, currentVersion: '—',
+        autoCheck: false, percent: 0, error: '', available: '', notes: ''
+      });
+      if (el.btnUpdCheck) el.btnUpdCheck.disabled = true;
+      if (el.chkUpdAuto) el.chkUpdAuto.disabled = true;
+      return;
+    }
+
+    if (el.chkUpdAuto) {
+      el.chkUpdAuto.addEventListener('change', function (e) {
+        const want = e.target.checked;
+        native.updateSetAutoCheck(want).then(function (real) {
+          e.target.checked = !!real;
+          setCaption(real ? '已开启自动检查更新' : '已关闭自动检查更新（仍可手动点「检查更新」）');
+        }).catch(function () { e.target.checked = !want; });
+      });
+    }
+
+    if (el.btnUpdCheck) {
+      el.btnUpdCheck.addEventListener('click', function () {
+        setCaption('正在检查有没有新版本…');
+        native.updateCheck().then(renderUpdate).catch(function () { });
+      });
+    }
+
+    if (el.btnUpdDownload) {
+      el.btnUpdDownload.addEventListener('click', function () {
+        el.btnUpdDownload.hidden = true;
+        setCaption('开始下载新版本，可以继续用软件');
+        native.updateDownload();
+      });
+    }
+
+    if (el.btnUpdInstall) {
+      el.btnUpdInstall.addEventListener('click', function () {
+        setCaption('正在安装新版本，软件马上会自己重新打开…');
+        native.updateInstall();
+      });
+    }
+
+    if (native.onUpdateStatus) native.onUpdateStatus(renderUpdate);
+    if (native.onUpdateInstalling) native.onUpdateInstalling(function () {
+      setCaption('正在安装新版本，软件马上会自己重新打开…');
+    });
+
+    /* 首屏主动拉一次：窗口刷新后主进程的 send 是收不到的，只能自己问 */
+    native.updateGetState().then(renderUpdate).catch(function () { });
   }
 
   /* -------------------------------------------------- 备忘 / 待办 事件绑定 */
@@ -2113,10 +2254,11 @@
       applyVisibility(!document.hidden);
     });
 
-    /* 备忘 / 待办 / 设置 / 桌面宠物 */
+    /* 备忘 / 待办 / 设置 / 桌面宠物 / 软件更新（更新只挂设置页，主界面与待办页不动） */
     bindTodoPage();
     bindSettings();
     bindDesktopPet();
+    bindUpdate();
   }
 
   /* ---------------------------------------------------------- 启动 */

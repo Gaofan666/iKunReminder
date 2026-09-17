@@ -191,6 +191,21 @@ body.anim-off *::after{animation-play-state:paused !important}
 .set-row:last-child{border-bottom:0}
 .set-desc{margin:7px 0 0;font-size:12px;line-height:1.8;color:var(--dim)}
 .set-desc b{color:var(--lake)}
+
+/* ---------- 设置页：软件更新 ---------- */
+.upd-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0;font-size:13px;color:var(--text)}
+.upd-line b{color:var(--lake);font-size:15px}
+.upd-state{font-size:12.5px;color:var(--dim)}
+.upd-state.ok{color:var(--leaf)}
+.upd-state.warn{color:#c98a2e}
+.upd-state.err{color:#cf574d}
+.upd-bar{margin-top:11px;height:8px;border-radius:99px;overflow:hidden;background:rgba(74,155,212,.14)}
+.upd-bar i{
+  display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(100deg,var(--sky),var(--lake));
+  transition:width .25s ease;
+}
+.upd-btns{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
 .quick-time{display:flex;flex-wrap:wrap;gap:6px}
 .quick-time button{
   border:1px solid var(--line);background:#fff;border-radius:9px;

@@ -11,6 +11,11 @@ const path = require('path');
 const fs = require('fs');
 const UI = require('./ui-scale.js');
 
+/* 自动更新（electron-updater）。require 失败不影响软件本体 ——
+   退化成「不支持自动更新」，设置页会照实说明，不会崩。 */
+let autoUpdater = null;
+try { autoUpdater = require('electron-updater').autoUpdater; } catch (e) { autoUpdater = null; }
+
 let win = null;
 let tray = null;
 let timersRunning = true;
@@ -38,7 +43,7 @@ let forceDpiPending = false;    // 已发现换屏、等页面那边也反应过
 const DIAG = (function () {
   const hit = process.argv.filter(function (a) { return a.indexOf('--diag') === 0; });
   if (!hit.length) return null;
-  const out = { ratio: 0, shot: '', win: '', avail: null };
+  const out = { ratio: 0, shot: '', win: '', avail: null, wait: 0 };
   hit.forEach(function (a) {
     let m = /^--diag=([\d.]+)$/.exec(a);
     /* 允许两种写法：--diag=150（百分比）和 --diag=1.5（比例） */
@@ -55,6 +60,10 @@ const DIAG = (function () {
     /* --diag-tab=home|todo|settings：自检时切到指定页再截图 */
     m = /^--diag-tab=(home|todo|settings)$/.exec(a);
     if (m) out.tab = m[1];
+    /* --diag-wait=<ms>：截图前多等一会儿，用来测异步的东西
+       （比如启动 8 秒后才会跑的「自动检查更新」） */
+    m = /^--diag-wait=(\d+)$/.exec(a);
+    if (m) out.wait = parseInt(m[1], 10);
   });
   return out;
 })();
@@ -477,7 +486,7 @@ function createWindow() {
         }
         quitting = true;
         try { app.exit(0); } catch (e) { }
-      }, 1500);
+      }, 1500 + (DIAG.wait || 0));
     });
   }
 
@@ -1453,6 +1462,197 @@ function bindPowerEvents() {
   });
 }
 
+/* ============================================================ 软件自动更新
+   策略：只检查、只提示。点「下载」才开始下，下完再点「重启并安装」。
+   所以 autoDownload 和 autoInstallOnAppQuit 都是 false —— 全程不擅自动手。
+
+   注意自动更新只在【打包后】有效：开发模式（electron .）没有 app-update.yml，
+   除非项目根目录放了 dev-app-update.yml（那是给本地自测用的）。 */
+const UPDATE_FIRST_DELAY = 8 * 1000;          // 启动后 8 秒查第一次
+const UPDATE_EVERY = 6 * 60 * 60 * 1000;      // 之后每 6 小时查一次
+
+let updateSupported = false;
+let updateState = 'unsupported';  // unsupported|idle|checking|available|downloading|downloaded|none|error
+let updateInfo = null;            // { version, releaseNotes, releaseDate }
+let updatePercent = 0;
+let updateError = '';
+let updateAutoCheck = true;
+let updateTimer = null;
+let updateNextDelay = UPDATE_FIRST_DELAY;
+let updateManual = false;         // 这次检查是不是用户手点的（后台查到的才弹托盘气泡）
+
+function updatePrefFile() { return path.join(app.getPath('userData'), 'update-settings.json'); }
+
+function loadUpdatePref() {
+  try {
+    const o = JSON.parse(fs.readFileSync(updatePrefFile(), 'utf8'));
+    if (o && typeof o.autoCheck === 'boolean') updateAutoCheck = o.autoCheck;
+  } catch (e) { /* 首次运行没这个文件，用默认值 */ }
+}
+
+function saveUpdatePref() {
+  try {
+    fs.writeFileSync(updatePrefFile(), JSON.stringify({ autoCheck: updateAutoCheck }, null, 2), 'utf8');
+  } catch (e) { }
+}
+
+/* GitHub 的 releaseNotes 可能是字符串，也可能是 [{version, note}] 数组 */
+function notesText(notes) {
+  if (!notes) return '';
+  if (typeof notes === 'string') return notes;
+  if (Array.isArray(notes)) return notes.map(function (n) { return (n && n.note) || ''; }).join('\n');
+  return '';
+}
+
+function updateSnapshot() {
+  return {
+    state: updateState,
+    supported: updateSupported,
+    devMode: !app.isPackaged,
+    currentVersion: app.getVersion(),
+    autoCheck: updateAutoCheck,
+    percent: updatePercent,
+    error: updateError,
+    available: updateInfo ? String(updateInfo.version || '') : '',
+    notes: updateInfo ? notesText(updateInfo.releaseNotes) : ''
+  };
+}
+
+function pushUpdate() { send('update-status', updateSnapshot()); }
+
+function setUpdateError(err) {
+  updateState = 'error';
+  updateError = String((err && err.message) || err || '未知错误').slice(0, 300);
+  pushUpdate();
+}
+
+function initUpdater() {
+  if (!autoUpdater) return;   // 没装上 electron-updater：保持 unsupported
+
+  /* 开发模式没放测试配置：查了也是白报错，直接标成不支持 */
+  if (!app.isPackaged && !fs.existsSync(path.join(app.getAppPath(), 'dev-app-update.yml'))) {
+    updateState = 'unsupported';
+    return;
+  }
+
+  updateSupported = true;
+  updateState = 'idle';
+
+  /* 开发模式下 electron-updater 默认拒绝检查更新（日志是
+     "Skip checkForUpdates because application is not packed and dev update config is not forced"），
+     必须显式开这个开关才会去读 dev-app-update.yml。
+     打包后的版本 app.isPackaged 为真，本来就会查，这个开关对它没有影响。 */
+  autoUpdater.forceDevUpdateConfig = true;
+
+  autoUpdater.autoDownload = false;          // 只提示；下载要用户点
+  autoUpdater.autoInstallOnAppQuit = false;  // 退出时也不擅自装
+  autoUpdater.allowPrerelease = false;       // 不碰预发布版
+
+  autoUpdater.on('checking-for-update', function () {
+    updateState = 'checking'; updateError = ''; pushUpdate();
+  });
+
+  autoUpdater.on('update-available', function (info) {
+    updateInfo = info || null;
+    updateState = 'available';
+    updatePercent = 0;
+    pushUpdate();
+    /* 后台自己查到的，就用托盘气泡轻轻提一句，不抢前台、不打断 */
+    if (!updateManual && tray && typeof tray.displayBalloon === 'function') {
+      try {
+        tray.displayBalloon({
+          title: '有新版本 v' + String((info && info.version) || ''),
+          content: '打开「设置」页可以下载并安装，不会自动装。'
+        });
+      } catch (e) { }
+    }
+  });
+
+  autoUpdater.on('update-not-available', function () {
+    updateInfo = null;
+    updateState = 'none';
+    pushUpdate();
+  });
+
+  /* 进度事件很密，只在整数百分比变化时才推给页面，别把 IPC 打满 */
+  autoUpdater.on('download-progress', function (p) {
+    const pc = Math.round((p && p.percent) || 0);
+    updateState = 'downloading';
+    if (pc !== updatePercent) { updatePercent = pc; pushUpdate(); }
+  });
+
+  autoUpdater.on('update-downloaded', function (info) {
+    if (info) updateInfo = info;
+    updateState = 'downloaded';
+    updatePercent = 100;
+    pushUpdate();
+  });
+
+  autoUpdater.on('error', function (err) { setUpdateError(err); });
+}
+
+function checkUpdate(manual) {
+  if (!updateSupported) return Promise.resolve(updateSnapshot());
+  if (updateState === 'downloading') return Promise.resolve(updateSnapshot());
+  updateManual = !!manual;
+  updatePercent = 0;
+  updateError = '';
+  return autoUpdater.checkForUpdates().then(function () {
+    return updateSnapshot();
+  }).catch(function (err) {
+    setUpdateError(err);
+    return updateSnapshot();
+  });
+}
+
+function downloadUpdate() {
+  if (!updateSupported || updateState !== 'available') return false;
+  updateState = 'downloading';
+  updatePercent = 0;
+  updateError = '';
+  pushUpdate();
+  autoUpdater.downloadUpdate().catch(function (err) { setUpdateError(err); });
+  return true;
+}
+
+function installUpdate() {
+  if (!updateSupported || updateState !== 'downloaded') return false;
+  quitting = true;                 // 别让 close 处理器把窗口收进托盘
+  send('update-installing');
+  /* 静默安装，装完自动把新版拉起来 —— 用户已经点过「重启并安装」了，不用再走向导 */
+  setImmediate(function () {
+    try {
+      autoUpdater.quitAndInstall(true, true);
+    } catch (e) {
+      quitting = false;
+      setUpdateError(e);
+    }
+  });
+  return true;
+}
+
+function scheduleUpdateCheck() {
+  clearTimeout(updateTimer);
+  if (!updateSupported || !updateAutoCheck) return;
+  updateTimer = setTimeout(function () {
+    checkUpdate(false);
+    updateNextDelay = UPDATE_EVERY;
+    scheduleUpdateCheck();
+  }, updateNextDelay);
+}
+
+ipcMain.handle('update-get-state', () => updateSnapshot());
+ipcMain.handle('update-check', () => checkUpdate(true));
+ipcMain.handle('update-download', () => downloadUpdate());
+ipcMain.handle('update-install', () => installUpdate());
+ipcMain.handle('update-set-auto-check', (e, on) => {
+  updateAutoCheck = !!on;
+  saveUpdatePref();
+  if (updateAutoCheck) scheduleUpdateCheck(); else clearTimeout(updateTimer);
+  pushUpdate();
+  return updateAutoCheck;
+});
+
 /* ------------------------------------------------------------ 生命周期 */
 const gotLock = app.requestSingleInstanceLock();
 
@@ -1482,6 +1682,12 @@ if (!gotLock) {
     buildTray();
     bindPowerEvents();
     bindDisplayEvents();
+
+    /* 自动更新：读偏好 → 挂事件 → 排第一次检查。
+       放在 buildTray 之后，后台查到新版时托盘气泡才有得用。 */
+    loadUpdatePref();
+    initUpdater();
+    scheduleUpdateCheck();
   });
   app.on('before-quit', () => { quitting = true; });
   app.on('window-all-closed', () => { /* 有托盘常驻，不退出 */ });

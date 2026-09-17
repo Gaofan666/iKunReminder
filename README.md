@@ -12,8 +12,27 @@
 - 提醒会同时给：全屏动画 + 原创 8-bit 旋律 + 中文语音播报 + 系统通知 + 任务栏闪烁。
 - **主界面随窗口等比缩放**，窗口拉大拉小都是整比例缩放，不会挤成一团或留一大片白。
 
-> 不联网、无第三方依赖（除 Electron 运行时）。
+> **平时完全不联网**：待办、备忘、设置、统计全部只存在本机，不上传任何东西。
+> 唯一会联网的地方是设置页的「检查更新」——只在你点它、或者你开着自动检查时，
+> 去向 GitHub 问一句「有没有新版本」。
+> 除 Electron 运行时外只有一个第三方依赖 `electron-updater`，就是为了这个自动更新。
 > 角色、篮球、霓虹舞台全部是 Canvas 代码实时绘制的**原创美术**，音效是 Web Audio 实时合成。
+
+---
+
+## 🆕 v3.2.1 更新（自动更新）
+
+### ⬆ 设置页多了「软件更新」
+
+- 显示**当前版本**、更新状态和下载进度条。
+- 有新版本时**只提示，不自动下载**；点「下载新版本」才开始下，下好了再点「重启并安装」。
+- 安装是**静默**的：关掉软件 → 装上新版 → **自动重新打开**，不用再手动卸载旧版、重装新版。
+- **升级不丢数据**：待办、备忘、设置、宠物位置都存在用户数据目录，升级不碰它。
+- 可以关掉「自动检查更新」；关掉后仍能手动点「检查更新」。
+  后台自动查到的更新只用**托盘气泡**轻轻提一句，不抢前台、不打断你。
+
+> ⚠️ **这个版本要先手动装一次**：v3.2.1 之前的版本都没有内置更新器，
+> 没法自己更新自己。手动装一次 v3.2.1 之后，以后的新版本就能在设置页里一键更新了。
 
 ---
 
@@ -112,7 +131,7 @@
 > 宠物窗会被 Windows 夹成 760×560；③ 窗口 resize 时本地的 devicePixelRatio
 > 会覆盖主进程给的权威缩放值，跨屏瞬间算出错误的缩放。
 
-### 相关文件（v3.1 / v3.2）
+### 相关文件（v3.1 / v3.2 / v3.2.1）
 
 | 文件 | 作用 |
 | --- | --- |
@@ -120,6 +139,8 @@
 | `pet-draw.js` | 角色绘制 + 皮肤精灵图 + 8-bit 音效 —— 主界面舞台与桌面宠物窗**共用同一份** |
 | `skin-picker.js` | 皮肤「取列表 / 载入」的薄封装（要调主进程桥，所以单独放） |
 | `pet.html` / `pet.js` / `pet-preload.js` | 桌面宠物独立小窗（透明、置顶、可拖、右键菜单） |
+| `build/patch-icon.js` | 打包后给 exe 换图标 + 写版本信息（绕开 winCodeSign 的符号链接问题） |
+| `build/write-app-update.js` | 生成 `resources/app-update.yml`（更新器靠它找更新源）。**必须自己写**：我们的两步构建里 electron-builder 的 `afterPack` 不会执行，它自己不生成 |
 | `build/test-ui-scale.js` | 算法单测：`node build/test-ui-scale.js`，覆盖 12 种屏幕组合 |
 | `build/diag-run.cmd` | 端到端自检：模拟四种系统缩放，实测出屏物理尺寸并截图 |
 
@@ -131,7 +152,13 @@
 
 **方式一：GitHub Releases（推荐）**
 
-> **v3.2.0（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.0
+> **v3.2.1（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.1
+> 直接下载：[`iKunReminder-setup-v3.2.1.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.1/iKunReminder-setup-v3.2.1.exe)（约 110 MB，安装版）
+>
+> ⚠️ **v3.2.1 是最后一个需要手动装的版本** —— 装上一次之后，
+> 以后的新版本都能在「设置 → 软件更新」里一键更新，不用再卸载重装。
+>
+> 历史版本 **v3.2.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.0
 > 直接下载：[`iKunReminder-setup-v3.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.0/iKunReminder-setup-v3.2.0.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.0.0
@@ -306,22 +333,22 @@ npm run build:portable   # 便携版  → dist\iKunReminder-便携版.exe
 ```
 kunkun-reminder/
 ├─ dist/
-│  ├─ iKunReminder-setup-v<版本号>.exe  ← 推荐：装一次，之后 1 秒开
-│  ├─ iKunReminder-绿色版.zip           ← 推荐：免安装，0.7 秒开
-│  ├─ win-unpacked/                     ← 上面那个 zip 的解压态，可直接运行
-│  └─ iKunReminder.exe                  ← 单文件便携版（每次启动要解压 10 秒）
+│  ├─ iKunReminder-setup-v<版本号>.exe   ← 推荐：装一次，之后 1 秒开
+│  ├─ latest.yml                         ← 自动更新清单（更新器先拉它比对版本 + 校验 sha512）
+│  ├─ iKunReminder-setup-*.exe.blockmap  ← 差分更新索引（只下改动的那几块）
+│  ├─ iKunReminder-绿色版.zip            ← 推荐：免安装，0.7 秒开
+│  ├─ win-unpacked/                      ← 上面那个 zip 的解压态，可直接运行
+│  └─ iKunReminder.exe                   ← 单文件便携版（每次启动要解压 10 秒）
 ├─ 启动.cmd          ← 源码方式启动
-├─ build/
-│  └─ installer.nsh  自定义安装向导页（桌面快捷方式勾选框）
 ├─ main.js           Electron 主进程：窗口 / 抢前台 / 托盘 / 桌面宠物窗 / 右键菜单 / 拖窗限位
-│                   / 屏幕缩放适配（窗口逻辑尺寸 = 物理设计尺寸 ÷ k）/ 开机自启动
+│                   / 屏幕缩放适配 / 开机自启动 / 自动更新（检查·下载·静默安装）
 ├─ ui-scale.js       界面缩放的纯函数（缩放因子、窗口尺寸、换屏重排），主进程与页面共用
 ├─ pet-draw.js       角色绘制 + 皮肤系统 + 音效（主界面与桌面宠物窗共用同一份）
 ├─ skin-picker.js    皮肤列表 / 载入（调主进程桥）
-├─ preload.js        安全桥：alert / dismiss / 托盘与菜单指令 / 拖窗 / 桌面宠物开关 / 屏幕缩放
+├─ preload.js        安全桥：alert / 托盘与菜单指令 / 拖窗 / 桌面宠物 / 屏幕缩放 / 软件更新
 ├─ index.html        页面结构（自绘标题栏 + 标签页 + 主界面/待办/设置三页 + 各弹层）
-├─ style.css         浅色夏日主题 / 标签页 / 备忘待办列表 / 设置页样式
-├─ app.js            计时逻辑 + 备忘待办 + 待办调度 + 缩放（角色绘制已移到 pet-draw.js）
+├─ style.css         浅色夏日主题 / 标签页 / 备忘待办列表 / 设置页与「软件更新」卡样式
+├─ app.js            计时逻辑 + 备忘待办 + 待办调度 + 缩放 + 更新界面（角色绘制在 pet-draw.js）
 ├─ pet.html          桌面宠物窗页面（只有一个透明画布）
 ├─ pet.js            桌面宠物窗脚本（画自己 / 拖动 / 单击说话 / 右键菜单）
 ├─ pet-preload.js    桌面宠物窗的安全桥（最小接口）
@@ -329,9 +356,14 @@ kunkun-reminder/
 ├─ icon.png          应用图标（任务栏用）
 ├─ tray.png          托盘图标（和上面是同一张图）
 ├─ build/
-│  ├─ test-ui-scale.js  DPI 适配算法单测（node build/test-ui-scale.js）
-│  └─ diag-run.cmd      端到端 DPI 自检（模拟四种系统缩放并截图）
-├─ package.json      含 electron-builder 打包配置
+│  ├─ patch-icon.js       打包后给 exe 换图标 + 写版本信息
+│  ├─ write-app-update.js 生成 resources/app-update.yml（更新器靠它找更新源）
+│  ├─ make-icons.js       icon-src.html → icon.png / tray.png / icon.ico
+│  ├─ make-skins.js       生成皮肤精灵图
+│  ├─ installer.nsh       自定义安装向导页（桌面快捷方式勾选框）
+│  ├─ test-ui-scale.js    DPI 适配算法单测（node build/test-ui-scale.js）
+│  └─ diag-run.cmd        端到端 DPI 自检（模拟四种系统缩放并截图）
+├─ package.json      含 electron-builder 打包配置（含 publish → GitHub）
 └─ README.md
 ```
 
@@ -341,6 +373,18 @@ kunkun-reminder/
 
 **Q：关了窗口就没了？**
 点 ✕ 是收进托盘，还在后台计时。要真正退出：右键托盘图标 → 退出。
+
+**Q：怎么升级到新版本？还要先卸载吗？**
+**不用卸载。** 从 v3.2.1 起，设置页有「⬆ 软件更新」：
+有新版本时会显示出来，点「下载新版本」→ 下好了点「重启并安装」，
+它会自己关掉软件、静默装好、再把新版打开，**待办备忘设置都不丢**。
+
+> 只有 **v3.2.1 本身**要手动装一次 —— 更早的版本里没有更新器，没法自己更新自己。
+
+**Q：自动更新会不会偷偷装？会不会联网上传我的数据？**
+都不会。策略是**只提示**：查到新版本只显示出来，**不自动下载、更不自动安装**，
+下载和安装都要你亲手点。联网也只有在检查更新那一下，去向 GitHub 问一句有没有新版，
+待办、备忘、设置这些从来不上传。
 
 **Q：便携版 exe 第一次打开要等很久？**
 便携版**每次**都要等 10 秒左右 —— 它每次启动都会把 320 MB 解压到临时目录，这是

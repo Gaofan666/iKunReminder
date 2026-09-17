@@ -1,14 +1,14 @@
 {
   "name": "kunkun-reminder",
   "productName": "iKunReminder",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "喝水/休息提醒 + 电子宠物：到点自动跳到前台播放动画",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win dir && node build/patch-icon.js && electron-builder --win nsis --prepackaged dist/win-unpacked",
-    "build:fast": "electron-builder --win dir && node build/patch-icon.js",
-    "build:portable": "electron-builder --win dir && node build/patch-icon.js && electron-builder --win portable --prepackaged dist/win-unpacked"
+    "build": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js && electron-builder --win nsis --prepackaged dist/win-unpacked --publish never",
+    "build:fast": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js",
+    "build:portable": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js && electron-builder --win portable --prepackaged dist/win-unpacked --publish never"
   },
   "author": "",
   "license": "MIT",
@@ -22,6 +22,11 @@
     "productName": "iKunReminder",
     "directories": {
       "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Gaofan666",
+      "repo": "iKunReminder"
     },
     "files": [
       "main.js",
@@ -83,5 +88,8 @@
       "requestExecutionLevel": "user"
     },
     "compression": "normal"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

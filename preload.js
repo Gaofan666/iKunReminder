@@ -22,6 +22,16 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch: (on) => ipcRenderer.invoke('set-auto-launch', !!on),
 
+  /* 软件更新：只检查、只提示。下载和安装都必须由用户点，
+     主进程侧 autoDownload / autoInstallOnAppQuit 都是关的。 */
+  updateGetState: () => ipcRenderer.invoke('update-get-state'),
+  updateCheck: () => ipcRenderer.invoke('update-check'),
+  updateDownload: () => ipcRenderer.invoke('update-download'),
+  updateInstall: () => ipcRenderer.invoke('update-install'),
+  updateSetAutoCheck: (on) => ipcRenderer.invoke('update-set-auto-check', !!on),
+  onUpdateStatus: (cb) => ipcRenderer.on('update-status', (e, s) => cb(s)),
+  onUpdateInstalling: (cb) => ipcRenderer.on('update-installing', () => cb()),
+
   minimize: () => ipcRenderer.invoke('minimize'),
   hideToTray: () => ipcRenderer.invoke('hide'),
   showWindow: () => ipcRenderer.invoke('show-window'),
