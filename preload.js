@@ -22,6 +22,14 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch: (on) => ipcRenderer.invoke('set-auto-launch', !!on),
 
+  /* 护眼模式：把显示器色温调暖（改显卡伽马表）。状态由主进程持有，
+     页面只负责读出来画勾、点了之后告诉主进程去调。 */
+  eyeCareGet: () => ipcRenderer.invoke('eye-care-get'),
+  eyeCareSet: (on) => ipcRenderer.invoke('eye-care-set', !!on),
+  /* 拖色温滑杆：主进程那边一律按「打开」处理（拖了就是想看效果） */
+  eyeCareSetKelvin: (k) => ipcRenderer.invoke('eye-care-set-kelvin', Number(k)),
+  onEyeCareChanged: (cb) => ipcRenderer.on('eye-care-changed', (e, s) => cb(s)),
+
   /* 软件更新：只检查、只提示。下载和安装都必须由用户点，
      主进程侧 autoDownload / autoInstallOnAppQuit 都是关的。 */
   updateGetState: () => ipcRenderer.invoke('update-get-state'),

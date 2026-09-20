@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.2.8</span>
+    <span class="tb-ver" id="tbVer">v3.2.9</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -70,6 +70,11 @@
       <label class="chk big" title="勾上后桌面上会一直有一只宠物小窗，和主界面同时存在">
         <input type="checkbox" id="chkDesktopPet"><span>🐣 桌面宠物</span>
       </label>
+      <!-- 护眼模式：直接调显示器色温（降蓝光），和桌面宠物同一行 -->
+      <label class="chk big" title="把显示器色温调暖到护眼色温（约 4500K，降蓝光）。直接改显卡伽马表，是真的调色温不是叠黄遮罩；取消勾选立刻恢复原来的色温。开了 HDR 或显卡驱动不支持时会失效。">
+        <input type="checkbox" id="chkEyeCare"><span>🌙 护眼模式</span>
+      </label>
+      <span class="psr-label" id="eyeCareMsg" hidden></span>
     </div>
 
     <div class="pet-size-row" id="petSizeRow" hidden>
@@ -150,6 +155,7 @@
     <button class="set-nav-item on" data-target="secBasic">⚙ 设置</button>
     <button class="set-nav-item" data-target="secUpdate">⬆ 软件更新</button>
     <button class="set-nav-item" data-target="secMoyu">🐟 一键摸鱼</button>
+    <button class="set-nav-item" data-target="secEye">🌙 护眼模式</button>
   </nav>
 
   <section class="card set-col" id="setCard">
@@ -234,6 +240,44 @@
       </div>
       <p class="set-desc" id="moyuDesc">默认是 <b>Ctrl + Alt + M</b>。
         要包含 Ctrl 或 Alt，也可以直接用 F1～F12 这种功能键 —— 免得跟打字冲突。</p>
+    </div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkTap"><span>同一个键连按 3 下也能摸鱼</span></label>
+      <p class="set-desc" id="tapHint">—</p>
+    </div>
+    <div class="set-row">
+      <p class="set-label">连击用哪个键</p>
+      <div class="moyu-row">
+        <select class="skin-sel" id="tapKey"></select>
+      </div>
+      <p class="set-desc">只开放<b>修饰键和功能键</b>：字母数字键要是也能选，
+        打字时连按三下同一个字母就会当场把桌面收走。
+        选「Ctrl（左右都算）」的话，左 Ctrl 和右 Ctrl 都算数。</p>
+    </div>
+
+    <hr class="set-sep">
+
+    <!-- 护眼模式：直接调显示器色温（降蓝光）。和主界面「桌面宠物」那一行的开关是同一个 -->
+    <div class="col-head set-head" id="secEye"><h2>🌙 护眼模式</h2></div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkEyeSet"><span>启用护眼模式</span></label>
+      <p class="set-desc">把屏幕色温调暖、少放出蓝光。<b>直接改显卡的伽马表</b> ——
+        是真的把颜色调暖，不是往屏幕上叠一层黄遮罩。主界面「桌面宠物」那一行也有同一个开关，
+        勾哪边都一样。开了 HDR、或者显卡驱动不接受时，勾了也不会生效（这里会说明原因）。</p>
+    </div>
+    <div class="set-row">
+      <p class="set-label">色温</p>
+      <div class="eye-slider">
+        <input type="range" id="eyeK" min="2700" max="6500" step="100" value="4500"
+               title="往左更暖（护眼、蓝光更少），往右接近屏幕原色">
+        <output class="eye-k" id="eyeKOut">4500K</output>
+      </div>
+      <p class="set-desc">默认 <b>4500K</b>，和 Windows 夜间模式的中间档差不多。
+        数值越小越暖、蓝光越少；<b>6500K 基本就是屏幕原色</b>（等于没开）。
+        拖动时会立刻生效，松手就记住；这里拖了会自动把护眼模式打开。
+        有些显卡驱动不接受太暖的值，拖过头时<b>会自动退到它能接受的最暖温度</b>，
+        滑杆也会跟着吸回去。关掉护眼模式会还原成你原来的色温，不会留下痕迹。</p>
+      <p class="set-desc eye-err" id="eyeErr" hidden></p>
     </div>
 
   </section>

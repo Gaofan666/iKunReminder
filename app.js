@@ -323,6 +323,12 @@
     /* 设置 */
     chkDesktopPet: $('#chkDesktopPet'),
     desktopPetRow: $('#desktopPetRow'),
+    chkEyeCare: $('#chkEyeCare'),
+    eyeCareMsg: $('#eyeCareMsg'),
+    chkEyeSet: $('#chkEyeSet'),
+    eyeK: $('#eyeK'),
+    eyeKOut: $('#eyeKOut'),
+    eyeErr: $('#eyeErr'),
     pageTodo: $('#pageTodo'),
     chkAutoLaunch: $('#chkAutoLaunch'),
     chkAutoLaunchTodo: $('#chkAutoLaunchTodo'),
@@ -348,6 +354,9 @@
     /* 一键摸鱼 */
     chkMoyu: $('#chkMoyu'),
     moyuKey: $('#moyuKey'),
+    chkTap: $('#chkTap'),
+    tapKey: $('#tapKey'),
+    tapHint: $('#tapHint'),
     moyuReset: $('#moyuReset'),
     moyuDesc: $('#moyuDesc'),
     moyuPick: $('#moyuPick'),
@@ -879,14 +888,15 @@
     const topChrome = tbShown ? tbH : 0;
     const availW = Math.max(1, window.innerWidth);
     const availH = Math.max(1, window.innerHeight - topChrome);
-    /* 待办页要「填满窗口剩余高度」：它比主界面高，用 JS 把可用高度写进 CSS 变量，
-       比在 CSS 里拿 vh ÷ ui-scale 可靠（缩放容器里的 vh 语义容易算歪）。 */
-    document.documentElement.style.setProperty('--page-min-h', Math.round(availH) + 'px');
 
-    /* 内容高：主界面用实测的设计高；待办/设置页更高，就按当前实际布局高来算，
-       这样切到长列表页面也不会被压扁。 */
-    const natural = Math.max(1, view.scrollHeight || view.offsetHeight || 0);
-    const designContentH = Math.max(layoutH, natural) * k;
+    /* 内容高：只用「主界面实测的设计高」这个固定值，故意不看 view.scrollHeight。
+       为什么：设置页那张卡的高度是由 --page-view-h 控制的，而 --page-view-h = availH / s。
+       如果 s 反过来还依赖 scrollHeight，就成了正反馈 —— 每重排一次卡片就能长高一点、
+       s 跟着缩一点，一路缩到整张卡片都塞进窗口才停（表现就是「拖动窗口后卡片不断缩小，
+       直到显示出完整的卡片」）。切到设置页那一刻还没自增过，所以看着是正常的。
+       改成固定设计高之后，s 只跟窗口尺寸有关：窗口怎么变，整体等比缩放，不会再漂。
+       待办页的列表有 max-height:620px，本来就不会比主界面高，所以不会被裁掉。 */
+    const designContentH = layoutH * k;
 
     let s;
     if (UI_SCALE && UI_SCALE.computeContentScale) {
@@ -897,13 +907,19 @@
     if (!isFinite(s) || s <= 0) s = 1;
     s = Math.max(0.35, Math.min(MAX_SCALE, s));
 
+    /* 「窗口在设计空间里有多高」—— 待办页要填满它、设置页的卡片拿它当最大高度。
+       两处用的都是设计单位，而窗口可用高是 CSS 像素，所以必须除以 s。
+       （以前 --page-min-h 直接写 availH，只有 s 恰好等于 1 时才碰巧是对的。） */
+    const viewH = Math.max(1, Math.round(availH / s));
+    document.documentElement.style.setProperty('--page-min-h', viewH + 'px');
+
     view.style.top = topChrome + 'px';
     view.style.left = Math.max(0, (availW - designW * s) / 2) + 'px';
     view.style.transform = 'scale(' + s + ')';
     contentScale = s;            // 设置页导航跳转要用它把「视觉坐标」换算回「布局坐标」
     /* 设置页合并成一整张卡片后要整体滚动：把「视口在设计空间里有多高」写成 CSS 变量。
        直接写 vh 在缩放容器里会算歪，所以由 JS 按实际缩放比换算。 */
-    document.documentElement.style.setProperty('--page-view-h', Math.round(availH / s) + 'px');
+    document.documentElement.style.setProperty('--page-view-h', viewH + 'px');
     stage.resize();
     alertStage.resize();
   }
@@ -1363,7 +1379,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.8 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.9 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1810,6 +1826,43 @@
       el.moyuDesc.textContent = d;
       el.moyuDesc.className = 'set-desc' + ((st.on && !st.active) ? ' moyu-err' : '');
     }
+
+    /* 连击摸鱼：可选键清单由主进程给（页面别自己编，两边会不一致） */
+    if (el.chkTap) el.chkTap.checked = !!st.tapOn;
+    if (el.tapKey) {
+      const list = st.tapKeys || [];
+      if (el.tapKey.options.length !== list.length) {
+        el.tapKey.innerHTML = '';
+        list.forEach(function (k) {
+          const o = document.createElement('option');
+          o.value = k.id;
+          o.textContent = k.label;
+          el.tapKey.appendChild(o);
+        });
+      }
+      if (st.tapKey) el.tapKey.value = st.tapKey;
+      el.tapKey.disabled = !st.tapOn;
+    }
+    if (el.tapHint) {
+      const gap = st.tapGap || 500;
+      let t;
+      if (!st.on) {
+        t = '一键摸鱼关着，连击也不会生效。';
+      } else if (!st.tapOn) {
+        t = '除了组合键，还可以用「同一个键连按 3 下」触发（默认 ' + (st.tapKeyLabel || 'Ctrl')
+          + ' 连按 3 下）。这个功能要装一个全局键盘钩子并常驻一个后台进程，'
+          + '所以默认关着，得你手动勾上；钩子只用来数你指定的那个键，不记录任何其他按键。';
+      } else if (st.tapError) {
+        t = st.tapError;
+      } else if (!st.tapReady) {
+        t = '正在启动键盘钩子…';
+      } else {
+        t = '已生效：' + (st.tapKeyLabel || 'Ctrl') + ' 连按 3 下就摸鱼。'
+          + '两下之间最多隔 ' + gap + ' 毫秒，中间按了别的键就要重新数。';
+      }
+      el.tapHint.textContent = t;
+      el.tapHint.className = 'set-desc' + (st.tapOn && st.tapError ? ' moyu-err' : '');
+    }
   }
 
   function bindMoyu() {
@@ -1836,6 +1889,25 @@
     }
 
     if (el.moyuKey) el.moyuKey.addEventListener('click', startMoyuRecord);
+
+    /* 连击摸鱼：勾选 / 换键都交给主进程去重启键盘钩子 */
+    if (el.chkTap) {
+      el.chkTap.addEventListener('change', function (e) {
+        const want = e.target.checked;
+        native.moyuSet({ tapOn: want }).then(function (st) {
+          renderMoyu(st);
+          setCaption(want ? '连击摸鱼已开启，正在启动键盘钩子…' : '连击摸鱼已关闭');
+        }).catch(function () { e.target.checked = !want; });
+      });
+    }
+    if (el.tapKey) {
+      el.tapKey.addEventListener('change', function (e) {
+        native.moyuSet({ tapKey: e.target.value }).then(function (st) {
+          renderMoyu(st);
+          if (st && st.tapKeyLabel) setCaption('连击键已设为 ' + st.tapKeyLabel);
+        }).catch(function () { });
+      });
+    }
 
     if (el.moyuReset) {
       el.moyuReset.addEventListener('click', function () {
@@ -1966,6 +2038,40 @@
         settings.petOn = !!on;
         saveSettings();
         pushState();
+      });
+    }
+
+    /* 护眼模式：状态由主进程持有（它要落盘、还要在休眠唤醒后自动重设），
+       页面这边只负责显示和转发点击。 */
+    if (el.chkEyeCare) {
+      el.chkEyeCare.addEventListener('change', function (e) {
+        Sound.click();
+        eyeCareRequest(e.target.checked, null, e.target);
+      });
+    }
+    if (el.chkEyeSet) {
+      el.chkEyeSet.addEventListener('change', function (e) {
+        Sound.click();
+        eyeCareRequest(e.target.checked, null, e.target);
+      });
+    }
+    if (el.eyeK) {
+      el.eyeK.addEventListener('input', function (e) {
+        const k = +e.target.value;
+        if (el.eyeKOut) el.eyeKOut.textContent = k + 'K';   // 文字立刻跟手
+        eyeKPending = k;
+        if (eyeKTimer) clearTimeout(eyeKTimer);
+        eyeKTimer = setTimeout(function () {
+          eyeKTimer = null;
+          eyeCareRequest(true, eyeKPending, el.eyeK);       // 松手才真的去改色温
+        }, 220);
+      });
+    }
+    if (native && native.onEyeCareChanged) {
+      native.onEyeCareChanged(function (st) {
+        /* 拖动期间别让主进程的回报把滑杆拽回去 */
+        if (!eyeKTimer) paintEyeCare(st, false);
+        else paintEyeCare({ on: st.on, busy: st.busy, kelvin: eyeKPending, applied: st.applied, error: st.error }, false);
       });
     }
 
@@ -2442,6 +2548,70 @@
     });
   }
 
+  /* ------------------------------------------------------------ 护眼模式
+     色温是显卡驱动的全局状态，程序重启 / 休眠唤醒后可能被系统复位，
+     所以真正的状态放在主进程，页面只把 eyeCareGet() 的结果画出来。
+     主界面一个开关、设置页一个开关一个滑杆，三处都跟着主进程走。
+
+     滑杆要防抖：拖一下会连续触发 input，每次都去 spawn 一个 PowerShell
+     改伽马表又慢又费，所以「档位文字」立刻更新、「真正去改色温」等松手。
+     （改色温一律按「打开」处理 —— 拖了就是想看效果，不该拖了没反应。） */
+  let eyeCareMsgTimer = null;
+  let eyeKTimer = null;
+  let eyeKPending = 0;
+
+  function eyeCareMsg(txt, bad) {
+    if (eyeCareMsgTimer) { clearTimeout(eyeCareMsgTimer); eyeCareMsgTimer = null; }
+    if (el.eyeCareMsg) {
+      el.eyeCareMsg.hidden = !txt;
+      el.eyeCareMsg.textContent = txt || '';
+      el.eyeCareMsg.className = 'psr-label' + (bad ? ' bad' : '');
+    }
+    if (el.eyeErr) {
+      /* 出错时设置页也要说一声，否则在设置页拖滑杆的人不知道为什么没反应 */
+      el.eyeErr.hidden = !bad;
+      el.eyeErr.textContent = bad ? txt : '';
+    }
+    if (txt && !bad) {
+      eyeCareMsgTimer = setTimeout(function () { if (el.eyeCareMsg) el.eyeCareMsg.hidden = true; }, 3200);
+    }
+  }
+
+  function paintEyeCare(st, justToggled) {
+    st = st || {};
+    const on = !!st.on;
+    const k = st.kelvin || 4500;
+    [el.chkEyeCare, el.chkEyeSet].forEach(function (c) { if (c) c.checked = on; });
+    if (el.eyeK) {
+      if (+el.eyeK.value !== k) el.eyeK.value = k;
+      el.eyeK.disabled = !!st.busy;
+    }
+    if (el.eyeKOut) el.eyeKOut.textContent = k + 'K';
+    if (st.error) eyeCareMsg(st.error, true);
+    else if (st.busy) eyeCareMsg('正在设置…', false);
+    else if (on && justToggled) {
+      eyeCareMsg('已调暖到 ' + k + 'K' + (st.applied > 1 ? '（' + st.applied + ' 台显示器）' : ''), false);
+    } else eyeCareMsg('', false);
+  }
+
+  /* 统一的入口：主界面开关、设置页开关、滑杆都走这里 */
+  function eyeCareRequest(on, kelvin, srcEl) {
+    if (!native || !native.eyeCareSet) { if (srcEl) srcEl.checked = false; return; }
+    const back = function () { if (srcEl) srcEl.disabled = false; };
+    if (srcEl) srcEl.disabled = true;
+    const p = (kelvin === undefined || kelvin === null)
+      ? native.eyeCareSet(on)
+      : native.eyeCareSetKelvin(kelvin);
+    p.then(function (st) {
+      back();
+      paintEyeCare(st, !!on);
+    }).catch(function () {
+      back();
+      if (srcEl && srcEl.type === 'checkbox') srcEl.checked = !on;
+      paintEyeCare({ on: false, error: '设置失败，没能改屏幕色温' }, false);
+    });
+  }
+
   function bindAll() {
     bindPanelList();
 
@@ -2670,6 +2840,13 @@
     if (native && el.petSizeRow) el.petSizeRow.hidden = false;
     if (native && el.desktopPetRow) el.desktopPetRow.hidden = false;
     if (el.chkDesktopPet) el.chkDesktopPet.checked = !!settings.petOn;
+    /* 护眼模式的开关状态和色温都在主进程，问它要一次；
+       查到「没生效」时也要如实显示（不然用户以为开着，一直等护眼效果） */
+    if (native && native.eyeCareGet) {
+      native.eyeCareGet().then(function (st) {
+        paintEyeCare(st, false);
+      }).catch(function () { });
+    }
     updatePetSizeUI();
     if (native && native.setPetSize) native.setPetSize(settings.petSize);
 

@@ -382,6 +382,31 @@ body.anim-off *::after{animation-play-state:paused !important}
 /* 宠物默认大小选择 */
 .pet-size-row{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap}
 .psr-label{font-size:12.5px;color:var(--dim);letter-spacing:.5px;white-space:nowrap}
+/* 护眼模式的状态提示：成功时闪一下自动隐掉，失败（驱动不支持）要一直留着 */
+.psr-label.bad{color:#cf574d;white-space:normal}
+/* 护眼模式：色温滑杆（左暖右冷） */
+.eye-slider{display:flex;align-items:center;gap:12px;margin:4px 0 2px}
+.eye-slider input[type=range]{
+  flex:1;min-width:0;height:22px;appearance:none;-webkit-appearance:none;
+  background:transparent;cursor:pointer;
+}
+.eye-slider input[type=range]::-webkit-slider-runnable-track{
+  height:8px;border-radius:99px;
+  /* 左边暖黄、右边接近白，一眼看出往哪拖更护眼 */
+  background:linear-gradient(90deg,#ff9a3c 0%,#ffc86b 34%,#ffe9c2 62%,#eef2f7 100%);
+  border:1px solid var(--line);
+}
+.eye-slider input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-6px;
+  border-radius:50%;background:#fff;border:2px solid var(--lake);
+  box-shadow:0 2px 6px rgba(62,154,168,.35);
+}
+.eye-slider input[type=range]:disabled{opacity:.5;cursor:default}
+.eye-k{
+  min-width:64px;text-align:right;font-family:ui-monospace,Consolas,monospace;
+  font-size:14px;font-weight:600;color:var(--lake);
+}
+.set-desc.eye-err{color:#cf574d}
 /* 皮肤选择器（用原生 select，保持轻量） */
 .skin-sel{
   flex:1;min-width:0;max-width:230px;height:28px;padding:0 8px;

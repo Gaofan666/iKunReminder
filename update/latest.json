@@ -1,20 +1,20 @@
 {
-  "version": "3.2.8",
-  "releaseDate": "2026-09-20T10:17:01.262Z",
-  "notes": "## iKunReminder v3.2.8\n\n1. 🔧 **修好了「一键摸鱼」的目标窗口不最大化** —— 之前它不看是谁打开的，直接去最大化「当前最前面的那个窗口」，实测会把 Outlook / 浏览器之类顶到最前面，而真正要看的文档却留在后面\n2. 🎯 现在只认两种窗口：**这次新打开的**，或**刚被目标程序还原出来的老窗口**。其它窗口一概不碰（壁纸软件、桌面壳层、桌面宠物都不会被误伤）\n3. 🖥 **Win10 / Win11 都适配** —— 识别 DWM 隐身的空壳窗口（关掉的 UWP 应用会留一堆，以前会被当成目标窗口），UWP 应用窗口也能正确识别和最大化\n4. 🛡 修了一个隐藏问题：**连着按两次快捷键时，收起的窗口可能还原不回来**（桌面卡在全部最小化）。原因是写「收起了哪些窗口」这份清单是异步的，按太快会在清单写出来之前就被打断，现在会等它落盘\n5. 🔤 **设置页字号整体放大**，更新说明 / 选项 / 快捷键都看得更清楚了\n6. ✨ **左侧导航高亮不再乱闪**，而且点哪个分节就亮哪个（以前点「软件更新」可能亮成「一键摸鱼」）\n\n**下载**：`iKunReminder-setup-v3.2.8.exe`（约 110 MB，Windows x64，双击安装）\n",
-  "size": 115587335,
-  "sha512": "39I0wphjzxt3POxMyoK+mhA1MvFdJ5AnNCZagbMz7MSd7PTRaLyhqa8SdAo1QgDwSsS1wPYwV8EPghl9QguwlA==",
+  "version": "3.2.9",
+  "releaseDate": "2026-09-20T13:23:40.429Z",
+  "notes": "## iKunReminder v3.2.9\n\n1. 🌙 **新增「护眼模式」** —— 直接调显示器色温（降蓝光），和 f.lux / 护眼宝 一个原理：改的是显卡的伽马表，**真的把颜色调暖，不是往屏幕上叠一层黄遮罩**。主界面「桌面宠物」那一行有开关；**设置页新增一条色温滑杆**（2700K ~ 6500K，默认 4500K），拖的时候立刻生效、松手就记住，下次启动自动恢复\n2. 🛡 护眼模式不会留下痕迹：开启前会自动备份你原来的色温，关掉时**逐字符精确还原**；休眠唤醒、改分辨率、插拔显示器都会自动重新调暖（这些操作会让系统把色温复位）；**退出程序时也会还原**，不会把屏幕留在暖色上\n3. ⌨ **摸鱼多了一种触发方式：同一个键连按 3 下**（默认 Ctrl 连按 3 下，也可以指定 Alt / Shift / Win / F1~F12 / Caps Lock 等）。两下之间最多隔 500 毫秒，中间按了别的键就重新数。它**只观察不拦截**，Ctrl 照常能用；因为要装一个全局键盘钩子，所以默认关着，需要你在设置页手动勾选\n4. 🖼 **主界面比例固定，缩放时整体等比缩放** —— 拖动窗口只会让界面整体放大缩小，不会再变形或重新排版\n5. 🐛 **修好了「设置页卡片越拖越小」** —— 以前切到设置页后只要拖动一下窗口，卡片就会一路缩小，直到整张卡片都显示出来才停（缩放比和卡片高度互相追着改，形成了正反馈）。现在缩放比只由窗口尺寸决定，怎么拖都不漂\n6. 🐛 修好了系统缩放不是 100% 时，**待办页填不满窗口**（底部空一截）的问题\n\n**下载**：`iKunReminder-setup-v3.2.9.exe`（约 110 MB，Windows x64，双击安装）\n",
+  "size": 115602174,
+  "sha512": "1N7kUmXBlGqAaMBultWffUDt8YK52HiU19k9TcUjb5rbvIy+bI/kbRflu3U2PmBp0LAJeCKTH6LqSHrY72Z5TQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.8/iKunReminder-setup-v3.2.8.exe.part1",
-      "size": 57793668,
-      "sha512": "Jem2c7ajSg6sqw2HKkjKZYVM0gDLnmdFsJPQx7lLA7uFQH7U9Vfad6XdyiKASagQI5MyES51czI7mf0CNUAPfQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.9/iKunReminder-setup-v3.2.9.exe.part1",
+      "size": 57801087,
+      "sha512": "m9X5zqKX5vY5CA73+igBnin1pcNfHz+RIhkHSF5DS4LRtpZxqsEgq9fxpz8A/MzxLMV2siKmhrNkDPsnBOKq9g==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.8/iKunReminder-setup-v3.2.8.exe.part2",
-      "size": 57793667,
-      "sha512": "sopE9zG4CfBO3Uz+qmdxkoq+NAaauKm0hGwvVRGT1l1EKx5UcEkxaB4nClK/2sqYI7vi+9ugkmCzXadqat4qDA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.9/iKunReminder-setup-v3.2.9.exe.part2",
+      "size": 57801087,
+      "sha512": "tDEeP3GY00Pp111uezjGlNBYoOadye7yXh5fMsPz+urIVVqxc85fYMJciad90iNyg4KcHoLUUgOCfgJOOXvaMg==",
       "index": 2
     }
   ]
