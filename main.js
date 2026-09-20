@@ -490,6 +490,24 @@ function createWindow() {
               'return {scrollH:c.scrollHeight, clientH:c.clientHeight, 可滚动:c.scrollHeight>c.clientHeight+4,' +
               'overflowY:getComputedStyle(c).overflowY, pageViewH:getComputedStyle(document.documentElement).getPropertyValue("--page-view-h")};})()',
               true));
+            /* 点最后一个导航项，验证「滚动定位 + 高亮」都生效 */
+            const navBefore = await win.webContents.executeJavaScript(
+              '(function(){var c=document.getElementById("setCard");return c?c.scrollTop:-1;})()', true);
+            await win.webContents.executeJavaScript(
+              'document.querySelectorAll("#setNav [data-target]")[2].click(); true;', true);
+            await new Promise(function (r) { setTimeout(r, 2000); });
+            diagLog('set-nav', {
+              点击前scrollTop: navBefore,
+              after: await win.webContents.executeJavaScript(
+                '(function(){var c=document.getElementById("setCard");if(!c)return null;' +
+                'var cr=c.getBoundingClientRect();var rel={};' +
+                '["secBasic","secUpdate","secMoyu"].forEach(function(id){' +
+                'var e=document.getElementById(id);' +
+                'rel[id]=e?Math.round((e.getBoundingClientRect().top-cr.top)*10)/10:"NULL";});' +
+                'var on=document.querySelector("#setNav .on");' +
+                'return {scrollTop:Math.round(c.scrollTop), 最大可滚:c.scrollHeight-c.clientHeight,' +
+                'rel:rel, 高亮:on?on.textContent.trim():""};})()', true)
+            });
           }
           if (DIAG.moyu) {
             diagLog('moyu-step1-before', { visible: win.isVisible() });

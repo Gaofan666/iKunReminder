@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.2.5</span>
+    <span class="tb-ver" id="tbVer">v3.2.6</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -142,13 +142,19 @@
   </section>
 </main>
 
-<!-- ===================== 设置页 ===================== -->
 <!-- ===================== 设置页 =====================
-     三块内容合并成一整张卡片，整体上下滚动（不再分几张卡片互相挤位置） -->
+     三块内容合并成一整张卡片，整体上下滚动（不再分几张卡片互相挤位置）；
+     左侧是导航，点一下滑到对应功能，滚动时也会高亮当前所在的那块 -->
 <main class="layout page" id="pageSettings" hidden>
+  <nav class="card set-nav" id="setNav">
+    <button class="set-nav-item on" data-target="secBasic">⚙ 设置</button>
+    <button class="set-nav-item" data-target="secUpdate">⬆ 软件更新</button>
+    <button class="set-nav-item" data-target="secMoyu">🐟 一键摸鱼</button>
+  </nav>
+
   <section class="card set-col" id="setCard">
 
-    <div class="col-head set-head"><h2>⚙ 设置</h2></div>
+    <div class="col-head set-head" id="secBasic"><h2>⚙ 设置</h2></div>
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkAutoLaunch"><span>开机自动启动</span></label>
       <p class="set-desc">勾上之后，开机时程序会<b>直接藏在右下角托盘里</b>，不会弹出主界面；
@@ -174,7 +180,7 @@
     <hr class="set-sep">
 
     <!-- 软件更新：只检查、只提示，下载与安装都由用户点 -->
-    <div class="col-head set-head"><h2>⬆ 软件更新</h2></div>
+    <div class="col-head set-head" id="secUpdate"><h2>⬆ 软件更新</h2></div>
     <div class="set-row">
       <p class="upd-line">
         <span>当前版本 <b id="updCur">—</b></span>
@@ -203,7 +209,7 @@
 
     <!-- 一键摸鱼（老板键）：只由快捷键触发，卡片里不放按钮。
          按一次收起桌面所有窗口并打开指定程序/文档，再按一次全部还原 -->
-    <div class="col-head set-head"><h2>🐟 一键摸鱼</h2></div>
+    <div class="col-head set-head" id="secMoyu"><h2>🐟 一键摸鱼</h2></div>
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkMoyu"><span>启用一键摸鱼</span></label>
       <p class="set-desc">开着的时候，按下面的快捷键就会：<b>先把桌面上所有窗口收起来</b>，

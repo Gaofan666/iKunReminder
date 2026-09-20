@@ -191,7 +191,25 @@ body.anim-off *::after{animation-play-state:paused !important}
 /* ---------- 设置页：三块内容合并成一整张卡片，整体上下滚动 ----------
    以前是三张独立卡片排在网格里，更新说明一长就把「一键摸鱼」整块往下推。
    现在合成一张卡，卡内滚动；--page-view-h 由 JS 算出「视口在设计空间里有多高」。 */
-#pageSettings{grid-template-columns:1fr;align-items:start}
+#pageSettings{grid-template-columns:158px minmax(0,1fr);gap:16px;align-items:start}
+
+/* 左侧导航：卡片在内部滚动，所以导航天然是固定的，不用 position:sticky */
+.set-nav{
+  display:flex;flex-direction:column;gap:4px;
+  padding:9px 8px;border-radius:16px;
+}
+.set-nav-item{
+  appearance:none;cursor:pointer;text-align:left;
+  font-family:inherit;font-size:13px;font-weight:600;color:var(--dim);
+  background:transparent;border:0;border-radius:10px;
+  padding:9px 11px;
+  transition:background .15s ease,color .15s ease,box-shadow .18s ease;
+}
+.set-nav-item:hover{background:rgba(74,155,212,.10);color:var(--text)}
+.set-nav-item.on{
+  background:linear-gradient(100deg,var(--sky),var(--lake));
+  color:#fff;box-shadow:0 6px 16px rgba(62,154,168,.28);
+}
 #pageSettings .set-col{
   max-height:var(--page-view-h,820px);
   overflow-y:auto;overflow-x:hidden;

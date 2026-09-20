@@ -329,6 +329,9 @@
     chkTodoCatchUp: $('#chkTodoCatchUp'),
     btnOpenDataDir: $('#btnOpenDataDir'),
     setAbout: $('#setAbout'),
+    /* 设置页左侧导航 */
+    setNav: $('#setNav'),
+    setCard: $('#setCard'),
     /* 软件更新 */
     updCur: $('#updCur'),
     updState: $('#updState'),
@@ -896,12 +899,17 @@
     view.style.top = topChrome + 'px';
     view.style.left = Math.max(0, (availW - designW * s) / 2) + 'px';
     view.style.transform = 'scale(' + s + ')';
+    contentScale = s;            // 设置页导航跳转要用它把「视觉坐标」换算回「布局坐标」
     /* 设置页合并成一整张卡片后要整体滚动：把「视口在设计空间里有多高」写成 CSS 变量。
        直接写 vh 在缩放容器里会算歪，所以由 JS 按实际缩放比换算。 */
     document.documentElement.style.setProperty('--page-view-h', Math.round(availH / s) + 'px');
     stage.resize();
     alertStage.resize();
   }
+
+  /* #view 当前的 transform scale。设置页的导航跳转要拿它把
+     getBoundingClientRect() 的「视觉坐标」换算回滚动容器的「布局坐标」 */
+  let contentScale = 1;
 
   let fitPending = false;
   function requestFit() {
@@ -1354,8 +1362,74 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.5 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.6 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
+  }
+
+  /* ------------------------------------------------------------ 设置页左侧导航
+     整张设置卡在内部滚动：点导航项滑到对应分节；
+     反过来滚卡片时也高亮当前所在的那块（scroll-spy）。 */
+  function bindSettingsNav() {
+    if (!el.setNav || !el.setCard) return;
+    const items = Array.prototype.slice.call(el.setNav.querySelectorAll('[data-target]'));
+    const secs = items.map(function (b) { return document.getElementById(b.dataset.target); });
+
+    function highlight(idx) {
+      items.forEach(function (b, i) { b.classList.toggle('on', i === idx); });
+    }
+
+    /* 把目标分节滚到卡片顶部。
+       坑：卡片在 #view 里被 transform:scale() 缩放过，getBoundingClientRect()
+       给的是缩放后的视觉坐标，而 scrollTop / scrollTo 用的是布局坐标 ——
+       差值必须除以 contentScale，否则缩放比不是 1 的屏上会滚偏。 */
+    function goTo(sec, smooth) {
+      const cr = el.setCard.getBoundingClientRect();
+      const r = sec.getBoundingClientRect();
+      const top = el.setCard.scrollTop + (r.top - cr.top) / (contentScale || 1) - 6;
+      el.setCard.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+    }
+
+    /* 谁在顶部就算谁「当前所在」。
+       注意最后几节可能永远够不到顶部（内容不够长、已经滚到底了），
+       所以到底了就一律高亮最后一项 —— 否则点最后一节导航，高亮会停在上面某一节。 */
+    function spyNow() {
+      const c = el.setCard;
+      if (c.scrollTop + c.clientHeight >= c.scrollHeight - 4) {
+        highlight(items.length - 1);
+        return;
+      }
+      const cr = c.getBoundingClientRect();
+      let idx = 0;
+      for (let i = 0; i < secs.length; i++) {
+        if (!secs[i]) continue;
+        if (secs[i].getBoundingClientRect().top - cr.top <= 14) idx = i;
+      }
+      highlight(idx);
+    }
+
+    items.forEach(function (btn, i) {
+      btn.addEventListener('click', function () {
+        if (!secs[i]) return;
+        goTo(secs[i], true);
+        highlight(i);
+        /* 平滑滚动期间位置一直在变，持续校正一小会儿，滚停后自然落在正确的分节上。
+           这里刻意不用 requestAnimationFrame 节流：窗口被遮挡时 rAF 会被节流甚至
+           不触发，节流锁会卡死、后续高亮全部丢失（这个坑实测踩到过）。 */
+        let n = 0;
+        const t = setInterval(function () {
+          spyNow();
+          if (++n >= 14) clearInterval(t);
+        }, 90);
+      });
+    });
+
+    let spyTimer = null;
+    el.setCard.addEventListener('scroll', function () {
+      if (spyTimer) return;
+      spyTimer = setTimeout(function () { spyTimer = null; spyNow(); }, 60);
+    });
+
+    spyNow();
   }
 
   /* ------------------------------------------------------------ 软件更新
@@ -2534,6 +2608,7 @@
     bindDesktopPet();
     bindUpdate();
     bindMoyu();
+    bindSettingsNav();
   }
 
   /* ---------------------------------------------------------- 启动 */
