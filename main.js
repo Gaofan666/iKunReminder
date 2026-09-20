@@ -1766,6 +1766,45 @@ function psRun(script, done) {
     });
 }
 
+/* 摸鱼时【绝对不碰】的窗口。
+   壁纸软件（Wallpaper Engine / Lively 这类）是把壁纸画在挂在 WorkerW / Progman
+   下面的窗口里的，一旦被最小化，桌面就只剩纯色背景，而且它自己不一定恢复得回来。
+   从两个维度识别：窗口类名（桌面壳层）+ 进程名（壁纸类软件）。 */
+const MOYU_SKIP_CLASSES = [
+  'Progman', 'WorkerW',                                    // 桌面本体
+  'Shell_TrayWnd', 'Shell_SecondaryTrayWnd',               // 任务栏
+  'SysListView32', 'SysHeader32',                          // 桌面图标
+  'ApplicationManager_DesktopShellWindow',
+  'Windows.UI.Core.CoreWindow',
+  'XamlExplorerHostIslandWindow', 'Xaml_WindowedPopupClass',
+  'TopLevelWindowForOverflowXamlIsland',
+  'ForegroundStaging', 'MultitaskingViewFrame',
+  'TaskListThumbnailWnd', 'Shell_InputSwitchTopLevelWindow',
+  'EdgeUiInputTopWndClass', 'NarratorHelperWindow',
+  'Windows.Internal.Shell.TabProxyWindow'
+].join(',');
+
+const MOYU_SKIP_PROCS = [
+  'wallpaper32', 'wallpaper64', 'wallpaper_engine', 'wallpaperengine', 'ui32', 'ui64',  // Wallpaper Engine
+  'lively', 'livelywpf',                    // Lively Wallpaper
+  'rainmeter', 'deskscapes', 'dreamscene',  // 其他动态壁纸/桌面小工具
+  'dynamicwallpaper', 'wallpaper'
+].join(',');
+
+/* 还能自己在 userData\moyu-skip.txt 里补进程名（一行一个，或用逗号分隔），
+   免得遇到我没收录的壁纸软件就没辙 */
+function moyuSkipProcs() {
+  let extra = '';
+  try {
+    extra = fs.readFileSync(path.join(app.getPath('userData'), 'moyu-skip.txt'), 'utf8')
+      .replace(/^\uFEFF/, '');
+  } catch (e) { /* 没这个文件很正常 */ }
+  const list = extra.split(/[\r\n,]+/)
+    .map(function (s) { return s.trim().toLowerCase(); })
+    .filter(Boolean);
+  return list.length ? (MOYU_SKIP_PROCS + ',' + list.join(',')) : MOYU_SKIP_PROCS;
+}
+
 /* 用 EnumWindows 逐个精确最小化，而不是 Shell 的 MinimizeAll()。
    原因：MinimizeAll 是「显示桌面」那套状态，紧接着 Start-Process 打开新窗口时
    会把它顶掉 —— 实测出现「文档打开了、但自己的窗口又弹回来了」。
@@ -1775,6 +1814,7 @@ const MOYU_WINAPI = [
   'using System;',
   'using System.Collections.Generic;',
   'using System.Runtime.InteropServices;',
+  'using System.Text;',
   'public class KkWin {',
   '  delegate bool EnumProc(IntPtr h, IntPtr l);',
   '  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);',
@@ -1783,7 +1823,6 @@ const MOYU_WINAPI = [
      static extern 默认是 private，漏了 public 会报 "does not contain a method named" */
   '  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);',
   '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
-  '  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);',
   '',
   /* 前台窗口属于哪个进程；拿不到返回 0 */
   '  public static int ForegroundPid() {',
@@ -1794,21 +1833,40 @@ const MOYU_WINAPI = [
   '  }',
   '  public static void MaximizeForeground() { ShowWindow(GetForegroundWindow(), 3); }',
   '  [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);',
+  '  [DllImport("user32.dll")] static extern int GetClassName(IntPtr h, StringBuilder s, int n);',
   '  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
   '  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);',
   '  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);',
   '',
-  '  public static IntPtr[] MinimizeAll(int selfPid) {',
+  '  static List<string> SplitCsv(string csv) {',
+  '    var l = new List<string>();',
+  '    if (csv != null) {',
+  '      foreach (var s in csv.Split(new char[] { (char)44 })) {',
+  '        var t = s.Trim().ToLower();',
+  '        if (t.Length > 0) l.Add(t);',
+  '      }',
+  '    }',
+  '    return l;',
+  '  }',
+  '',
+  '  public static IntPtr[] MinimizeAll(int selfPid, string skipProcs, string skipClasses) {',
+  '    var procs = SplitCsv(skipProcs);',
+  '    var classes = SplitCsv(skipClasses);',
   '    var list = new List<IntPtr>();',
   '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
   '      if (!IsWindowVisible(h)) return true;',
   '      if (GetWindowTextLength(h) == 0) return true;',
   '      if ((GetWindowLong(h, -20) & 0x00000080) != 0) return true;',   // WS_EX_TOOLWINDOW
+  '      var cb = new StringBuilder(256); GetClassName(h, cb, 256);',
+  '      if (classes.Contains(cb.ToString().ToLower())) return true;',    // 桌面壳层，绝不碰
   '      uint pid; GetWindowThreadProcessId(h, out pid);',
   '      if ((int)pid == selfPid) return true;',
-  '      if (IsIconic(h)) return true;',                                 // 本来就最小化的不动
+  '      string pname = "";',
+  '      try { pname = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName.ToLower(); } catch {}',
+  '      if (procs.Contains(pname)) return true;',                        // 壁纸类软件，绝不碰
+  '      if (IsIconic(h)) return true;',                                  // 本来就最小化的不动
   '      list.Add(h);',
-  '      ShowWindow(h, 6);',                                             // SW_MINIMIZE
+  '      ShowWindow(h, 6);',                                              // SW_MINIMIZE
   '      return true;',
   '    }, IntPtr.Zero);',
   '    return list.ToArray();',
@@ -1844,8 +1902,10 @@ function moyuGo() {
   const lines = [
     "$ErrorActionPreference = 'SilentlyContinue'",
     MOYU_WINAPI,
-    /* 排除自己这个进程的窗口（已经用 hideToTray 藏了） */
-    '$hs = [KkWin]::MinimizeAll(' + process.pid + ')',
+    /* 排除自己这个进程的窗口（已经用 hideToTray 藏了），
+       并且跳过桌面壳层和壁纸类软件 —— 收了它们桌面就空了 */
+    '$hs = [KkWin]::MinimizeAll(' + process.pid
+      + ", '" + moyuSkipProcs() + "', '" + MOYU_SKIP_CLASSES + "')",
     "$csv = (($hs | ForEach-Object { $_.ToInt64().ToString() }) -join ',')",
     "[System.IO.File]::WriteAllText('" + stateFile + "', $csv)",
     "$target = '" + t + "'",

@@ -1350,7 +1350,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.2 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.3 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 

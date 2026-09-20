@@ -20,6 +20,29 @@
 
 ---
 
+## 🐛 v3.2.3 修复（一键摸鱼会把动态壁纸收掉）
+
+v3.2.2 的「一键摸鱼」是「把所有有标题的可见窗口都最小化」，结果**把 Wallpaper Engine
+这类动态壁纸软件也收走了** —— 壁纸是画在挂在 `WorkerW` / `Progman`（桌面壳层）下面的
+窗口里的，一旦被最小化，桌面就只剩纯色背景，而且它自己不一定恢复得回来。
+
+现在加了**两道白名单判断**，这几类窗口一律不碰：
+
+| 维度 | 不碰的东西 |
+| --- | --- |
+| **窗口类名** | `Progman` / `WorkerW`（桌面本体）、`Shell_TrayWnd`（任务栏）、`SysListView32`（桌面图标）、`Windows.UI.Core.CoreWindow`、以及一批 XAML 壳层窗口 |
+| **进程名** | Wallpaper Engine（`wallpaper32/64`、`ui32/64`）、Lively（`lively`、`livelywpf`）、Rainmeter、DeskScapes、DreamScene、`dynamicwallpaper` 等 |
+
+> **还能自己补**：如果用的是别的动态壁纸软件没被认出来，在
+> `%APPDATA%\iKunReminder\moyu-skip.txt` 里写它的进程名（一行一个，或用逗号分隔）就行，
+> 摸鱼时会一并跳过。
+
+> 💡 **壁纸还是没回来？** 这多半是 Wallpaper Engine 自己的「其他程序最大化时暂停」
+> 在起作用 —— 摸鱼会打开一个最大化的文档，它会据此暂停壁纸。在 Wallpaper Engine
+> 设置里把那条暂停规则关掉，或者退出重开一次 Wallpaper Engine 即可。
+
+---
+
 ## 🆕 v3.2.2 更新（一键摸鱼 · 老板键）
 
 ### 🐟 设置页多了「一键摸鱼」
@@ -175,11 +198,14 @@
 
 **方式一：GitHub Releases（推荐）**
 
-> **v3.2.2（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.2
-> 直接下载：[`iKunReminder-setup-v3.2.2.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.2/iKunReminder-setup-v3.2.2.exe)（约 110 MB，安装版）
+> **v3.2.3（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.3
+> 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)（约 110 MB，安装版）
 >
 > ⚠️ **v3.2.1 及更早的版本需要手动装一次**（它们里面没有更新器，没法自己更新自己）。
-> 装上 v3.2.2 之后就不用了 —— 以后的新版本都能在「设置 → 软件更新」里一键更新。
+> 装上 v3.2.2 或更高之后就不用了 —— 以后的新版本都能在「设置 → 软件更新」里一键更新。
+>
+> 历史版本 **v3.2.2 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.2
+> 直接下载：[`iKunReminder-setup-v3.2.2.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.2/iKunReminder-setup-v3.2.2.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.1 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.1
 > 直接下载：[`iKunReminder-setup-v3.2.1.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.1/iKunReminder-setup-v3.2.1.exe)（约 110 MB，安装版）
