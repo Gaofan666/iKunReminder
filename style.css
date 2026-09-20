@@ -200,7 +200,7 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .set-nav-item{
   appearance:none;cursor:pointer;text-align:left;
-  font-family:inherit;font-size:13px;font-weight:600;color:var(--dim);
+  font-family:inherit;font-size:14.5px;font-weight:600;color:var(--dim);
   background:transparent;border:0;border-radius:10px;
   padding:9px 11px;
   transition:background .15s ease,color .15s ease,box-shadow .18s ease;
@@ -227,13 +227,13 @@ body.anim-off *::after{animation-play-state:paused !important}
 .set-head:first-child{margin-top:0}
 .set-row{padding:14px 2px;border-bottom:1px dashed var(--line)}
 .set-row:last-child{border-bottom:0}
-.set-desc{margin:7px 0 0;font-size:12px;line-height:1.8;color:var(--dim)}
+.set-desc{margin:8px 0 0;font-size:13.5px;line-height:1.85;color:var(--dim)}
 .set-desc b{color:var(--lake)}
 
 /* ---------- 设置页：软件更新 ---------- */
-.upd-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0;font-size:13px;color:var(--text)}
-.upd-line b{color:var(--lake);font-size:15px}
-.upd-state{font-size:12.5px;color:var(--dim)}
+.upd-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0;font-size:14.5px;color:var(--text)}
+.upd-line b{color:var(--lake);font-size:17px}
+.upd-state{font-size:13.5px;color:var(--dim)}
 .upd-state.ok{color:var(--leaf)}
 .upd-state.warn{color:#c98a2e}
 .upd-state.err{color:#cf574d}
@@ -246,14 +246,14 @@ body.anim-off *::after{animation-play-state:paused !important}
 .upd-btns{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
 
 /* ---------- 设置页：一键摸鱼 ---------- */
-.set-label{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--text)}
+.set-label{margin:0 0 9px;font-size:15px;font-weight:600;color:var(--text)}
 
 /* ---------- 设置页：更新内容（长了就内部滚动，别把下面的卡片顶下去） ---------- */
 .upd-note{
   max-height:148px;overflow-y:auto;overflow-x:hidden;
   padding:10px 12px;border:1px solid var(--line);border-radius:11px;
   background:rgba(74,155,212,.06);
-  font-size:12px;line-height:1.9;color:var(--dim);
+  font-size:13.5px;line-height:1.9;color:var(--dim);
   white-space:pre-wrap;word-break:break-word;overscroll-behavior:contain;
 }
 .upd-note::-webkit-scrollbar{width:8px}
@@ -273,7 +273,7 @@ body.anim-off *::after{animation-play-state:paused !important}
 .moyu-key.bad{border-color:#cf574d;color:#cf574d}
 /* 伪装目标的路径可能很长，等宽 + 强制换行，别把卡片撑破 */
 #moyuTarget{
-  font-family:ui-monospace,Consolas,monospace;font-size:12px;
+  font-family:ui-monospace,Consolas,monospace;font-size:13px;
   word-break:break-all;line-height:1.75;
 }
 .moyu-err{color:#cf574d}
@@ -285,7 +285,7 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .quick-time button:hover{border-color:var(--lake);color:var(--lake)}
 
-.chk.big{font-size:13.5px;font-weight:600}
+.chk.big{font-size:15px;font-weight:600}
 .it-row.col{display:block}
 .it-row textarea{
   width:100%;box-sizing:border-box;margin-top:6px;padding:9px 11px;
@@ -375,7 +375,7 @@ body.anim-off *::after{animation-play-state:paused !important}
 .btn.sm{padding:7px 12px;font-size:12.5px;font-weight:500}
 .btn.big{padding:13px 26px;font-size:15px;border-radius:14px}
 
-.chk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none}.chk input{width:15px;height:15px;accent-color:var(--lake);cursor:pointer}
+.chk{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--dim);cursor:pointer;user-select:none}.chk input{width:15px;height:15px;accent-color:var(--lake);cursor:pointer}
 
 .hint{margin:10px 4px 0;font-size:11.5px;color:var(--dim);line-height:1.7}
 

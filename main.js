@@ -493,15 +493,25 @@ function createWindow() {
               'return {scrollH:c.scrollHeight, clientH:c.clientHeight, 可滚动:c.scrollHeight>c.clientHeight+4,' +
               'overflowY:getComputedStyle(c).overflowY, pageViewH:getComputedStyle(document.documentElement).getPropertyValue("--page-view-h")};})()',
               true));
-            /* 点最后一个导航项，验证「滚动定位 + 高亮」都生效 */
+            /* 逐个点三个导航项，验证「滚动定位 + 点哪亮哪」。
+               顺带在页面里挂一个 40ms 的采样器，把点击后 1.5 秒内高亮项的
+               变化序列记下来 —— 高亮闪烁是瞬时的，只看最终状态测不出来，
+               序列长度 > 1 就说明中途闪到过别的项。 */
             const navBefore = await win.webContents.executeJavaScript(
               '(function(){var c=document.getElementById("setCard");return c?c.scrollTop:-1;})()', true);
-            await win.webContents.executeJavaScript(
-              'document.querySelectorAll("#setNav [data-target]")[2].click(); true;', true);
-            await new Promise(function (r) { setTimeout(r, 2000); });
-            diagLog('set-nav', {
-              点击前scrollTop: navBefore,
-              after: await win.webContents.executeJavaScript(
+            const navRuns = [];
+            for (let ni = 0; ni < 3; ni++) {
+              await win.webContents.executeJavaScript(
+                '(function(){window.__navSeq=[];var t0=Date.now();' +
+                'window.__navTimer=setInterval(function(){' +
+                'var on=document.querySelector("#setNav .on");' +
+                'var v=on?on.textContent.trim():"";var s=window.__navSeq;' +
+                'if(s.length===0||s[s.length-1].v!==v)s.push({t:Date.now()-t0,v:v});' +
+                'if(Date.now()-t0>1500)clearInterval(window.__navTimer);},40);' +
+                'document.querySelectorAll("#setNav [data-target]")[' + ni + '].click();return true;})()', true);
+              await new Promise(function (r) { setTimeout(r, 1800); });
+              const sampled = await win.webContents.executeJavaScript('window.__navSeq', true);
+              const settled = await win.webContents.executeJavaScript(
                 '(function(){var c=document.getElementById("setCard");if(!c)return null;' +
                 'var cr=c.getBoundingClientRect();var rel={};' +
                 '["secBasic","secUpdate","secMoyu"].forEach(function(id){' +
@@ -509,8 +519,17 @@ function createWindow() {
                 'rel[id]=e?Math.round((e.getBoundingClientRect().top-cr.top)*10)/10:"NULL";});' +
                 'var on=document.querySelector("#setNav .on");' +
                 'return {scrollTop:Math.round(c.scrollTop), 最大可滚:c.scrollHeight-c.clientHeight,' +
-                'rel:rel, 高亮:on?on.textContent.trim():""};})()', true)
-            });
+                'rel:rel, 高亮:on?on.textContent.trim():""};})()', true);
+              navRuns.push({
+                第几次: ni + 1,
+                点的: await win.webContents.executeJavaScript(
+                  'document.querySelectorAll("#setNav [data-target]")[' + ni + '].textContent.trim()', true),
+                高亮变化序列: sampled,
+                变化次数: (sampled || []).length,
+                最终: settled
+              });
+            }
+            diagLog('set-nav', { 点击前scrollTop: navBefore, 三次点击: navRuns });
           }
           if (DIAG.moyu) {
             diagLog('moyu-step1-before', { visible: win.isVisible() });
@@ -2017,6 +2036,7 @@ let moyuRunning = false;      // 是否正处在「摸鱼中」
 let moyuCustom = false;       // 快捷键是不是用户自己录的
 let moyuAutoPicked = false;   // 这次是不是自动顺位换了一个组合
 let moyuGoChild = null;       // 「收起桌面 + 打开目标」那个 PowerShell 进程
+let moyuBacking = false;      // 正在还原（等清单落盘 → kill → Restore），期间不接受切换
 
 function moyuPrefFile() { return path.join(app.getPath('userData'), 'moyu.json'); }
 
@@ -2075,8 +2095,17 @@ function psRun(script, done) {
   return execFile('powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', b64],
     { windowsHide: true, timeout: 30000 },
-    function (err) {
-      if (err) diagLog('moyu-ps-error', { message: String((err && err.message) || err) });
+    function (err, stdout, stderr) {
+      /* 自检时把退出码 / stdout / stderr 都留下来。
+         只记 err.message 会被 PowerShell 的 CLIXML 噪音盖住，看不出真正的原因。 */
+      if (err) diagLog('moyu-ps-error', {
+        message: String((err && err.message) || err).slice(0, 1200),
+        code: (err && err.code) || '',
+        killed: !!(err && err.killed),
+        signal: (err && err.signal) || '',
+        stdout: String(stdout || '').slice(0, 3000),
+        stderr: String(stderr || '').slice(0, 3000)
+      });
       if (typeof done === 'function') done(err);
     });
 }
@@ -2137,21 +2166,14 @@ const MOYU_WINAPI = [
   /* IsIconic / ShowWindow 要从 PowerShell 直接调，必须是 public ——
      static extern 默认是 private，漏了 public 会报 "does not contain a method named" */
   '  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);',
-  '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
-  '',
-  /* 前台窗口属于哪个进程；拿不到返回 0 */
-  '  public static int ForegroundPid() {',
-  '    IntPtr h = GetForegroundWindow();',
-  '    if (h == IntPtr.Zero) return 0;',
-  '    uint pid; GetWindowThreadProcessId(h, out pid);',
-  '    return (int)pid;',
-  '  }',
-  '  public static void MaximizeForeground() { ShowWindow(GetForegroundWindow(), 3); }',
   '  [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);',
   '  [DllImport("user32.dll")] static extern int GetClassName(IntPtr h, StringBuilder s, int n);',
   '  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
   '  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);',
+  '  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string win);',
   '  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);',
+  '  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);',
+  '  [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);',
   '',
   '  static List<string> SplitCsv(string csv) {',
   '    var l = new List<string>();',
@@ -2164,27 +2186,119 @@ const MOYU_WINAPI = [
   '    return l;',
   '  }',
   '',
+  /* DWM 隐身（cloaked）：UWP / 桌面壳层留下的「空壳窗口」，IsWindowVisible 仍然
+     返回 true、IsIconic 返回 false，但屏幕上根本看不见（实测本机一堆
+     ApplicationFrameWindow 空壳就是 cloak=2）。Win10 上这类残留比 Win11 更多
+     （关掉的 UWP 应用会留一堆 frame 空壳）。
+     不排掉的话两个后果：收桌面时白收一遍，认目标窗口时把空壳当成「新窗口」——
+     结果就是「打开了但没最大化」，因为最大化的其实是个看不见的壳。 */
+  '  static bool Cloaked(IntPtr h) {',
+  '    int v = 0;',
+  '    try { DwmGetWindowAttribute(h, 14, out v, 4); } catch {}',
+  '    return v != 0;',
+  '  }',
+  '',
+  /* 「真实的应用窗口」：MinimizeAll / VisibleHandles / IconicHandles / PickTarget
+     共用同一套判定，Win10 和 Win11 行为一致。 */
+  '  static bool RealWindow(IntPtr h, int selfPid, List<string> skipClasses) {',
+  '    if (!IsWindowVisible(h)) return false;',
+  '    if (Cloaked(h)) return false;',
+  '    if ((GetWindowLong(h, -20) & 0x00000080) != 0) return false;',    // WS_EX_TOOLWINDOW
+  '    if (selfPid != 0) {',
+  '      uint pid; GetWindowThreadProcessId(h, out pid);',
+  '      if ((int)pid == selfPid) return false;',                        // 自己的宠物/气泡窗
+  '    }',
+  '    var cb = new StringBuilder(256); GetClassName(h, cb, 256);',
+  '    string cls = cb.ToString();',
+  '    if (skipClasses != null && skipClasses.Contains(cls.ToLower())) return false;',
+  '    if (GetWindowTextLength(h) > 0) return true;',
+  /* UWP 的 ApplicationFrameWindow 标题常常是空的，真正的标题挂在子 CoreWindow
+     上。只放行「还有活的 CoreWindow 子窗口」的 frame —— 已经关掉只剩空壳的不算。 */
+  '    return cls == "ApplicationFrameWindow" &&',
+  '           FindWindowEx(h, IntPtr.Zero, "Windows.UI.Core.CoreWindow", null) != IntPtr.Zero;',
+  '  }',
+  '',
   '  public static IntPtr[] MinimizeAll(int selfPid, string skipProcs, string skipClasses) {',
   '    var procs = SplitCsv(skipProcs);',
   '    var classes = SplitCsv(skipClasses);',
   '    var list = new List<IntPtr>();',
   '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
-  '      if (!IsWindowVisible(h)) return true;',
-  '      if (GetWindowTextLength(h) == 0) return true;',
-  '      if ((GetWindowLong(h, -20) & 0x00000080) != 0) return true;',   // WS_EX_TOOLWINDOW
-  '      var cb = new StringBuilder(256); GetClassName(h, cb, 256);',
-  '      if (classes.Contains(cb.ToString().ToLower())) return true;',    // 桌面壳层，绝不碰
+  '      if (!RealWindow(h, selfPid, classes)) return true;',
+  '      if (IsIconic(h)) return true;',                                  // 本来就最小化的不动
   '      uint pid; GetWindowThreadProcessId(h, out pid);',
-  '      if ((int)pid == selfPid) return true;',
   '      string pname = "";',
   '      try { pname = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName.ToLower(); } catch {}',
   '      if (procs.Contains(pname)) return true;',                        // 壁纸类软件，绝不碰
-  '      if (IsIconic(h)) return true;',                                  // 本来就最小化的不动
   '      list.Add(h);',
   '      ShowWindow(h, 6);',                                              // SW_MINIMIZE
   '      return true;',
   '    }, IntPtr.Zero);',
   '    return list.ToArray();',
+  '  }',
+  '',
+  /* 收起桌面之前把「已经存在的可见窗口」记下来。
+     后面靠它区分「这次新冒出来的窗口」和「本来就开着、被我们最小化的窗口」。 */
+  '  public static IntPtr[] VisibleHandles(int selfPid) {',
+  '    var list = new List<IntPtr>();',
+  '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
+  '      if (RealWindow(h, selfPid, null)) list.Add(h);',
+  '      return true;',
+  '    }, IntPtr.Zero);',
+  '    return list.ToArray();',
+  '  }',
+  '',
+  /* 「收起桌面之前本来就是最小化」的窗口。
+     它们不会出现在 MinimizeAll 的返回清单里（那个只记我们收起来的），
+     但目标程序如果是「本来就在跑、窗口本来就是最小化的」，打开文件时
+     它还原的是这个老窗口 —— 这一路也得认出来，否则只认新窗口会漏。 */
+  '  public static IntPtr[] IconicHandles(int selfPid) {',
+  '    var list = new List<IntPtr>();',
+  '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
+  '      if (RealWindow(h, selfPid, null) && IsIconic(h)) list.Add(h);',
+  '      return true;',
+  '    }, IntPtr.Zero);',
+  '    return list.ToArray();',
+  '  }',
+  '',
+  /* 挑出「这次打开动作真正拉起来的那个窗口」，找不到返回 Zero。
+     顺序：① before 之外的可见新窗口（目标程序本来没开 / 开了新窗口）
+           ② 现在自己从最小化状态恢复了的窗口（目标程序已在跑，打开文件时
+              还原的是老窗口 —— Win11 记事本这种标签页式的就走这条）
+     三个「绝不碰」的约束：
+       - 不看「当前前台窗口」：实测目标还没起来时前台可能是别的软件
+         （比如 Outlook 弹出来提醒），照着前台最大化会把别人的窗口顶到最前面；
+       - 跳过自己进程（selfPid）的窗口：桌面宠物窗 / 气泡窗都有标题、
+         又不在 VisibleHandles 的 before 清单里（那个按 selfPid 排除了），
+         不排掉就会被当成「新窗口」放大到全屏；
+       - 跳过 DWM 隐身的空壳窗口（见 Cloaked），否则会去最大化一个看不见的壳。 */
+  '  public static IntPtr PickTarget(IntPtr[] before, string wasMinimizedCsv, bool allowRestored, int selfPid) {',
+  '    var seen = new HashSet<IntPtr>();',
+  '    if (before != null) { foreach (var h in before) seen.Add(h); }',
+  '    IntPtr best = IntPtr.Zero;',
+  '    IntPtr any = IntPtr.Zero;',
+  '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
+  '      if (IsIconic(h)) return true;',
+  '      if (!RealWindow(h, selfPid, null)) return true;',
+  '      if (seen.Contains(h)) return true;',
+  '      if (any == IntPtr.Zero) any = h;',
+  /* 优先挑「能最大化的正常主窗口」：WPS / Office 这类国产办公软件常常先弹一个
+     广告小窗或启动页，那种窗口没有 WS_THICKFRAME / WS_MAXIMIZEBOX，
+     真被选中就会出现「目标打开了、最大化的却是广告窗」。 */
+  '      int st = GetWindowLong(h, -16);',
+  '      if ((st & 0x00040000) != 0 || (st & 0x00010000) != 0) {',
+  '        if (best == IntPtr.Zero) best = h;',
+  '      }',
+  '      return true;',
+  '    }, IntPtr.Zero);',
+  '    if (best != IntPtr.Zero) return best;',
+  '    if (any != IntPtr.Zero) return any;',
+  '    if (!allowRestored) return IntPtr.Zero;',
+  '    foreach (var s in SplitCsv(wasMinimizedCsv)) {',
+  '      long v; if (!long.TryParse(s, out v)) continue;',
+  '      IntPtr h = new IntPtr(v);',
+  '      if (IsWindowVisible(h) && !IsIconic(h) && !Cloaked(h)) return h;',
+  '    }',
+  '    return IntPtr.Zero;',
   '  }',
   '',
   '  public static void Restore(string csv) {',
@@ -2201,10 +2315,32 @@ const MOYU_WINAPI = [
 /* 「窗口句柄清单」存在这里，还原时按它精确恢复 */
 function moyuStateFile() { return path.join(app.getPath('userData'), 'moyu-windows.txt'); }
 
+/* 等「收起了哪些窗口」这份清单落盘。
+   收桌面那个 PowerShell 是异步的：先编译 C# → 枚举窗口 → 收起来 → 最后才写清单。
+   用户按得太快时它可能还没写盘，这时直接 kill 掉清单就缺了 ——
+   那些窗口再也还原不回来（桌面卡在全部最小化，只能手动一个个点回来）。
+   所以按第二次时先等清单出现；子进程已经退出或超时就不再等。 */
+function moyuWaitState(child, cb) {
+  let waited = 0;
+  const tick = function () {
+    let ok = false;
+    try { ok = fs.existsSync(moyuStateFile()); } catch (e) { }
+    const gone = !child || child.exitCode !== null || child.signalCode !== null;
+    if (ok || gone || waited >= 5000) { cb(ok); return; }
+    waited += 100;
+    setTimeout(tick, 100);
+  };
+  setTimeout(tick, 100);
+}
+
 /* 按一次：收起桌面 → 打开伪装目标（文档再最大化） */
 function moyuGo() {
-  if (moyuRunning) return;
+  if (moyuRunning || moyuBacking) return;
   moyuRunning = true;
+
+  /* 清掉上一次的清单：这样「清单存在」就等于「这一次已经收好了」，
+     moyuBack() 靠它判断能不能安全地按住不动。 */
+  try { fs.unlinkSync(moyuStateFile()); } catch (e) { }
 
   /* 自己的主窗口直接藏掉（任务栏图标一起没）——
      用最小化的话任务栏会留一条自己的程序名，摸鱼就露馅了 */
@@ -2216,31 +2352,41 @@ function moyuGo() {
 
   const lines = [
     "$ErrorActionPreference = 'SilentlyContinue'",
+    /* 关掉进度流：PowerShell 首次运行会往 stderr 写 CLIXML 进度记录，
+       会让 execFile 误判成命令失败（退出码和执行结果其实都是对的）。 */
+    "$ProgressPreference = 'SilentlyContinue'",
     MOYU_WINAPI,
+    /* 先记下此刻已经开着的可见窗口，再收桌面 —— 顺序不能反。
+       iconic 那批是「本来就最小化」的：MinimizeAll 不会收它们，
+       但目标程序打开文件时可能还原的正是这种老窗口。 */
+    '$before = [KkWin]::VisibleHandles(' + process.pid + ')',
+    '$iconic = [KkWin]::IconicHandles(' + process.pid + ')',
     /* 排除自己这个进程的窗口（已经用 hideToTray 藏了），
        并且跳过桌面壳层和壁纸类软件 —— 收了它们桌面就空了 */
     '$hs = [KkWin]::MinimizeAll(' + process.pid
       + ", '" + moyuSkipProcs() + "', '" + MOYU_SKIP_CLASSES + "')",
     "$csv = (($hs | ForEach-Object { $_.ToInt64().ToString() }) -join ',')",
     "[System.IO.File]::WriteAllText('" + stateFile + "', $csv)",
+    /* 还原判定的候选池 = 我们收起来的 + 本来就是最小化的 */
+    '$pool = ((@($hs) + @($iconic)) | ForEach-Object { $_.ToInt64().ToString() }) -join \',\'',
     "$target = '" + t + "'",
     "if ($target -ne '') { Start-Process -FilePath $target | Out-Null }"
   ];
 
   if (isDoc) {
     lines.push(
-      /* 盯着「前台窗口」而不是「新进程」：
-         Win11 的记事本是标签页式的，打开 txt 不会产生新进程，
-         光靠认新进程会漏掉。Start-Process 之后被激活的那个窗口就是目标。 */
-      '$done = $false',
-      'for ($i = 0; $i -lt 36 -and -not $done; $i++) {',
+      /* 只认「这次新冒出来的窗口」或「刚被还原的老窗口」，
+         绝不碰本来就开着、仍然最小化的窗口 —— 挨个去看当前前台窗口是错的：
+         目标还没起来时前台可能是别的软件（实测把 Outlook 顶到最前面最大化了）。 */
+      '$h = [IntPtr]::Zero',
+      'for ($i = 0; $i -lt 40 -and $h -eq [IntPtr]::Zero; $i++) {',
       '  Start-Sleep -Milliseconds 250',
-      '  $fp = [KkWin]::ForegroundPid()',
-      '  if ($fp -eq 0 -or $fp -eq ' + process.pid + ') { continue }',
-      '  $nm = (Get-Process -Id $fp -ErrorAction SilentlyContinue).ProcessName',
-      "  if ($nm -match '^(powershell|pwsh|electron|explorer)$') { continue }",
-      '  [KkWin]::MaximizeForeground()',
-      '  $done = $true',
+      /* 前 2.5 秒只认新窗口；之后才接受「目标程序把老窗口自己还原了」这种情形 */
+      '  $h = [KkWin]::PickTarget($before, $pool, ($i -ge 10), ' + process.pid + ')',
+      '}',
+      'if ($h -ne [IntPtr]::Zero) {',
+      '  [KkWin]::ShowWindow($h, 3) | Out-Null',                          // SW_MAXIMIZE
+      '  [KkWin]::SetForegroundWindow($h) | Out-Null',
       '}'
     );
   }
@@ -2253,26 +2399,39 @@ function moyuGo() {
 function moyuBack() {
   if (!moyuRunning) return;
   moyuRunning = false;
+  moyuBacking = true;                 // 还原在下一次事件循环里完成，期间不接受新的切换
 
-  /* 先把还在跑的「找窗口最大化」那个 PowerShell 掐掉。
-     否则用户按得太快时，它会在还原之后才去最大化某个窗口，看着莫名其妙。 */
-  if (moyuGoChild) {
-    try { moyuGoChild.kill(); } catch (e) { }
-    moyuGoChild = null;
-  }
-
+  const child = moyuGoChild;
+  moyuGoChild = null;
   const stateFile = moyuStateFile().replace(/'/g, "''");
-  psRun([
-    "$ErrorActionPreference = 'SilentlyContinue'",
-    MOYU_WINAPI,
-    "[KkWin]::Restore([System.IO.File]::ReadAllText('" + stateFile + "'))"
-  ].join('\n'));
 
-  showWindow();          // 自己也回来
+  showWindow();                       // 自己先回来，别让用户干等
   send('moyu-changed', moyuSnapshot());
+
+  const finish = function () {
+    /* 掐掉那个还在跑的「找窗口最大化」PowerShell。
+       否则用户按得太快时，它会在还原之后才去最大化某个窗口，看着莫名其妙。
+       注意必须等清单落盘之后再掐，否则被收起的窗口就还原不回来了。 */
+    if (child) {
+      try { child.kill(); } catch (e) { }
+    }
+    psRun([
+      "$ErrorActionPreference = 'SilentlyContinue'",
+      "$ProgressPreference = 'SilentlyContinue'",
+      MOYU_WINAPI,
+      /* 清单可能还没写出来（比如收桌面那步就失败了），别让 ReadAllText 抛错 */
+      "if (Test-Path '" + stateFile + "') { " +
+      "[KkWin]::Restore([System.IO.File]::ReadAllText('" + stateFile + "')) }"
+    ].join('\n'));
+    moyuBacking = false;
+  };
+
+  const gone = !child || child.exitCode !== null || child.signalCode !== null;
+  if (gone) finish(); else moyuWaitState(child, finish);
 }
 
 function moyuToggle() {
+  if (moyuBacking) return;
   if (moyuRunning) moyuBack(); else moyuGo();
 }
 

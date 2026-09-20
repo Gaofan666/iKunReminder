@@ -1363,7 +1363,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.7 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.8 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1408,24 +1408,54 @@
       highlight(idx);
     }
 
+    /* 点导航后进入「接管」状态：平滑滚动全程由这次点击独占高亮，
+       scroll 事件一律不参与 scroll-spy。否则滚到一半时 spyNow() 会把高亮
+       抢到途中经过的那一节，看上去就是高亮在导航栏里乱闪（实测踩到过）。
+       滚停之后（连续 140ms 没有 scroll 事件）再交还给 scroll-spy。
+
+       另外记住「刚点的是哪一项」（navPinned）：内容不够长、目标分节根本滚不到
+       顶部时，scroll-spy 只能按位置猜（滚到底就一律算成最后一节），会出现
+       「点『软件更新』却亮『一键摸鱼』」。这时以用户点的为准。
+       用户自己滚（滚轮 / 触摸 / 拖滚动条）就清掉 navPinned，恢复按位置高亮。 */
+    let navLocked = false;
+    let navPinned = null;
+    let quietTimer = null;
+
+    function endNavLock() {
+      navLocked = false;
+      quietTimer = null;
+      if (navPinned === null) spyNow(); else highlight(navPinned);
+    }
+
     items.forEach(function (btn, i) {
       btn.addEventListener('click', function () {
         if (!secs[i]) return;
-        goTo(secs[i], true);
+        navLocked = true;
+        navPinned = i;
+        if (quietTimer) clearTimeout(quietTimer);
         highlight(i);
-        /* 平滑滚动期间位置一直在变，持续校正一小会儿，滚停后自然落在正确的分节上。
-           这里刻意不用 requestAnimationFrame 节流：窗口被遮挡时 rAF 会被节流甚至
-           不触发，节流锁会卡死、后续高亮全部丢失（这个坑实测踩到过）。 */
-        let n = 0;
-        const t = setInterval(function () {
-          spyNow();
-          if (++n >= 14) clearInterval(t);
-        }, 90);
+        goTo(secs[i], true);
+        /* 兜底：点的就是当前位置、压根没产生 scroll 事件时也要解锁。
+           真产生了 scroll 事件的话，这个定时器会被下面的静默检测顶掉。 */
+        quietTimer = setTimeout(endNavLock, 700);
       });
+    });
+
+    /* 滚轮 / 触摸 = 用户自己在滚，不再坚持「点哪亮哪」 */
+    ['wheel', 'touchstart'].forEach(function (ev) {
+      el.setCard.addEventListener(ev, function () { navPinned = null; }, { passive: true });
     });
 
     let spyTimer = null;
     el.setCard.addEventListener('scroll', function () {
+      if (navLocked) {
+        /* 还在平滑滚动：不断把「滚停」判定往后推 */
+        if (quietTimer) clearTimeout(quietTimer);
+        quietTimer = setTimeout(endNavLock, 140);
+        return;
+      }
+      /* 锁外发生的滚动都是用户自己滚的（比如拖滚动条），交还给 scroll-spy */
+      navPinned = null;
       if (spyTimer) return;
       spyTimer = setTimeout(function () { spyTimer = null; spyNow(); }, 60);
     });

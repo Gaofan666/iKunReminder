@@ -1,20 +1,20 @@
 {
-  "version": "3.2.7",
-  "releaseDate": "2026-09-20T09:36:17.263Z",
-  "notes": "## iKunReminder v3.2.7\n\n1. 🌐 **国内也能自动更新了** —— 新增 Gitee 更新源。检查更新时先探测两个源（各拉个小文件测耗时），自动选快的那个\n2. ⚡ 走 Gitee 源时按**分卷**下载再合并（它的发行版附件单文件上限 100MB，安装包 110MB 传不下），下完对**合并后的整包**做 sha512 校验，坏包自动删掉让你重试\n3. 🛡 GitHub 连不上时不再直接报错，会**自动切到 Gitee**；两个源都不通才提示失败\n4. 📍 设置页的「软件更新」会显示这次用的是哪个源，鼠标悬停能看到两个源各自的探测耗时\n5. 🔁 记住上次成功的源，下次优先用它，不用每次重新测速\n\n**下载**：`iKunReminder-setup-v3.2.7.exe`（约 110 MB，Windows x64，双击安装）",
-  "size": 115584231,
-  "sha512": "yU1w0lyAzB5YAWhUdl6kixrfjo6LPS1YzkCDTo2mCD+MF+XK+miHgnNb0yf8DV2xqdXKtRQLlWGIgWWhDLBfnQ==",
+  "version": "3.2.8",
+  "releaseDate": "2026-09-20T10:17:01.262Z",
+  "notes": "## iKunReminder v3.2.8\n\n1. 🔧 **修好了「一键摸鱼」的目标窗口不最大化** —— 之前它不看是谁打开的，直接去最大化「当前最前面的那个窗口」，实测会把 Outlook / 浏览器之类顶到最前面，而真正要看的文档却留在后面\n2. 🎯 现在只认两种窗口：**这次新打开的**，或**刚被目标程序还原出来的老窗口**。其它窗口一概不碰（壁纸软件、桌面壳层、桌面宠物都不会被误伤）\n3. 🖥 **Win10 / Win11 都适配** —— 识别 DWM 隐身的空壳窗口（关掉的 UWP 应用会留一堆，以前会被当成目标窗口），UWP 应用窗口也能正确识别和最大化\n4. 🛡 修了一个隐藏问题：**连着按两次快捷键时，收起的窗口可能还原不回来**（桌面卡在全部最小化）。原因是写「收起了哪些窗口」这份清单是异步的，按太快会在清单写出来之前就被打断，现在会等它落盘\n5. 🔤 **设置页字号整体放大**，更新说明 / 选项 / 快捷键都看得更清楚了\n6. ✨ **左侧导航高亮不再乱闪**，而且点哪个分节就亮哪个（以前点「软件更新」可能亮成「一键摸鱼」）\n\n**下载**：`iKunReminder-setup-v3.2.8.exe`（约 110 MB，Windows x64，双击安装）\n",
+  "size": 115587335,
+  "sha512": "39I0wphjzxt3POxMyoK+mhA1MvFdJ5AnNCZagbMz7MSd7PTRaLyhqa8SdAo1QgDwSsS1wPYwV8EPghl9QguwlA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.7/iKunReminder-setup-v3.2.7.exe.part1",
-      "size": 57792116,
-      "sha512": "5Q4ysjHjr3FAU6wmGOfc/Ipe3oUXeIRSu8/dyyIlz4q0aajdJuK+tAIJzr/lO91G0qAD3Gy9rGDPJZEjl/3wog==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.8/iKunReminder-setup-v3.2.8.exe.part1",
+      "size": 57793668,
+      "sha512": "Jem2c7ajSg6sqw2HKkjKZYVM0gDLnmdFsJPQx7lLA7uFQH7U9Vfad6XdyiKASagQI5MyES51czI7mf0CNUAPfQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.7/iKunReminder-setup-v3.2.7.exe.part2",
-      "size": 57792115,
-      "sha512": "gnz2L/zDswmdnHC3q6XaAj646pgwroHVrWhgJeMn75CTvhjVVqJeiMH7m76qnrje9KDjQKGnwoMgIq8Ho+nHRA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.8/iKunReminder-setup-v3.2.8.exe.part2",
+      "size": 57793667,
+      "sha512": "sopE9zG4CfBO3Uz+qmdxkoq+NAaauKm0hGwvVRGT1l1EKx5UcEkxaB4nClK/2sqYI7vi+9ugkmCzXadqat4qDA==",
       "index": 2
     }
   ]
