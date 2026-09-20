@@ -20,6 +20,17 @@
 
 ---
 
+## 🎨 v3.2.5 调整（设置页合并成一整块 + 更新说明改成编号列表）
+
+1. **设置页合并成一整块** —— 不再分成「设置 / 软件更新 / 一键摸鱼」三张卡片，
+   整页一起上下滑动；谁也不会把谁挤下去，窗口小的时候也不会露出半截。
+2. **更新说明改成 `1. 2. 3.` 的编号列表** —— 一眼就能看出这一版改了几项；
+   老版本那些「小标题 + 列表」写法的说明也会被自动编号，不再显得乱。
+3. 顺带补上 v3.2.4 的两处修复（更新说明不再显示成 HTML 标签、不再顶走下面的卡片）——
+   如果你当时跳过了 v3.2.4，这次一并生效。
+
+---
+
 ## 🐛 v3.2.4 修复（更新说明显示乱、还把下面的卡片顶下去）
 
 两个显示问题：
@@ -214,11 +225,14 @@ v3.2.2 的「一键摸鱼」是「把所有有标题的可见窗口都最小化�
 
 **方式一：GitHub Releases（推荐）**
 
-> **v3.2.4（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.4
-> 直接下载：[`iKunReminder-setup-v3.2.4.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.4/iKunReminder-setup-v3.2.4.exe)（约 110 MB，安装版）
+> **v3.2.5（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.5
+> 直接下载：[`iKunReminder-setup-v3.2.5.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.5/iKunReminder-setup-v3.2.5.exe)（约 110 MB，安装版）
 >
 > ⚠️ **v3.2.1 及更早的版本需要手动装一次**（它们里面没有更新器，没法自己更新自己）。
 > 装上 v3.2.2 或更高之后就不用了 —— 以后的新版本都能在「设置 → 软件更新」里一键更新。
+>
+> 历史版本 **v3.2.4 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.4
+> 直接下载：[`iKunReminder-setup-v3.2.4.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.4/iKunReminder-setup-v3.2.4.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.3 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.3
 > 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)（约 110 MB，安装版）

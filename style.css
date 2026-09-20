@@ -187,6 +187,26 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 
 .set-col{padding:16px 18px}
+
+/* ---------- 设置页：三块内容合并成一整张卡片，整体上下滚动 ----------
+   以前是三张独立卡片排在网格里，更新说明一长就把「一键摸鱼」整块往下推。
+   现在合成一张卡，卡内滚动；--page-view-h 由 JS 算出「视口在设计空间里有多高」。 */
+#pageSettings{grid-template-columns:1fr;align-items:start}
+#pageSettings .set-col{
+  max-height:var(--page-view-h,820px);
+  overflow-y:auto;overflow-x:hidden;
+  padding:16px 20px 18px;
+  overscroll-behavior:contain;
+}
+#pageSettings .set-col::-webkit-scrollbar{width:9px}
+#pageSettings .set-col::-webkit-scrollbar-track{background:transparent}
+#pageSettings .set-col::-webkit-scrollbar-thumb{background:rgba(74,155,212,.28);border-radius:99px}
+#pageSettings .set-col::-webkit-scrollbar-thumb:hover{background:rgba(74,155,212,.46)}
+/* 分隔线前面那条 .set-row 的虚线边框去掉，否则两条线叠在一起 */
+.set-row:has(+ .set-sep){border-bottom:0}
+.set-sep{margin:18px 0 4px;border:0;border-top:2px solid rgba(74,155,212,.16)}
+.set-head{margin-top:6px}
+.set-head:first-child{margin-top:0}
 .set-row{padding:14px 2px;border-bottom:1px dashed var(--line)}
 .set-row:last-child{border-bottom:0}
 .set-desc{margin:7px 0 0;font-size:12px;line-height:1.8;color:var(--dim)}

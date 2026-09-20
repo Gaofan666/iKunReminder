@@ -896,6 +896,9 @@
     view.style.top = topChrome + 'px';
     view.style.left = Math.max(0, (availW - designW * s) / 2) + 'px';
     view.style.transform = 'scale(' + s + ')';
+    /* 设置页合并成一整张卡片后要整体滚动：把「视口在设计空间里有多高」写成 CSS 变量。
+       直接写 vh 在缩放容器里会算歪，所以由 JS 按实际缩放比换算。 */
+    document.documentElement.style.setProperty('--page-view-h', Math.round(availH / s) + 'px');
     stage.resize();
     alertStage.resize();
   }
@@ -1351,7 +1354,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.4 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.5 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1468,13 +1471,26 @@
       .replace(/`([^`]*)`/g, '$1');
 
     /* 逐行去掉首尾空白，再把「3 个以上连续换行」压成 2 个（也就是最多一个空行） */
-    return s
+    const text = s
       .split('\n')
       .map(function (t) { return t.replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, ''); })
       .join('\n')
       .replace(/\n{3,}/g, '\n\n')
       .replace(/^\n+/, '')
       .replace(/\n+$/, '');
+
+    /* 统一成编号列表：老版 Release 说明是「小标题 + · 列表」那种写法，
+       直接显示显得乱；把列表项编号成 1. 2. 3.，一眼就能看完有几条改动。
+       已经自己编好号的（新版 Release 说明就是这么写的）原样保留。 */
+    if (/^\s*\d+[.、)]\s/m.test(text)) return text;
+    let n = 0;
+    return text.split('\n').map(function (l) {
+      if (/^·\s+/.test(l)) {
+        n += 1;
+        return n + '. ' + l.replace(/^·\s+/, '');
+      }
+      return l;
+    }).join('\n');
   }
 
   function bindUpdate() {

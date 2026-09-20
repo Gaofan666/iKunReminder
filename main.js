@@ -484,6 +484,12 @@ function createWindow() {
               'for(var i=1;i<=28;i++){o.push(i+". 这是一行用来测试滚动条的更新说明，故意写长一点，好看出排版和高度对不对。");}' +
               'e.textContent=o.join("\\n");r.hidden=false;return true;})()', true);
             await new Promise(function (r) { setTimeout(r, 400); });
+            /* 量一下合并后的设置卡：内容高 > 可视高 才算真的能滚 */
+            diagLog('set-card', await win.webContents.executeJavaScript(
+              '(function(){var c=document.getElementById("setCard");if(!c)return null;' +
+              'return {scrollH:c.scrollHeight, clientH:c.clientHeight, 可滚动:c.scrollHeight>c.clientHeight+4,' +
+              'overflowY:getComputedStyle(c).overflowY, pageViewH:getComputedStyle(document.documentElement).getPropertyValue("--page-view-h")};})()',
+              true));
           }
           if (DIAG.moyu) {
             diagLog('moyu-step1-before', { visible: win.isVisible() });

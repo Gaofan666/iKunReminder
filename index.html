@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.2.4</span>
+    <span class="tb-ver" id="tbVer">v3.2.5</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -143,9 +143,12 @@
 </main>
 
 <!-- ===================== 设置页 ===================== -->
+<!-- ===================== 设置页 =====================
+     三块内容合并成一整张卡片，整体上下滚动（不再分几张卡片互相挤位置） -->
 <main class="layout page" id="pageSettings" hidden>
-  <section class="card set-col">
-    <div class="col-head"><h2>⚙ 设置</h2></div>
+  <section class="card set-col" id="setCard">
+
+    <div class="col-head set-head"><h2>⚙ 设置</h2></div>
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkAutoLaunch"><span>开机自动启动</span></label>
       <p class="set-desc">勾上之后，开机时程序会<b>直接藏在右下角托盘里</b>，不会弹出主界面；
@@ -167,11 +170,11 @@
     <div class="set-row">
       <p class="set-desc" id="setAbout"></p>
     </div>
-  </section>
 
-  <!-- 软件更新：只检查、只提示，下载与安装都由用户点 -->
-  <section class="card set-col">
-    <div class="col-head"><h2>⬆ 软件更新</h2></div>
+    <hr class="set-sep">
+
+    <!-- 软件更新：只检查、只提示，下载与安装都由用户点 -->
+    <div class="col-head set-head"><h2>⬆ 软件更新</h2></div>
     <div class="set-row">
       <p class="upd-line">
         <span>当前版本 <b id="updCur">—</b></span>
@@ -195,18 +198,18 @@
       <p class="set-label">本次更新内容</p>
       <div class="upd-note" id="updNote"></div>
     </div>
-  </section>
 
-  <!-- 一键摸鱼（老板键）：只由快捷键触发，卡片里不放按钮。
-       按一次收起桌面所有窗口并打开指定程序/文档，再按一次全部还原 -->
-  <section class="card set-col">
-    <div class="col-head"><h2>🐟 一键摸鱼</h2></div>
+    <hr class="set-sep">
+
+    <!-- 一键摸鱼（老板键）：只由快捷键触发，卡片里不放按钮。
+         按一次收起桌面所有窗口并打开指定程序/文档，再按一次全部还原 -->
+    <div class="col-head set-head"><h2>🐟 一键摸鱼</h2></div>
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkMoyu"><span>启用一键摸鱼</span></label>
       <p class="set-desc">开着的时候，按下面的快捷键就会：<b>先把桌面上所有窗口收起来</b>，
         再<b>自动打开你指定的程序或文档</b> —— 文档会自动最大化，程序打开就行。
         再按一次快捷键，刚才收起来的窗口<b>全部还原</b>（伪装软件留着不动）。
-        桌面上的小鸡不受影响。</p>
+        桌面上的小鸡不受影响，壁纸类软件也不会被碰。</p>
     </div>
     <div class="set-row">
       <p class="set-label">伪装目标</p>
@@ -225,6 +228,7 @@
       <p class="set-desc" id="moyuDesc">默认是 <b>Ctrl + Alt + M</b>。
         要包含 Ctrl 或 Alt，也可以直接用 F1～F12 这种功能键 —— 免得跟打字冲突。</p>
     </div>
+
   </section>
 </main>
 
