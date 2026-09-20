@@ -1,0 +1,21 @@
+{
+  "version": "3.2.7",
+  "releaseDate": "2026-09-20T09:36:17.263Z",
+  "notes": "## iKunReminder v3.2.7\n\n1. 🌐 **国内也能自动更新了** —— 新增 Gitee 更新源。检查更新时先探测两个源（各拉个小文件测耗时），自动选快的那个\n2. ⚡ 走 Gitee 源时按**分卷**下载再合并（它的发行版附件单文件上限 100MB，安装包 110MB 传不下），下完对**合并后的整包**做 sha512 校验，坏包自动删掉让你重试\n3. 🛡 GitHub 连不上时不再直接报错，会**自动切到 Gitee**；两个源都不通才提示失败\n4. 📍 设置页的「软件更新」会显示这次用的是哪个源，鼠标悬停能看到两个源各自的探测耗时\n5. 🔁 记住上次成功的源，下次优先用它，不用每次重新测速\n\n**下载**：`iKunReminder-setup-v3.2.7.exe`（约 110 MB，Windows x64，双击安装）",
+  "size": 115584231,
+  "sha512": "yU1w0lyAzB5YAWhUdl6kixrfjo6LPS1YzkCDTo2mCD+MF+XK+miHgnNb0yf8DV2xqdXKtRQLlWGIgWWhDLBfnQ==",
+  "parts": [
+    {
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.7/iKunReminder-setup-v3.2.7.exe.part1",
+      "size": 57792116,
+      "sha512": "5Q4ysjHjr3FAU6wmGOfc/Ipe3oUXeIRSu8/dyyIlz4q0aajdJuK+tAIJzr/lO91G0qAD3Gy9rGDPJZEjl/3wog==",
+      "index": 1
+    },
+    {
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.7/iKunReminder-setup-v3.2.7.exe.part2",
+      "size": 57792115,
+      "sha512": "gnz2L/zDswmdnHC3q6XaAj646pgwroHVrWhgJeMn75CTvhjVVqJeiMH7m76qnrje9KDjQKGnwoMgIq8Ho+nHRA==",
+      "index": 2
+    }
+  ]
+}

@@ -335,6 +335,7 @@
     /* 软件更新 */
     updCur: $('#updCur'),
     updState: $('#updState'),
+    updSrc: $('#updSrc'),
     updBar: $('#updBar'),
     updFill: $('#updFill'),
     updDesc: $('#updDesc'),
@@ -1362,7 +1363,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.6 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.7 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1461,6 +1462,21 @@
     if (el.updState) {
       el.updState.textContent = meta.txt + (withVer && s.available ? ' v' + s.available : '');
       el.updState.className = 'upd-state' + (meta.cls ? ' ' + meta.cls : '');
+    }
+
+    /* 用了哪个更新源（GitHub / Gitee 镜像）。两个源都连不上时把探测结果说清楚 */
+    if (el.updSrc) {
+      if (s.sourceLabel) {
+        el.updSrc.textContent = '· 更新源：' + s.sourceLabel;
+        el.updSrc.title = (s.sourceTried || []).map(function (t) {
+          return t.label + ' ' + (t.ok ? t.ms + 'ms' : '不通');
+        }).join('\n');
+      } else if (s.state === 'error' && (s.sourceTried || []).length) {
+        el.updSrc.textContent = '· ' + s.sourceTried.map(function (t) { return t.label + ' 不通'; }).join('，');
+      } else {
+        el.updSrc.textContent = '';
+        el.updSrc.title = '';
+      }
     }
 
     /* 进度条只在下载中 / 下载完成时出现 */

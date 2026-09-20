@@ -10,6 +10,7 @@ const { app, BrowserWindow, ipcMain, Menu, screen, Tray, nativeImage, powerMonit
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
+const crypto = require('crypto');
 const UI = require('./ui-scale.js');
 
 /* 自动更新（electron-updater）。require 失败不影响软件本体 ——
@@ -70,6 +71,8 @@ const DIAG = (function () {
     /* --diag-note：往「软件更新」卡里塞一段长更新说明，验证它能内部滚动、
        不会把下面的「一键摸鱼」顶下去 */
     if (a === '--diag-note') out.note = true;
+    /* --diag-update：跑完整更新流程（检查 → 下载 → 等结果），端到端验证用 */
+    if (a === '--diag-update') out.update = true;
   });
   return out;
 })();
@@ -517,6 +520,31 @@ function createWindow() {
             moyuToggle();
             await new Promise(function (r) { setTimeout(r, 700); });
             diagLog('moyu-step3-shown', { visible: win.isVisible() });
+          }
+          /* 更新流程自检：点「检查更新」→ 点「下载新版本」→ 等结束 → 校验合并后的整包 */
+          if (DIAG.update) {
+            const clickBtn = function (id) {
+              return win.webContents.executeJavaScript(
+                '(function(){var b=document.getElementById("' + id + '");' +
+                'if(!b||b.hidden||b.disabled)return false;b.click();return true;})()', true);
+            };
+            await clickBtn('btnUpdCheck');
+            await new Promise(function (r) { setTimeout(r, 5000); });
+            diagLog('update-checked', updateSnapshot());
+            diagLog('update-download-click', { clicked: await clickBtn('btnUpdDownload') });
+            for (let i = 0; i < 60; i++) {
+              await new Promise(function (r) { setTimeout(r, 500); });
+              if (updateState === 'downloaded' || updateState === 'error') break;
+            }
+            diagLog('update-final', updateSnapshot());
+            const f = updateMergedExe;
+            diagLog('update-merged', {
+              file: f || '',
+              exists: !!(f && fs.existsSync(f)),
+              size: (f && fs.existsSync(f)) ? fs.statSync(f).size : 0,
+              sha512: (f && fs.existsSync(f))
+                ? crypto.createHash('sha512').update(fs.readFileSync(f)).digest('base64') : ''
+            });
           }
           const shot = await runDiagnose();
           diagLog('result', shot);
@@ -1541,13 +1569,191 @@ function loadUpdatePref() {
     /* 同 loadMoyuPref：手改过的文件可能带 BOM，先去干净再解析 */
     const o = JSON.parse(fs.readFileSync(updatePrefFile(), 'utf8').replace(/^\uFEFF/, ''));
     if (o && typeof o.autoCheck === 'boolean') updateAutoCheck = o.autoCheck;
+    if (o && typeof o.lastSource === 'string') updateLastGood = o.lastSource;
   } catch (e) { /* 首次运行没这个文件，用默认值 */ }
 }
 
 function saveUpdatePref() {
   try {
-    fs.writeFileSync(updatePrefFile(), JSON.stringify({ autoCheck: updateAutoCheck }, null, 2), 'utf8');
+    fs.writeFileSync(updatePrefFile(),
+      JSON.stringify({ autoCheck: updateAutoCheck, lastSource: updateLastGood }, null, 2), 'utf8');
   } catch (e) { }
+}
+
+/* ============================================================ 更新源（多源 + 自动选路）
+   国内直连 GitHub 经常不通，所以备两个源，检查时都探一下、挑能用的：
+
+     · github —— electron-updater 原生跑。好处：能显示 Release 更新说明，
+                 而且能走 blockmap 差分（小版本往往只下几 MB）
+     · gitee  —— 读仓库里的 update/latest.json（Gitee raw，地址恒定、国内快）。
+                 安装包在 Gitee 上超过附件上限（100MB），所以按【分卷】传，
+                 由我们下载后合并、再对整包做 sha512 校验。
+
+   选路策略：优先用上次成功的源；否则按探测耗时从快到慢试；失败自动换下一个。 */
+const UPDATE_SOURCES = [
+  { id: 'github', label: 'GitHub', kind: 'github' },
+  {
+    id: 'gitee', label: 'Gitee 镜像', kind: 'mirror',
+    /* 自测时可以用环境变量把它指到本地假更新源上（见 .diag/ 里的更新自检） */
+    manifest: process.env.KUNKUN_UPDATE_MIRROR
+      || 'https://gitee.com/gaofan666/iKunReminder/raw/main/update/latest.json'
+  }
+];
+const UPDATE_PROBE_TIMEOUT = 6000;
+
+let updateSourceId = '';          // 这次实际用的源
+let updateSourceTried = [];       // 这次探测过的源 + 结果（给界面看）
+let updateLastGood = '';          // 上次成功的源（存 userData，下次优先）
+let updateMirror = null;          // Gitee 源解析出来的清单
+let updateMergedExe = '';         // Gitee 源下载合并后的安装包路径
+
+/* 带超时的取回，返回 { status, text } 或抛错 */
+async function httpGetText(url, timeoutMs, wantStream) {
+  const ac = new AbortController();
+  /* timeoutMs <= 0 表示不限时（大文件下载用），此时绝不能设定时器 ——
+     setTimeout(fn, 0) 会立刻触发 abort */
+  const t = timeoutMs > 0 ? setTimeout(function () { ac.abort(); }, timeoutMs) : null;
+  try {
+    const r = await fetch(url, { signal: ac.signal, redirect: 'follow' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return wantStream ? r : { status: r.status, text: await r.text() };
+  } finally {
+    if (t) clearTimeout(t);
+  }
+}
+
+/* 探测一个源能不能用：拉个「小文件」量耗时。
+   不用 ping —— ICMP 很多网络禁掉，而且只反映延迟、不反映带宽。 */
+async function probeSource(src) {
+  const started = Date.now();
+  try {
+    if (src.kind === 'github') {
+      await httpGetText('https://api.github.com/repos/Gaofan666/iKunReminder/releases/latest', UPDATE_PROBE_TIMEOUT);
+    } else {
+      await httpGetText(src.manifest, UPDATE_PROBE_TIMEOUT);
+    }
+    return { id: src.id, label: src.label, ok: true, ms: Date.now() - started };
+  } catch (e) {
+    return {
+      id: src.id, label: src.label, ok: false, ms: Date.now() - started,
+      error: String((e && e.message) || e).slice(0, 120)
+    };
+  }
+}
+
+/* 版本号比较：a > b 返回正数 */
+function cmpVersion(a, b) {
+  const pa = String(a || '0').split('.').map(Number);
+  const pb = String(b || '0').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+/* 走 GitHub 官方源（electron-updater 原生） */
+async function checkViaGitHub() {
+  autoUpdater.setFeedURL({
+    provider: 'github', owner: 'Gaofan666', repo: 'iKunReminder'
+  });
+  await autoUpdater.checkForUpdates();   // 状态由事件回调设置；失败会 reject
+}
+
+/* 走 Gitee 镜像源：自己拉清单比对版本 */
+async function checkViaMirror(src) {
+  const r = await httpGetText(src.manifest, 8000);
+  let m = null;
+  try { m = JSON.parse(r.text.replace(/^\uFEFF/, '')); } catch (e) { throw new Error('清单格式不对'); }
+  if (!m || !m.version) throw new Error('清单里没有 version');
+
+  updateMirror = m;
+  if (cmpVersion(m.version, app.getVersion()) > 0) {
+    updateInfo = { version: m.version, releaseNotes: m.notes || '', releaseDate: m.releaseDate || '' };
+    updateState = 'available';
+    updatePercent = 0;
+    pushUpdate();
+    if (!updateManual && tray && typeof tray.displayBalloon === 'function') {
+      try {
+        tray.displayBalloon({
+          title: '有新版本 v' + m.version,
+          content: '打开「设置」页可以下载并安装，不会自动装。'
+        });
+      } catch (e) { }
+    }
+  } else {
+    updateInfo = null;
+    updateState = 'none';
+    pushUpdate();
+  }
+}
+
+/* ---------- Gitee 源：分卷下载 → 合并 → 校验整包 sha512 ---------- */
+async function fetchToFile(url, file, baseBytes, totalBytes, onProgress) {
+  /* 第三个参数 wantStream=true 必须传：不传的话拿回来的是 {status,text} 而不是 Response，
+     r.body 就是 undefined，报 "Cannot read properties of undefined (reading 'getReader')" */
+  const r = await httpGetText(url, 0, true);
+  const reader = r.body.getReader();
+  const fd = fs.openSync(file, 'a');
+  let got = 0;
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      fs.writeSync(fd, Buffer.from(chunk.value));
+      got += chunk.value.length;
+      onProgress(baseBytes + got, totalBytes);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return got;
+}
+
+function sha512Of(file) {
+  return new Promise(function (resolve, reject) {
+    const h = crypto.createHash('sha512');
+    const s = fs.createReadStream(file);
+    s.on('data', function (c) { h.update(c); });
+    s.on('end', function () { resolve(h.digest('base64')); });
+    s.on('error', reject);
+  });
+}
+
+async function downloadViaMirror() {
+  const m = updateMirror;
+  if (!m || !Array.isArray(m.parts) || !m.parts.length) throw new Error('清单里没有分卷信息');
+
+  const total = m.parts.reduce(function (a, p) { return a + (p.size || 0); }, 0) || m.size || 1;
+  const out = path.join(app.getPath('userData'), 'pending-' + m.version + '.exe');
+
+  /* 每次重新下，避免上次的残缺文件被当成续传基准 */
+  try { fs.unlinkSync(out); } catch (e) { }
+
+  let base = 0;
+  for (let i = 0; i < m.parts.length; i++) {
+    const p = m.parts[i];
+    updatePercent = Math.floor(base / total * 100);
+    pushUpdate();
+    const got = await fetchToFile(p.url, out, base, total, function (done, tot) {
+      const pc = Math.floor(done / tot * 100);
+      if (pc !== updatePercent) { updatePercent = pc; pushUpdate(); }
+    });
+    if (p.size && got !== p.size) throw new Error('第 ' + (i + 1) + ' 个分卷大小不对');
+    base += got;
+  }
+
+  /* 关键：校验【合并后的整包】，光校验分卷不够 —— 断网/磁盘满都可能拼出坏包 */
+  updateState = 'downloading';
+  const got = await sha512Of(out);
+  if (m.sha512 && got !== m.sha512) {
+    try { fs.unlinkSync(out); } catch (e) { }
+    throw new Error('下载的文件校验不通过（可能没下全），请重试');
+  }
+  updateMergedExe = out;
+  updateState = 'downloaded';
+  updatePercent = 100;
+  pushUpdate();
 }
 
 /* GitHub 的 releaseNotes 可能是字符串，也可能是 [{version, note}] 数组 */
@@ -1568,7 +1774,11 @@ function updateSnapshot() {
     percent: updatePercent,
     error: updateError,
     available: updateInfo ? String(updateInfo.version || '') : '',
-    notes: updateInfo ? notesText(updateInfo.releaseNotes) : ''
+    notes: updateInfo ? notesText(updateInfo.releaseNotes) : '',
+    /* 用了哪个更新源、探测过哪些（给设置页显示） */
+    source: updateSourceId,
+    sourceLabel: (UPDATE_SOURCES.filter(function (s) { return s.id === updateSourceId; })[0] || {}).label || '',
+    sourceTried: updateSourceTried
   };
 }
 
@@ -1645,18 +1855,61 @@ function initUpdater() {
   autoUpdater.on('error', function (err) { setUpdateError(err); });
 }
 
-function checkUpdate(manual) {
-  if (!updateSupported) return Promise.resolve(updateSnapshot());
-  if (updateState === 'downloading') return Promise.resolve(updateSnapshot());
+async function checkUpdate(manual) {
+  if (!updateSupported) return updateSnapshot();
+  if (updateState === 'downloading') return updateSnapshot();
   updateManual = !!manual;
   updatePercent = 0;
   updateError = '';
-  return autoUpdater.checkForUpdates().then(function () {
-    return updateSnapshot();
-  }).catch(function (err) {
-    setUpdateError(err);
-    return updateSnapshot();
+  updateState = 'checking';
+  updateSourceTried = [];
+  updateMirror = null;
+  pushUpdate();
+
+  /* 1) 并发探测所有源（各带超时）。上次成功的排最前，其余按耗时从快到慢 ——
+        不用每次重新测速，常用源直接命中。 */
+  const probes = await Promise.all(UPDATE_SOURCES.map(function (s) { return probeSource(s); }));
+  updateSourceTried = probes.map(function (p) {
+    return { id: p.id, label: p.label, ok: p.ok, ms: p.ms, error: p.error || '' };
   });
+  const usable = probes.filter(function (p) { return p.ok; }).sort(function (a, b) {
+    if (a.id === updateLastGood) return -1;
+    if (b.id === updateLastGood) return 1;
+    return a.ms - b.ms;
+  });
+
+  if (!usable.length) {
+    updateState = 'error';
+    updateError = '两个更新源都连不上（GitHub 和 Gitee 都试过了），检查一下网络';
+    pushUpdate();
+    return updateSnapshot();
+  }
+
+  /* 2) 依次尝试，成功即定；失败就换下一个源 */
+  let lastErr = null;
+  for (const p of usable) {
+    const src = UPDATE_SOURCES.filter(function (s) { return s.id === p.id; })[0];
+    try {
+      if (src.kind === 'github') await checkViaGitHub();
+      else await checkViaMirror(src);
+      updateSourceId = p.id;
+      updateLastGood = p.id;
+      saveUpdatePref();
+      diagLog('update-source', { used: p.id, probes: updateSourceTried });
+      return updateSnapshot();
+    } catch (e) {
+      lastErr = e;
+      const t = updateSourceTried.filter(function (x) { return x.id === p.id; })[0];
+      if (t) { t.ok = false; t.error = String((e && e.message) || e).slice(0, 120); }
+      diagLog('update-source-fail', { id: p.id, error: String((e && e.message) || e) });
+    }
+  }
+
+  updateSourceId = '';
+  updateState = 'error';
+  updateError = String((lastErr && lastErr.message) || lastErr || '所有更新源都失败了').slice(0, 300);
+  pushUpdate();
+  return updateSnapshot();
 }
 
 function downloadUpdate() {
@@ -1665,7 +1918,15 @@ function downloadUpdate() {
   updatePercent = 0;
   updateError = '';
   pushUpdate();
-  autoUpdater.downloadUpdate().catch(function (err) { setUpdateError(err); });
+
+  const src = UPDATE_SOURCES.filter(function (s) { return s.id === updateSourceId; })[0];
+  if (src && src.kind === 'mirror') {
+    /* Gitee 源：自己按分卷下 → 合并 → 校验整包 sha512 */
+    downloadViaMirror().catch(function (err) { setUpdateError(err); });
+  } else {
+    /* GitHub 源：electron-updater 原生，能走 blockmap 差分 */
+    autoUpdater.downloadUpdate().catch(function (err) { setUpdateError(err); });
+  }
   return true;
 }
 
@@ -1673,10 +1934,27 @@ function installUpdate() {
   if (!updateSupported || updateState !== 'downloaded') return false;
   quitting = true;                 // 别让 close 处理器把窗口收进托盘
   send('update-installing');
-  /* 静默安装，装完自动把新版拉起来 —— 用户已经点过「重启并安装」了，不用再走向导 */
+
+  const src = UPDATE_SOURCES.filter(function (s) { return s.id === updateSourceId; })[0];
   setImmediate(function () {
     try {
-      autoUpdater.quitAndInstall(true, true);
+      if (src && src.kind === 'mirror') {
+        /* Gitee 源：合并好的安装包已经在自己手里了，按 NSIS 静默升级的规矩直接启动它。
+           参数与 electron-updater 的 quitAndInstall 保持一致：
+             --updated    告诉安装程序这是升级（保留用户数据、不走向导）
+             /S           静默
+             --force-run  装完把新版拉起来
+           用 detached + stdio:'ignore'：不占管道，父进程退出也不影响它 */
+        const { spawn } = require('child_process');
+        const child = spawn(updateMergedExe, ['--updated', '/S', '--force-run'], {
+          detached: true, stdio: 'ignore'
+        });
+        child.unref();
+        setTimeout(function () { app.quit(); }, 700);
+      } else {
+        /* GitHub 源：electron-updater 原生（静默安装 + 装完自动拉起） */
+        autoUpdater.quitAndInstall(true, true);
+      }
     } catch (e) {
       quitting = false;
       setUpdateError(e);
