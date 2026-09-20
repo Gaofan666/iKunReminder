@@ -20,6 +20,22 @@
 
 ---
 
+## 🐛 v3.2.4 修复（更新说明显示乱、还把下面的卡片顶下去）
+
+两个显示问题：
+
+1. **更新说明是一坨 HTML 标签**。electron-updater 从 GitHub 拿回来的 `releaseNotes`
+   其实是**渲染后的 HTML**（带 `<h2>` / `<ul>` / `<g-emoji>` 这些），之前直接当纯文本
+   塞进界面，于是你看到的就是 `<h2>iKunReminder v3.2.3</h2> <h3>…`。
+   现在会先转成干净纯文本：标题单独一行、列表还原成 `·` 条目、段落之间留一个空行，
+   `<br>` 这种同一段里的折行不会被误当成新段落。
+   （转换只做文本处理，**不把远端 HTML 塞进 DOM**。）
+2. **说明一长就把「一键摸鱼」卡片顶下去**，整页看着很乱。
+   现在更新说明有**独立的滚动框**（最高约 148px，右侧有滚动条），内容再长也只在框里滚，
+   下面的卡片位置纹丝不动。
+
+---
+
 ## 🐛 v3.2.3 修复（一键摸鱼会把动态壁纸收掉）
 
 v3.2.2 的「一键摸鱼」是「把所有有标题的可见窗口都最小化」，结果**把 Wallpaper Engine
@@ -198,11 +214,14 @@ v3.2.2 的「一键摸鱼」是「把所有有标题的可见窗口都最小化�
 
 **方式一：GitHub Releases（推荐）**
 
-> **v3.2.3（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.3
-> 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)（约 110 MB，安装版）
+> **v3.2.4（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.4
+> 直接下载：[`iKunReminder-setup-v3.2.4.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.4/iKunReminder-setup-v3.2.4.exe)（约 110 MB，安装版）
 >
 > ⚠️ **v3.2.1 及更早的版本需要手动装一次**（它们里面没有更新器，没法自己更新自己）。
 > 装上 v3.2.2 或更高之后就不用了 —— 以后的新版本都能在「设置 → 软件更新」里一键更新。
+>
+> 历史版本 **v3.2.3 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.3
+> 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.2 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.2
 > 直接下载：[`iKunReminder-setup-v3.2.2.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.2/iKunReminder-setup-v3.2.2.exe)（约 110 MB，安装版）

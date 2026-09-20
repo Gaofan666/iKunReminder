@@ -336,6 +336,7 @@
     updFill: $('#updFill'),
     updDesc: $('#updDesc'),
     updNote: $('#updNote'),
+    updNoteRow: $('#updNoteRow'),
     btnUpdCheck: $('#btnUpdCheck'),
     btnUpdDownload: $('#btnUpdDownload'),
     btnUpdInstall: $('#btnUpdInstall'),
@@ -1350,7 +1351,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.3 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.4 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1422,12 +1423,58 @@
       el.updDesc.textContent = d;
     }
 
-    /* Release 里的更新说明 */
+    /* Release 里的更新说明。
+       注意：electron-updater 从 GitHub 拿回来的 releaseNotes 其实是【渲染后的 HTML】
+       （会带 <h2>/<ul>/<li>/<g-emoji> 这些），直接 textContent 出来就是一坨标签，
+       所以先转成干净的纯文本再显示。 */
     if (el.updNote) {
       const show = !!s.notes && withVer;
-      el.updNote.hidden = !show;
-      if (show) el.updNote.textContent = s.notes;
+      if (el.updNoteRow) el.updNoteRow.hidden = !show;
+      if (show) el.updNote.textContent = notesToText(s.notes);
     }
+  }
+
+  /* 更新说明 → 干净纯文本。不渲染 HTML（那是远端内容，不往 DOM 里塞标签），
+     只把结构还原成「标题 / 换行 / · 列表」这种能直接读的样子。 */
+  function notesToText(raw) {
+    if (!raw) return '';
+    let s = String(raw);
+
+    if (/<\s*[a-z][^>]*>/i.test(s)) {
+      s = s
+        /* 软换行：<br> 只是同一段里的折行，绝不能当成分段 */
+        .replace(/<br\s*\/?>/gi, '\n')
+        /* 列表：每个 li 起一行；闭合标签不产生换行，否则每两条之间会多一个空行 */
+        .replace(/<li[^>]*>/gi, '\n· ')
+        .replace(/<\/(li|ul|ol)>/gi, '')
+        .replace(/<(ul|ol)[^>]*>/gi, '')
+        /* 硬分段：标题 / 段落 / 引用块前后各留一个空行 */
+        .replace(/<h[1-6][^>]*>/gi, '\n\n')
+        .replace(/<\/(p|div|h[1-6]|blockquote|tr|table|section)>/gi, '\n\n')
+        .replace(/<(p|blockquote|tr|table|section|div)[^>]*>/gi, '\n\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"').replace(/&#0?39;/gi, "'")
+        .replace(/&amp;/gi, '&');
+    }
+
+    /* 顺手把 markdown 的记号也去掉（万一哪天改回 markdown 格式） */
+    s = s
+      .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/^\s{0,3}[-*+]\s+/gm, '· ')
+      .replace(/^\s{0,3}>\s?/gm, '')
+      .replace(/`([^`]*)`/g, '$1');
+
+    /* 逐行去掉首尾空白，再把「3 个以上连续换行」压成 2 个（也就是最多一个空行） */
+    return s
+      .split('\n')
+      .map(function (t) { return t.replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, ''); })
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '');
   }
 
   function bindUpdate() {

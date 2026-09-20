@@ -208,7 +208,20 @@ body.anim-off *::after{animation-play-state:paused !important}
 .upd-btns{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
 
 /* ---------- 设置页：一键摸鱼 ---------- */
-.moyu-label{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--text)}
+.set-label{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--text)}
+
+/* ---------- 设置页：更新内容（长了就内部滚动，别把下面的卡片顶下去） ---------- */
+.upd-note{
+  max-height:148px;overflow-y:auto;overflow-x:hidden;
+  padding:10px 12px;border:1px solid var(--line);border-radius:11px;
+  background:rgba(74,155,212,.06);
+  font-size:12px;line-height:1.9;color:var(--dim);
+  white-space:pre-wrap;word-break:break-word;overscroll-behavior:contain;
+}
+.upd-note::-webkit-scrollbar{width:8px}
+.upd-note::-webkit-scrollbar-track{background:transparent}
+.upd-note::-webkit-scrollbar-thumb{background:rgba(74,155,212,.32);border-radius:99px}
+.upd-note::-webkit-scrollbar-thumb:hover{background:rgba(74,155,212,.5)}
 .moyu-row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
 .moyu-key{
   min-width:220px;font-family:ui-monospace,Consolas,monospace;

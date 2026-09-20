@@ -67,6 +67,9 @@ const DIAG = (function () {
     if (m) out.wait = parseInt(m[1], 10);
     /* --diag-moyu：自检时连着摸鱼两次，验证「藏 → 恢复」这条链路 */
     if (a === '--diag-moyu') out.moyu = true;
+    /* --diag-note：往「软件更新」卡里塞一段长更新说明，验证它能内部滚动、
+       不会把下面的「一键摸鱼」顶下去 */
+    if (a === '--diag-note') out.note = true;
   });
   return out;
 })();
@@ -472,6 +475,16 @@ function createWindow() {
             await new Promise(function (r) { setTimeout(r, 700); });
           }
           /* 一键摸鱼：连着切两次，看窗口是不是「藏 → 恢复」 */
+          /* 往「软件更新」卡里塞一段长说明，验证它能内部滚动、
+             不会把下面的「一键摸鱼」顶下去 */
+          if (DIAG.note) {
+            await win.webContents.executeJavaScript(
+              '(function(){var r=document.getElementById("updNoteRow"),e=document.getElementById("updNote");' +
+              'if(!r||!e)return false;var o=[];' +
+              'for(var i=1;i<=28;i++){o.push(i+". 这是一行用来测试滚动条的更新说明，故意写长一点，好看出排版和高度对不对。");}' +
+              'e.textContent=o.join("\\n");r.hidden=false;return true;})()', true);
+            await new Promise(function (r) { setTimeout(r, 400); });
+          }
           if (DIAG.moyu) {
             diagLog('moyu-step1-before', { visible: win.isVisible() });
             moyuToggle();

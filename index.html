@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.2.3</span>
+    <span class="tb-ver" id="tbVer">v3.2.4</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -191,8 +191,9 @@
       <p class="set-desc">开着的话，启动 8 秒后自动查一次，之后每 6 小时查一次（查到了只用托盘气泡提一句，不打扰你）。
         关掉之后就只剩上面的「检查更新」按钮能查。</p>
     </div>
-    <div class="set-row">
-      <p class="set-desc" id="updNote" hidden></p>
+    <div class="set-row" id="updNoteRow" hidden>
+      <p class="set-label">本次更新内容</p>
+      <div class="upd-note" id="updNote"></div>
     </div>
   </section>
 
@@ -208,7 +209,7 @@
         桌面上的小鸡不受影响。</p>
     </div>
     <div class="set-row">
-      <p class="moyu-label">伪装目标</p>
+      <p class="set-label">伪装目标</p>
       <div class="moyu-row">
         <button class="btn" id="moyuPick">📄 选择文件</button>
         <button class="btn ghost sm" id="moyuClear">清除</button>
@@ -216,7 +217,7 @@
       <p class="set-desc" id="moyuTarget">还没选。不选也行 —— 那就只把桌面收干净，不打开任何东西。</p>
     </div>
     <div class="set-row">
-      <p class="moyu-label">快捷键</p>
+      <p class="set-label">快捷键</p>
       <div class="moyu-row">
         <button class="btn moyu-key" id="moyuKey" title="点一下，然后按下你想用的组合键">点这里，然后按组合键</button>
         <button class="btn ghost sm" id="moyuReset">恢复默认</button>
