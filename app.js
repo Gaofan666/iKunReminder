@@ -1379,7 +1379,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.9 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.10 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1816,6 +1816,10 @@
         d = '一键摸鱼已关闭。勾上「启用一键摸鱼」就能用快捷键了。';
       } else if (!st.active) {
         d = (st.error || '快捷键没注册上') + '（可以点「恢复默认」换成 Ctrl + Alt + M）';
+      } else if (st.runtimeError) {
+        /* 运行期出错（比如 PowerShell 被杀毒软件拦了、桌面根本没被收起）——
+           必须说出来，否则用户只看到「按了没反应」 */
+        d = st.runtimeError;
       } else if (st.running) {
         d = '正在摸鱼中：再按一次 ' + prettyAccel(st.accel) + ' 就把刚才收起来的窗口全部还原。';
       } else {
@@ -1824,7 +1828,7 @@
           + (st.autoPicked ? '（默认的 Ctrl + Alt + M 被别的软件占了，自动换成了这个）' : '');
       }
       el.moyuDesc.textContent = d;
-      el.moyuDesc.className = 'set-desc' + ((st.on && !st.active) ? ' moyu-err' : '');
+      el.moyuDesc.className = 'set-desc' + ((st.on && (!st.active || st.runtimeError)) ? ' moyu-err' : '');
     }
 
     /* 连击摸鱼：可选键清单由主进程给（页面别自己编，两边会不一致） */

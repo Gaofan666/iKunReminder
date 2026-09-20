@@ -1,20 +1,20 @@
 {
-  "version": "3.2.9",
-  "releaseDate": "2026-09-20T13:23:40.429Z",
-  "notes": "## iKunReminder v3.2.9\n\n1. 🌙 **新增「护眼模式」** —— 直接调显示器色温（降蓝光），和 f.lux / 护眼宝 一个原理：改的是显卡的伽马表，**真的把颜色调暖，不是往屏幕上叠一层黄遮罩**。主界面「桌面宠物」那一行有开关；**设置页新增一条色温滑杆**（2700K ~ 6500K，默认 4500K），拖的时候立刻生效、松手就记住，下次启动自动恢复\n2. 🛡 护眼模式不会留下痕迹：开启前会自动备份你原来的色温，关掉时**逐字符精确还原**；休眠唤醒、改分辨率、插拔显示器都会自动重新调暖（这些操作会让系统把色温复位）；**退出程序时也会还原**，不会把屏幕留在暖色上\n3. ⌨ **摸鱼多了一种触发方式：同一个键连按 3 下**（默认 Ctrl 连按 3 下，也可以指定 Alt / Shift / Win / F1~F12 / Caps Lock 等）。两下之间最多隔 500 毫秒，中间按了别的键就重新数。它**只观察不拦截**，Ctrl 照常能用；因为要装一个全局键盘钩子，所以默认关着，需要你在设置页手动勾选\n4. 🖼 **主界面比例固定，缩放时整体等比缩放** —— 拖动窗口只会让界面整体放大缩小，不会再变形或重新排版\n5. 🐛 **修好了「设置页卡片越拖越小」** —— 以前切到设置页后只要拖动一下窗口，卡片就会一路缩小，直到整张卡片都显示出来才停（缩放比和卡片高度互相追着改，形成了正反馈）。现在缩放比只由窗口尺寸决定，怎么拖都不漂\n6. 🐛 修好了系统缩放不是 100% 时，**待办页填不满窗口**（底部空一截）的问题\n\n**下载**：`iKunReminder-setup-v3.2.9.exe`（约 110 MB，Windows x64，双击安装）\n",
-  "size": 115602174,
-  "sha512": "1N7kUmXBlGqAaMBultWffUDt8YK52HiU19k9TcUjb5rbvIy+bI/kbRflu3U2PmBp0LAJeCKTH6LqSHrY72Z5TQ==",
+  "version": "3.2.10",
+  "releaseDate": "2026-09-20T14:12:23.700Z",
+  "notes": "## iKunReminder v3.2.10\n\n1. 🖥 **修好了多屏用户的大问题：拖到另一块屏后界面变小、拖回来还变成全屏拖不动。**\n   以前是按 `当前屏缩放 ÷ 基准屏缩放` 让界面保持「物理像素尺寸恒定」，但 Windows 的缩放百分比本来就是「这块屏上多大的 DIP 看着舒服」的意思 —— 像素密度高的屏用户会把缩放调大，坚持物理像素恒定反而让界面显得更小（2K 屏上 10.8 英寸宽的界面，同样代码到 4K 屏只剩 7.2 英寸宽）。\n   现在改成**跟随系统缩放**：窗口在每块屏上都是同样大的 1180×849（逻辑像素），拖到哪块屏看起来都一样大，不用再手动调\n2. 🖥 同时修掉了「拖回来变成全屏、边缘抓不住、拖不动也缩放不了」：这是踩到了 Electron 在 Windows 上的一个已知回归（无边框+可调整大小的窗口，可视范围比它自己报告的尺寸向外多一圈、而且这一圈随 DPI 变化），跨屏时我们自己重算窗口尺寸正好把这圈算进去，窗口就溢出到屏幕外面去了。现在跨屏不再自己动窗口尺寸，交给系统\n3. 🎯 **修好了老板键「顺手把 VPN / ChatGPT 也打开了」**：以前判断「哪个窗口是这次打开的文档」时，会把「刚从最小化恢复出来的窗口」也算进去 —— 而 VPN 重连、聊天软件弹窗都是这种窗口，于是被当成目标最大化到全屏。现在会先解析出**这个文档到底由哪个程序打开**（读系统的文件关联），只认那个程序的窗口；兜底也只放宽到「新出现的窗口」，绝不再碰被还原的陌生窗口\n4. 🔧 **修好了老板键「按了没反应」**：拉起 PowerShell 偶尔会直接失败（被杀毒软件拦），旧代码没兜住，会导致按键状态永久卡死、热键从此失灵、程序还藏在托盘里。现在：调用失败不影响状态、还原状态用 finally 兜底、**6 秒没生效就自动把界面放回来并说明原因**、另外每 30 秒检查一次全局热键被没被别的软件抢走，抢走了自动补注册\n5. 📄 每次摸鱼会记一行 `moyu-last.txt`（想认哪个程序、最后认了哪个窗口），以后遇到问题可以直接看\n\n**下载**：`iKunReminder-setup-v3.2.10.exe`（约 110 MB，Windows x64，双击安装）\n",
+  "size": 115606271,
+  "sha512": "uD2gsTswJCvcGP9Ve9O4xLokSKcQVQ0dQwAnftfZZbcmGziUcdN5KkWgsLJPRi2zpa8YH2rFe76j8ebBAId4TQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.9/iKunReminder-setup-v3.2.9.exe.part1",
-      "size": 57801087,
-      "sha512": "m9X5zqKX5vY5CA73+igBnin1pcNfHz+RIhkHSF5DS4LRtpZxqsEgq9fxpz8A/MzxLMV2siKmhrNkDPsnBOKq9g==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.10/iKunReminder-setup-v3.2.10.exe.part1",
+      "size": 57803136,
+      "sha512": "HFQXngErYeeHRj2D982ur2tA+hf90c/hP6EU5rNAyFDUXreTN4QFV+BO0jA96UEGfFJZCSNVEftgIJjCFQOVdw==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.9/iKunReminder-setup-v3.2.9.exe.part2",
-      "size": 57801087,
-      "sha512": "tDEeP3GY00Pp111uezjGlNBYoOadye7yXh5fMsPz+urIVVqxc85fYMJciad90iNyg4KcHoLUUgOCfgJOOXvaMg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.10/iKunReminder-setup-v3.2.10.exe.part2",
+      "size": 57803135,
+      "sha512": "vMHd5SAFfetGwXQH3G06wju2YLNdkkrIJ6KFycXKhrItGW5I7O+VuSKC3CSibzfrdgG+/eRh4tihx32vDeWm6w==",
       "index": 2
     }
   ]

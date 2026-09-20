@@ -233,23 +233,33 @@ function applyDisplay(force) {
   const b = win.getBounds();
   const d = displayOf(b.x + Math.max(1, b.width) / 2, b.y + 8);
   const px = effScale(d);
-  const rpx = (d && d.scaleFactor) || 1;
-  const kOld = uiK();
-  const kNew = UI.computeUiScale(px, basePixelRatio);
-  const rOld = realUiK({ scaleFactor: curPixelRatio });
-  const rNew = realUiK(d);
-  const changed = !sameScale(px, curPixelRatio) || !sameScale(kOld, kNew);
+  const changed = !sameScale(px, curPixelRatio);
 
   if (!force && !changed) { sendDpiInfo(); return; }
 
   curPixelRatio = px;
-  /* 主界面：保持物理尺寸（用户手动拉过的比例也一起保住），左上角不动 */
-  if (normalBounds) normalBounds = UI.rescaleBox(normalBounds, kOld, kNew, d.workArea, 'topleft');
-  const next = UI.rescaleBox(b, kOld, kNew, d.workArea, 'topleft');
-  const min = UI.windowBox(kNew).main;
-  win.setMinimumSize(min.minWidth, min.minHeight);
-  win.setBounds(next);
-  if (!normalBounds) normalBounds = next;
+
+  /* 跨屏 / 改系统缩放时【不】再自己按 k 重算窗口尺寸了。
+     窗口就是固定的 1180×849 逻辑像素，系统按每块屏的缩放去渲染即可 ——
+     看起来一样大（见 ui-scale.js 里那段长注释）。
+     以前这里会 rescaleBox 再 setBounds，正好踩在 Electron 在 Windows 上的回归上
+     （electron#51679：无边框可调整大小的窗口，可视窗口比 getBounds() 向外多一圈、
+     而且这圈随 DPI 变化），跨屏时会把窗口算得溢出工作区 ——
+     表现就是「拖到另一块屏后界面变成全屏、边缘抓不住、拖不动也缩放不了」。
+     现在只在窗口真的跑到工作区外面时才把它拉回来，正常跨屏交给系统。 */
+  const wa = d.workArea;
+  const inset = Math.round(10 * ((d && d.scaleFactor) || 1));
+  const maxW = Math.max(1, wa.width - inset);
+  const maxH = Math.max(1, wa.height - inset);
+  const wantW = Math.min(b.width, maxW);
+  const wantH = Math.min(b.height, maxH);
+  const wantX = Math.min(Math.max(b.x, wa.x), wa.x + Math.max(0, wa.width - wantW) - inset);
+  const wantY = Math.min(Math.max(b.y, wa.y), wa.y + Math.max(0, wa.height - wantH) - inset);
+  if (wantW !== b.width || wantH !== b.height || wantX !== b.x || wantY !== b.y) {
+    win.setBounds({ x: wantX, y: wantY, width: wantW, height: wantH });
+  }
+
+  if (!normalBounds) normalBounds = win.getBounds();
   /* 桌面宠物是独立窗口，跟着它自己所在的那块屏重新适配 */
   applyPetDisplay();
   sendDpiInfo();
@@ -278,15 +288,11 @@ function bindDisplayEvents() {
   } catch (e) { /* 个别平台没有这些事件 */ }
 }
 
-/* 主界面默认尺寸 = 物理 1180×880 ÷ k（见 ui-scale.js）。
-   以前这里写死 1180×880 —— 那是「逻辑尺寸」，在 4K@200% 下开出来的窗口
-   物理上只有 590×440 英寸数，看着就是个小窗；现在按物理尺寸算，走到哪都一样大。 */
+/* 主界面默认尺寸 = 设计尺寸 1180×849（逻辑像素/DIP）。
+   窗口在每块屏上都是这个 DIP 尺寸 —— 跟随系统缩放，看起来一样大。
+   （以前这里按 k 换算成「物理尺寸恒定」，实测在 4K 高缩放屏上界面会明显变小，
+   详见 ui-scale.js 里那段说明。） */
 const NORMAL = { width: UI.DESIGN.winW, height: UI.DESIGN.winH };
-
-/* 主界面固定宽高比（= 设计尺寸 1180×849）。
-   窗口怎么拉都保持这个形状，配合页面里的「整体等比缩放」，
-   界面只会等比放大缩小，永远不会变形或重排。 */
-const WIN_RATIO = UI.DESIGN.winW / UI.DESIGN.winH;
 
 /* 桌面宠物：一个「独立的透明小窗」，和主界面同时存在（这是本次的核心改动 ——
    以前宠物模式是把主窗口自己缩小变形，所以两者天生无法共存）。
@@ -425,15 +431,15 @@ function createWindow() {
   const box = UI.windowBox(uiK()).main;
   const saved = winStateStillUsable(loadWinState()) ? loadWinState() : null;
 
-  /* 上次存的尺寸按「设计宽高比」纠正一遍：老版本可能存过一个别的形状，
-     直接恢复的话窗口一开出来比例就是错的（而宽高比是锁死的，下次一拖又会跳一下）。 */
-  const savedBox = (function () {
-    if (!saved) return null;
-    let w = Math.max(saved.width, box.minWidth);
-    let h = Math.round(w / WIN_RATIO);
-    if (h < box.minHeight) { h = box.minHeight; w = Math.round(h * WIN_RATIO); }
-    return { x: saved.x, y: saved.y, width: w, height: h };
-  })();
+  /* 恢复上次的尺寸：原样恢复，不再按设计宽高比纠正 ——
+     窗口形状现在是自由的（宽高比不再锁死），用户拉成什么样就记住什么样。 */
+  const savedBox = saved
+    ? {
+      x: saved.x, y: saved.y,
+      width: Math.max(saved.width, box.minWidth),
+      height: Math.max(saved.height, box.minHeight)
+    }
+    : null;
 
   win = new BrowserWindow({
     x: savedBox ? savedBox.x : undefined,
@@ -463,13 +469,15 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
-  /* 锁定主界面宽高比：拖边缘时窗口只能等比放大缩小，配合页面里的等比缩放，
-     整个界面就是「一张图整体缩放」，不会出现变形或重新排版。
-     支持的平台（Windows/macOS）由系统在拖拽时直接约束，不会有抖动；
-     万一某个平台不支持，这个调用静默无效 —— 页面那边本来也是等比缩放 +
-     居中留白，观感依旧一致，不会坏。 */
-  try { win.setAspectRatio(WIN_RATIO); } catch (e) { }
-
+  /* 这里以前调了 win.setAspectRatio() 想锁死窗口宽高比，现在撤掉了：
+     1) 它在 Windows 上是否生效、以及会不会影响 setBounds（我们拖窗口靠 setBounds），
+        无法自动化验证 —— 而「窗口拖不动也缩放不了」正是要修的严重问题之一，
+        不能把嫌疑留在里面；
+     2) 用户要的「比例固定」其实是「界面整体等比缩放、不变形」，那个由页面里的
+        统一 transform scale 保证（缩放比只由窗口尺寸算出来），跟窗口本身的形状无关；
+     3) 窗口形状自由之后，用户拖成什么比例，界面都是等比缩放 + 居中，
+        依然是「一张图整体缩放」的观感。
+     所以这里什么都不用设。 */
   win.loadFile(path.join(__dirname, 'index.html'));
   /* 开机自启动进来时不弹窗，只留托盘（页面照常在后台跑计时与待办调度） */
   win.once('ready-to-show', () => {
@@ -611,6 +619,20 @@ function createWindow() {
               'document.getElementById("tabHome").click(); true;', true);
             await new Promise(function (r) { setTimeout(r, 700); });
             diagLog('fit-home', await probeFit());
+
+            /* 模拟「跨屏 / 改系统缩放」走一遍 applyDisplay：
+               它现在【不该】再改窗口尺寸和位置了（以前按 k 重算尺寸再 setBounds，
+               踩在 electron#51679 上会把窗口算得溢出工作区）。 */
+            const bBefore = win.getBounds();
+            applyDisplay(true);
+            await new Promise(function (r) { setTimeout(r, 600); });
+            const bAfter = win.getBounds();
+            diagLog('fit-applydisplay', {
+              改之前: bBefore.width + 'x' + bBefore.height + '@' + bBefore.x + ',' + bBefore.y,
+              改之后: bAfter.width + 'x' + bAfter.height + '@' + bAfter.x + ',' + bAfter.y,
+              尺寸没变: bBefore.width === bAfter.width && bBefore.height === bAfter.height,
+              位置没变: bBefore.x === bAfter.x && bBefore.y === bAfter.y
+            });
 
             /* 切到设置页，并塞长说明让卡片撑高 */
             await win.webContents.executeJavaScript(
@@ -1732,6 +1754,18 @@ ipcMain.handle('open-data-dir', () => {
 let dragState = null;
 
 /* 把窗口位置钳制在鼠标所在显示器的可用区域内，不让它被拖出屏幕 */
+/* 无边框 + 可调整大小的窗口在 Windows 上会「可视窗口比 getBounds() 向外多一圈」
+   （electron#51679：SM_CXSIZEFRAME + SM_CXPADDEDBORDER，左侧/右侧/下方各多一圈，
+   上方不多，而且这一圈随 DPI 放大）。所以贴边摆放时要给右下留出这点余量，
+   否则可视窗口会顶出工作区、边缘抓不到（用户看到的就是「像全屏、拖不动也缩放不了」）。 */
+function winInsetDip() {
+  try {
+    const b = win && !win.isDestroyed() ? win.getBounds() : null;
+    const d = b ? displayOf(b.x + Math.max(1, b.width) / 2, b.y + 8) : null;
+    return Math.round(10 * ((d && d.scaleFactor) || 1));
+  } catch (e) { return 10; }
+}
+
 function clampToWorkArea(x, y, w, h, pt) {
   let wa;
   try {
@@ -1739,11 +1773,20 @@ function clampToWorkArea(x, y, w, h, pt) {
   } catch (err) {
     wa = screen.getPrimaryDisplay().workArea;
   }
-  const maxX = wa.x + Math.max(0, wa.width - w);
-  const maxY = wa.y + Math.max(0, wa.height - h);
+  /* 右边/下边留出那一圈，左边/上边不留（留了会让窗口贴不到左上角，反而更怪） */
+  const inset = winInsetDip();
+  /* 窗口比工作区还大时（理论上不该发生，但万一）：别把它钉死在左上角 ——
+     那会变成「完全拖不动」，而且右/下边缘在屏幕外也就「缩放不了」。
+     这种情况允许在「左上角贴边」到「右下边贴边」之间挪动。 */
+  const tooWide = w > wa.width;
+  const tooTall = h > wa.height;
+  const minX = tooWide ? wa.x - (w - wa.width) : wa.x;
+  const minY = tooTall ? wa.y - (h - wa.height) : wa.y;
+  const maxX = wa.x + Math.max(0, wa.width - w) - (tooWide ? 0 : inset);
+  const maxY = wa.y + Math.max(0, wa.height - h) - (tooTall ? 0 : inset);
   return {
-    x: Math.min(Math.max(x, wa.x), maxX),
-    y: Math.min(Math.max(y, wa.y), maxY)
+    x: Math.min(Math.max(x, minX), Math.max(minX, maxX)),
+    y: Math.min(Math.max(y, minY), Math.max(minY, maxY))
   };
 }
 
@@ -2302,6 +2345,8 @@ let moyuCustom = false;       // 快捷键是不是用户自己录的
 let moyuAutoPicked = false;   // 这次是不是自动顺位换了一个组合
 let moyuGoChild = null;       // 「收起桌面 + 打开目标」那个 PowerShell 进程
 let moyuBacking = false;      // 正在还原（等清单落盘 → kill → Restore），期间不接受切换
+let moyuGoAt = 0;             // 这次摸鱼的启动时间戳（保险丝用它判断是不是同一次）
+let moyuRuntimeError = '';    // 运行期出错（比如 PowerShell 没跑起来），显示给用户
 
 function moyuPrefFile() { return path.join(app.getPath('userData'), 'moyu.json'); }
 
@@ -2358,6 +2403,9 @@ function moyuSnapshot() {
     targetName: moyuTarget ? path.basename(moyuTarget) : '',
     targetIsDoc: !!moyuTarget && moyuIsDoc(moyuTarget),
     running: moyuRunning,
+    /* 运行期出错（比如 PowerShell 被拦、桌面没被收起）——要如实报给界面，
+       否则用户看到的是「按了没反应」却完全不知道发生了什么 */
+    runtimeError: moyuRuntimeError,
     /* 连击摸鱼：tapKeys 是可选键清单（页面用它填下拉框），
        tapReady 表示键盘钩子真的装上了 —— 装不上要如实告诉用户 */
     tapOn: moyuTapOn,
@@ -2376,22 +2424,32 @@ function moyuSnapshot() {
    二是彻底绕开引号/换行的转义问题。 */
 function psRun(script, done) {
   const b64 = Buffer.from(script, 'utf16le').toString('base64');
-  return execFile('powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', b64],
-    { windowsHide: true, timeout: 30000 },
-    function (err, stdout, stderr) {
-      /* 自检时把退出码 / stdout / stderr 都留下来。
-         只记 err.message 会被 PowerShell 的 CLIXML 噪音盖住，看不出真正的原因。 */
-      if (err) diagLog('moyu-ps-error', {
-        message: String((err && err.message) || err).slice(0, 1200),
-        code: (err && err.code) || '',
-        killed: !!(err && err.killed),
-        signal: (err && err.signal) || '',
-        stdout: String(stdout || '').slice(0, 3000),
-        stderr: String(stderr || '').slice(0, 3000)
+  let child = null;
+  try {
+    child = execFile('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', b64],
+      { windowsHide: true, timeout: 30000 },
+      function (err, stdout, stderr) {
+        /* 自检时把退出码 / stdout / stderr 都留下来。
+           只记 err.message 会被 PowerShell 的 CLIXML 噪音盖住，看不出真正的原因。 */
+        if (err) diagLog('moyu-ps-error', {
+          message: String((err && err.message) || err).slice(0, 1200),
+          code: (err && err.code) || '',
+          killed: !!(err && err.killed),
+          signal: (err && err.signal) || '',
+          stdout: String(stdout || '').slice(0, 3000),
+          stderr: String(stderr || '').slice(0, 3000)
+        });
+        if (typeof done === 'function') done(err, String(stdout || ''));
       });
-      if (typeof done === 'function') done(err, String(stdout || ''));
-    });
+  } catch (e) {
+    /* execFile 自己也可能同步抛（powershell.exe 起不来、被安全软件拦）。
+       绝不能让它把调用方带崩：调用方那边还有状态要复位、窗口要放回来。 */
+    diagLog('moyu-ps-spawn-error', { message: String((e && e.message) || e) });
+    setTimeout(function () { if (typeof done === 'function') done(e, ''); }, 0);
+    return null;
+  }
+  return child;
 }
 
 /* 摸鱼时【绝对不碰】的窗口。
@@ -2544,27 +2602,99 @@ const MOYU_WINAPI = [
   '    return list.ToArray();',
   '  }',
   '',
+  /* 进程名（小写，不带扩展名），拿不到返回空串 */
+  '  static string ProcName(IntPtr h) {',
+  '    uint pid; GetWindowThreadProcessId(h, out pid);',
+  '    try { return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName.ToLower(); } catch { return ""; }',
+  '  }',
+  '',
+  /* 文档 → 默认打开它的那个可执行文件名。
+     为什么要它：光凭「刚冒出来的窗口」判断不够 —— 实测用户按老板键时，
+     顺便自动弹出来的 VPN / ChatGPT 客户端也被当成了目标窗口给最大化了
+     （用户看到的就是「按了老板键，VPN 也被打开了」）。
+     有了这个白名单，只认「这次要打开的那个程序」的窗口，别的窗口一概不碰。 */
+  '  [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]',
+  '  static extern int AssocQueryString(int flags, int str, string assoc, string extra, StringBuilder buf, ref int len);',
+  '',
+  /* 从「可执行文件路径（可能带参数）」里取出纯路径。
+     坑：不能简单地「按第一个空格截断」—— 像
+     C:\Program Files\WindowsApps\...\Notepad.exe 这种带空格的路径会被截成
+     C:\Program，于是扩展名判断失败、白名单变空、整个进程过滤失效。
+     所以只在「确实带参数」时截断：带引号的取引号内，不带引号的找到 .exe/.com 为止。 */
+  '  static string ExePathOnly(string s) {',
+  '    s = (s == null ? "" : s.Trim());',
+  '    if (s.StartsWith("\\"")) {',
+  '      int q = s.IndexOf((char)34, 1);',
+  '      if (q > 0) return s.Substring(1, q - 1);',
+  '      return s.TrimStart(new char[] { (char)34 });',
+  '    }',
+  '    string low = s.ToLower();',
+  '    int ei = low.IndexOf(".exe");',
+  '    if (ei >= 0) return s.Substring(0, ei + 4);',
+  '    ei = low.IndexOf(".com");',
+  '    if (ei >= 0) return s.Substring(0, ei + 4);',
+  '    return s;',
+  '  }',
+  '',
+  '  public static string ExpectedProcs(string target) {',
+  '    var list = new List<string>();',
+  '    string t = (target == null ? "" : target.Trim());',
+  '    if (t.Length == 0) return "";',
+  '    string ext = System.IO.Path.GetExtension(t).TrimStart(new char[] { (char)46 }).ToLower();',
+  '    /* 先问 shell 关联：.pdf / .docx / .txt 这些都能问出可执行文件路径 */',
+  '    try {',
+  '      var sb = new StringBuilder(1024);',
+  '      int n = sb.Capacity;',
+  '      if (AssocQueryString(0, 2, t, "open", sb, ref n) == 0) {',
+  '        string exe = ExePathOnly(sb.ToString());',
+  /* 只认 .exe/.com：.url 的关联会给出 ieframe.dll（实际由 rundll32 打开），
+     直接把 dll 名字当进程名会让白名单永远匹配不上。 */
+  '        string lext = System.IO.Path.GetExtension(exe).ToLower();',
+  '        if (lext == ".exe" || lext == ".com") {',
+  '          string nm = System.IO.Path.GetFileNameWithoutExtension(exe).ToLower();',
+  '          if (nm.Length > 0) list.Add(nm);',
+  '        }',
+  '      }',
+  '    } catch {}',
+  '    /* 可执行文件本身：就算关联查不到，进程名也就是文件名 */',
+  '    if (ext == "exe" || ext == "com") {',
+  '      string nm2 = System.IO.Path.GetFileNameWithoutExtension(t).ToLower();',
+  '      if (nm2.Length > 0 && !list.Contains(nm2)) list.Add(nm2);',
+  '    }',
+  '    return string.Join(",", list.ToArray());',
+  '  }',
+  '',
   /* 挑出「这次打开动作真正拉起来的那个窗口」，找不到返回 Zero。
-     顺序：① before 之外的可见新窗口（目标程序本来没开 / 开了新窗口）
-           ② 现在自己从最小化状态恢复了的窗口（目标程序已在跑，打开文件时
-              还原的是老窗口 —— Win11 记事本这种标签页式的就走这条）
-     三个「绝不碰」的约束：
-       - 不看「当前前台窗口」：实测目标还没起来时前台可能是别的软件
-         （比如 Outlook 弹出来提醒），照着前台最大化会把别人的窗口顶到最前面；
+     顺序：
+       ① before 之外的新窗口，且进程属于 wantProcs（目标程序开了新窗口）
+       ② 刚从最小化恢复、且进程属于 wantProcs 的窗口
+          （目标程序本来就在跑，打开文件时还原的是老窗口 —— 记事本这种标签页式的走这条）
+       ③ anyNew 时兜底：任何新窗口（关联查不出来 / 判断错了时不至于完全失效）
+     刻意【不】做「任何被还原的窗口」这种兜底：VPN / ChatGPT 之类自己弹出来时
+     也是「被还原的窗口」，那正是实测踩到的坑。
+     另外三个「绝不碰」的约束：
+       - 不看「当前前台窗口」：实测目标还没起来时前台可能是别的软件，
+         照着前台最大化会把别人的窗口顶到最前面；
        - 跳过自己进程（selfPid）的窗口：桌面宠物窗 / 气泡窗都有标题、
          又不在 VisibleHandles 的 before 清单里（那个按 selfPid 排除了），
          不排掉就会被当成「新窗口」放大到全屏；
        - 跳过 DWM 隐身的空壳窗口（见 Cloaked），否则会去最大化一个看不见的壳。 */
-  '  public static IntPtr PickTarget(IntPtr[] before, string wasMinimizedCsv, bool allowRestored, int selfPid) {',
+  '  public static IntPtr PickTarget(IntPtr[] before, string wasMinimizedCsv, bool allowRestored, int selfPid, string wantProcs, bool anyNew) {',
   '    var seen = new HashSet<IntPtr>();',
   '    if (before != null) { foreach (var h in before) seen.Add(h); }',
-  '    IntPtr best = IntPtr.Zero;',
-  '    IntPtr any = IntPtr.Zero;',
+  '    var want = SplitCsv(wantProcs);',
+  '    bool anyWanted = want.Count == 0;      // 关联没查出来 → 退回老行为',
+  '    IntPtr best = IntPtr.Zero;             // 新窗口 + 进程匹配 + 能最大化',
+  '    IntPtr okNew = IntPtr.Zero;            // 新窗口 + 进程匹配',
+  '    IntPtr anyNewWin = IntPtr.Zero;        // 任何新窗口（兜底）',
   '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
   '      if (IsIconic(h)) return true;',
   '      if (!RealWindow(h, selfPid, null)) return true;',
   '      if (seen.Contains(h)) return true;',
-  '      if (any == IntPtr.Zero) any = h;',
+  '      bool hit = anyWanted || want.Contains(ProcName(h));',
+  '      if (anyNewWin == IntPtr.Zero) anyNewWin = h;',
+  '      if (!hit) return true;',
+  '      if (okNew == IntPtr.Zero) okNew = h;',
   /* 优先挑「能最大化的正常主窗口」：WPS / Office 这类国产办公软件常常先弹一个
      广告小窗或启动页，那种窗口没有 WS_THICKFRAME / WS_MAXIMIZEBOX，
      真被选中就会出现「目标打开了、最大化的却是广告窗」。 */
@@ -2575,13 +2705,18 @@ const MOYU_WINAPI = [
   '      return true;',
   '    }, IntPtr.Zero);',
   '    if (best != IntPtr.Zero) return best;',
-  '    if (any != IntPtr.Zero) return any;',
+  '    if (okNew != IntPtr.Zero) return okNew;',
   '    if (!allowRestored) return IntPtr.Zero;',
   '    foreach (var s in SplitCsv(wasMinimizedCsv)) {',
   '      long v; if (!long.TryParse(s, out v)) continue;',
   '      IntPtr h = new IntPtr(v);',
-  '      if (IsWindowVisible(h) && !IsIconic(h) && !Cloaked(h)) return h;',
+  '      if (!IsWindowVisible(h) || IsIconic(h) || Cloaked(h)) continue;',
+  '      if (!anyWanted && !want.Contains(ProcName(h))) continue;',
+  '      return h;',
   '    }',
+  '    /* 兜底只用「新窗口」：被还原的窗口里有太多别人的程序（VPN、聊天软件…），',
+  '       放进来就会重现「按老板键把 VPN 也打开了」那个 bug。 */',
+  '    if (anyNew && anyNewWin != IntPtr.Zero) return anyNewWin;',
   '    return IntPtr.Zero;',
   '  }',
   '',
@@ -2598,6 +2733,8 @@ const MOYU_WINAPI = [
 
 /* 「窗口句柄清单」存在这里，还原时按它精确恢复 */
 function moyuStateFile() { return path.join(app.getPath('userData'), 'moyu-windows.txt'); }
+/* 每次摸鱼写一行「想认哪个进程、最后认了哪个窗口」—— 出问题时看这个文件 */
+function moyuLogFile() { return path.join(app.getPath('userData'), 'moyu-last.txt'); }
 
 /* 等「收起了哪些窗口」这份清单落盘。
    收桌面那个 PowerShell 是异步的：先编译 C# → 枚举窗口 → 收起来 → 最后才写清单。
@@ -2621,6 +2758,7 @@ function moyuWaitState(child, cb) {
 function moyuGo() {
   if (moyuRunning || moyuBacking) return;
   moyuRunning = true;
+  moyuRuntimeError = '';       // 新的一次开始，先把上次的运行期错误清掉
 
   /* 清掉上一次的清单：这样「清单存在」就等于「这一次已经收好了」，
      moyuBack() 靠它判断能不能安全地按住不动。 */
@@ -2633,6 +2771,7 @@ function moyuGo() {
   const stateFile = moyuStateFile().replace(/'/g, "''");
   const t = moyuTarget.replace(/'/g, "''");          // PowerShell 单引号串里要写成 ''
   const isDoc = moyuTarget ? moyuIsDoc(moyuTarget) : false;
+  const logFile = moyuLogFile().replace(/'/g, "''");
 
   const lines = [
     "$ErrorActionPreference = 'SilentlyContinue'",
@@ -2640,6 +2779,16 @@ function moyuGo() {
        会让 execFile 误判成命令失败（退出码和执行结果其实都是对的）。 */
     "$ProgressPreference = 'SilentlyContinue'",
     MOYU_WINAPI,
+    "$target = '" + t + "'",
+    /* .lnk 先解析成真实目标：不解析的话既查不出关联、也认不出进程名，
+       目标窗口就选不准了 */
+    "if ($target -like '*.lnk') {",
+    "  try { $sh = New-Object -ComObject WScript.Shell; $rp = $sh.CreateShortcut($target).TargetPath; if ($rp -ne '') { $target = $rp } } catch {}",
+    '}',
+    /* 这次要打开的到底是哪个程序：文档问 shell 关联（.pdf → wpspdf 之类），
+       程序取文件名。下面的窗口挑选只认这些进程 —— 否则 VPN / ChatGPT 之类
+       自己弹出来的窗口也会被当成目标给最大化（实测踩到过）。 */
+    '$want = [KkWin]::ExpectedProcs($target)',
     /* 先记下此刻已经开着的可见窗口，再收桌面 —— 顺序不能反。
        iconic 那批是「本来就最小化」的：MinimizeAll 不会收它们，
        但目标程序打开文件时可能还原的正是这种老窗口。 */
@@ -2653,30 +2802,56 @@ function moyuGo() {
     "[System.IO.File]::WriteAllText('" + stateFile + "', $csv)",
     /* 还原判定的候选池 = 我们收起来的 + 本来就是最小化的 */
     '$pool = ((@($hs) + @($iconic)) | ForEach-Object { $_.ToInt64().ToString() }) -join \',\'',
-    "$target = '" + t + "'",
     "if ($target -ne '') { Start-Process -FilePath $target | Out-Null }"
   ];
 
   if (isDoc) {
     lines.push(
-      /* 只认「这次新冒出来的窗口」或「刚被还原的老窗口」，
-         绝不碰本来就开着、仍然最小化的窗口 —— 挨个去看当前前台窗口是错的：
-         目标还没起来时前台可能是别的软件（实测把 Outlook 顶到最前面最大化了）。 */
+      /* 只认「这次新冒出来的窗口」或「刚被还原的老窗口」，而且进程必须属于 $want。
+         绝不碰本来就开着、仍然最小化的窗口；也绝不放宽「被还原的窗口」——
+         实测那条路会把用户自己弹出来的 VPN / ChatGPT 当成目标最大化。 */
       '$h = [IntPtr]::Zero',
       'for ($i = 0; $i -lt 40 -and $h -eq [IntPtr]::Zero; $i++) {',
       '  Start-Sleep -Milliseconds 250',
-      /* 前 2.5 秒只认新窗口；之后才接受「目标程序把老窗口自己还原了」这种情形 */
-      '  $h = [KkWin]::PickTarget($before, $pool, ($i -ge 10), ' + process.pid + ')',
+      /* 前 2.5 秒只认新窗口；之后才接受「目标程序把老窗口自己还原了」；
+         7.5 秒还没找到就兜底放宽成「任何新窗口」（关联猜错了也不至于完全失效） */
+      '  $h = [KkWin]::PickTarget($before, $pool, ($i -ge 10), ' + process.pid + ', $want, ($i -ge 30))',
       '}',
       'if ($h -ne [IntPtr]::Zero) {',
       '  [KkWin]::ShowWindow($h, 3) | Out-Null',                          // SW_MAXIMIZE
       '  [KkWin]::SetForegroundWindow($h) | Out-Null',
-      '}'
+      '}',
+      /* 记一行结果，出问题时看这个文件就知道「想认谁、最后认了谁」 */
+      'try { [System.IO.File]::WriteAllText(\'' + logFile + '\', "want=" + $want + " picked=" + $h.ToInt64()) } catch {}'
     );
   }
 
-  moyuGoChild = psRun(lines.join('\n'));
+  /* 保险丝用的时间戳：6 秒后检查清单有没有落盘 */
+  const goAt = Date.now();
+  moyuGoAt = goAt;
+  try {
+    moyuGoChild = psRun(lines.join('\n'));
+  } catch (e) {
+    diagLog('moyu-go-throw', { message: String((e && e.message) || e) });
+  }
   send('moyu-changed', moyuSnapshot());
+
+  /* 保险丝：如果 6 秒内「收起了哪些窗口」这份清单还没落盘，说明那段 PowerShell
+     根本没跑起来（被杀毒软件拦了 / powershell.exe 起不来 / execFile 直接抛）。
+     这时候绝不能把用户搁在「程序藏了、桌面没动、热键也失灵」的状态里 ——
+     把界面放回来、状态复位、并说明原因，保证下次按还能用。 */
+  setTimeout(function () {
+    if (!moyuRunning || moyuGoAt !== goAt) return;       // 已经切回来了 / 又按了一次
+    let ok = false;
+    try { ok = fs.existsSync(moyuStateFile()); } catch (e) { }
+    if (ok) return;
+    diagLog('moyu-go-failsafe', {});
+    moyuRunning = false;
+    moyuRuntimeError = '摸鱼没跑起来：桌面没被收起（PowerShell 可能被杀毒软件拦住了）';
+    moyuResult = 'ps-fail';
+    showWindow();
+    send('moyu-changed', moyuSnapshot());
+  }, 6000);
 }
 
 /* 再按一次：把刚才收起来的窗口全部还原，伪装软件留着不动 */
@@ -2693,21 +2868,28 @@ function moyuBack() {
   send('moyu-changed', moyuSnapshot());
 
   const finish = function () {
-    /* 掐掉那个还在跑的「找窗口最大化」PowerShell。
-       否则用户按得太快时，它会在还原之后才去最大化某个窗口，看着莫名其妙。
-       注意必须等清单落盘之后再掐，否则被收起的窗口就还原不回来了。 */
-    if (child) {
-      try { child.kill(); } catch (e) { }
+    /* 用 try/finally 保住 moyuBacking：这里一旦抛异常又没复位，
+       热键就永远没反应了（moyuToggle 开头会直接 return）。 */
+    try {
+      /* 掐掉那个还在跑的「找窗口最大化」PowerShell。
+         否则用户按得太快时，它会在还原之后才去最大化某个窗口，看着莫名其妙。
+         注意必须等清单落盘之后再掐，否则被收起的窗口就还原不回来了。 */
+      if (child) {
+        try { child.kill(); } catch (e) { }
+      }
+      psRun([
+        "$ErrorActionPreference = 'SilentlyContinue'",
+        "$ProgressPreference = 'SilentlyContinue'",
+        MOYU_WINAPI,
+        /* 清单可能还没写出来（比如收桌面那步就失败了），别让 ReadAllText 抛错 */
+        "if (Test-Path '" + stateFile + "') { " +
+        "[KkWin]::Restore([System.IO.File]::ReadAllText('" + stateFile + "')) }"
+      ].join('\n'));
+    } catch (e) {
+      diagLog('moyu-back-throw', { message: String((e && e.message) || e) });
+    } finally {
+      moyuBacking = false;
     }
-    psRun([
-      "$ErrorActionPreference = 'SilentlyContinue'",
-      "$ProgressPreference = 'SilentlyContinue'",
-      MOYU_WINAPI,
-      /* 清单可能还没写出来（比如收桌面那步就失败了），别让 ReadAllText 抛错 */
-      "if (Test-Path '" + stateFile + "') { " +
-      "[KkWin]::Restore([System.IO.File]::ReadAllText('" + stateFile + "')) }"
-    ].join('\n'));
-    moyuBacking = false;
   };
 
   const gone = !child || child.exitCode !== null || child.signalCode !== null;
@@ -3609,6 +3791,20 @@ if (!gotLock) {
     } catch (e) {
       diagLog('eye-care-init-error', { message: String((e && e.message) || e) });
     }
+
+    /* 全局热键看门狗：Windows 上偶尔会有别的软件把热键抢走、或者系统把它丢掉，
+       表现就是「按了老板键一点反应都没有」。每 30 秒确认一次还在，不在就补注册。 */
+    setInterval(function () {
+      if (!moyuOn || !moyuActiveAccel) return;
+      try {
+        if (!globalShortcut.isRegistered(moyuActiveAccel)) {
+          diagLog('moyu-hotkey-lost', { accel: moyuActiveAccel });
+          moyuActiveAccel = null;
+          applyMoyuShortcut();
+          send('moyu-changed', moyuSnapshot());
+        }
+      } catch (e) { /* 查询失败就当它还在，下一轮再说 */ }
+    }, 30000);
   });
   app.on('before-quit', () => { quitting = true; });
   /* 退出时把全局快捷键摘掉，否则会残留在系统里（下次别的软件可能注册不上）；

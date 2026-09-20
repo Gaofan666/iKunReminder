@@ -65,31 +65,39 @@
     return bestD <= Math.max(0.06, n * 0.06) ? best : n;
   }
 
-  /* 核心：算出界面缩放因子 k = 像素比 ÷ 基准像素比。
-     pxRatio   当前显示器的缩放比例（display.scaleFactor 或 window.devicePixelRatio）
-     baseRatio 基准显示器的缩放比例（启动时首次记录，缺省 1）
+  /* 恒返回 1：主界面/宠物按逻辑像素(DIP)定尺寸，不跟显示器的缩放百分比走。
+     为什么废掉原来的「物理像素恒定」，见下面那段长注释。 */
+  function computeUiScale() { return 1; }
 
-     为什么是「像素比」而不是「缩放比例本身」：
-       设计尺寸 1180 是基准环境下「1 个 CSS 像素 = 1 个物理像素」时的宽度。
-       在高 DPI 屏上 CSS 像素会按缩放比例放大，所以界面会跟着变大；
-       要把它按「基准的物理尺寸」摆出来，就得用像素比的比例去缩。
-       基准屏自己跑时 k = 1，界面与改动前完全一致。 */
-  function computeUiScale(pxRatio, baseRatio) {
-    var p = snapRatio(pxRatio);
-    var b = snapRatio(baseRatio);
-    if (p == null) return 1;
-    if (b == null || b <= 0) b = 1;
-    var k = p / b;
-    if (!isFinite(k) || k <= 0) return 1;
-    return clampScale(k);
-  }
+  /* =======================================================================
+     注意：computeUiScale 现在【恒返回 1】—— 主界面和宠物一律按逻辑像素(DIP)
+     定尺寸，不再跟着显示器的缩放百分比走。为什么把原来那套「物理像素恒定」
+     的方案废掉：
 
-  /* 内容最终 scale：把设计尺寸按「物理像素」铺满当前窗口，但绝不为了填满而放大超过 k。
+     原方案 k = 当前屏像素比 ÷ 基准屏像素比，窗口逻辑尺寸 = 设计尺寸 ÷ k，
+     于是界面在每块屏上的【物理像素数】都一样，看着「物理大小恒定」。
+     但它跟用户直觉是反的：Windows 的缩放百分比表达的是「这块屏上多大的 DIP
+     看着舒服」—— 像素密度高的屏，用户会把缩放调大。这时坚持物理像素恒定，
+     反而让界面在这块屏上显得更小：
+        2K@100%（约 109 PPI）→ 1180 物理像素 ≈ 10.8 英寸宽
+        4K@150%（约 163 PPI）→ 1180 物理像素 ≈  7.2 英寸宽   ← 明显变小
+     实机反馈正是如此：「笔记本接 2K + 4K 双屏，从 2K 拖到 4K 后文字变小」。
+
+     正确做法是跟随系统缩放（Windows 已经按每块屏的 PPI 定义好了 DIP 的含义），
+     即 k 恒为 1：窗口在每块屏上都是 1180×849 DIP，看起来一样大。
+
+     顺带还躲开一个 Electron 在 Windows 上的回归（electron#51679）：无边框 +
+     可调整大小的窗口，可视窗口比 getBounds() 向外多出一圈（SM_CXSIZEFRAME +
+     SM_CXPADDEDBORDER，且这一圈随 DPI 变化）。原来跨屏时我们自己按 k 重算尺寸
+     再 setBounds，会把这圈偏移算进去，结果窗口溢出工作区 —— 表现就是
+     「拖到另一块屏后界面变成全屏、边缘抓不住、拖不动也缩放不了」。
+     k 恒为 1 之后，跨屏不需要我们自己 setBounds，交给系统即可，问题一并消失。
+     ======================================================================= */
+
+  /* 内容最终 scale：把设计尺寸铺满当前窗口，装不下就等比缩小，永远不溢出。
        fit = min(可用宽/设计宽, 可用高/设计高, 1)
-       scale = fit × k
-     配合下面的「窗口逻辑尺寸 = 物理设计尺寸 ÷ k」，窗口在换屏后 fit 恰好 ≈ 1/k，
-     于是 scale = k，内容物理大小严格恒定；而窗口被用户手动拉小时 fit 变小，
-     内容跟着缩小、永远不会溢出窗口（与现有行为一致）。 */
+       scale = fit × k，而 k 恒为 1（见上面那段），所以 scale 就等于 fit。
+     窗口被用户拉小时 fit 变小 → 内容跟着整体等比缩小（不重排版）。 */
   function computeContentScale(availW, availH, baseScale, designW, designH) {
     var k = clampScale(baseScale);
     var aw = Math.max(1, Number(availW) || 1);
