@@ -32,6 +32,18 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onUpdateStatus: (cb) => ipcRenderer.on('update-status', (e, s) => cb(s)),
   onUpdateInstalling: (cb) => ipcRenderer.on('update-installing', () => cb()),
 
+  /* 一键摸鱼（老板键）：全局快捷键按一下 → 主窗口收进托盘，再按一下恢复。
+     桌面宠物不受影响，提醒也照常。快捷键由用户自己在设置页录。 */
+  /* 一键摸鱼（老板键）：只由全局快捷键触发，没有按钮。
+     按一次 → 收起桌面所有窗口 + 自动打开指定的程序/文档；再按一次 → 全部还原。 */
+  moyuGet: () => ipcRenderer.invoke('moyu-get'),
+  moyuSet: (cfg) => ipcRenderer.invoke('moyu-set', cfg),
+  moyuReset: () => ipcRenderer.invoke('moyu-reset'),
+  moyuSuspend: (on) => ipcRenderer.invoke('moyu-suspend', !!on),
+  moyuPick: () => ipcRenderer.invoke('moyu-pick'),
+  moyuClearTarget: () => ipcRenderer.invoke('moyu-clear-target'),
+  onMoyuChanged: (cb) => ipcRenderer.on('moyu-changed', (e, s) => cb(s)),
+
   minimize: () => ipcRenderer.invoke('minimize'),
   hideToTray: () => ipcRenderer.invoke('hide'),
   showWindow: () => ipcRenderer.invoke('show-window'),

@@ -206,6 +206,27 @@ body.anim-off *::after{animation-play-state:paused !important}
   transition:width .25s ease;
 }
 .upd-btns{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+
+/* ---------- 设置页：一键摸鱼 ---------- */
+.moyu-label{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--text)}
+.moyu-row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.moyu-key{
+  min-width:220px;font-family:ui-monospace,Consolas,monospace;
+  font-size:14px;letter-spacing:1px;
+}
+.moyu-key.rec{          /* 正在录制：整块变高亮，明确告诉用户「现在按键会被吃掉」 */
+  background:linear-gradient(100deg,var(--sky),var(--lake));
+  border-color:transparent;color:#fff;
+  box-shadow:0 8px 22px rgba(62,154,168,.34);
+}
+.moyu-key.bad{border-color:#cf574d;color:#cf574d}
+/* 伪装目标的路径可能很长，等宽 + 强制换行，别把卡片撑破 */
+#moyuTarget{
+  font-family:ui-monospace,Consolas,monospace;font-size:12px;
+  word-break:break-all;line-height:1.75;
+}
+.moyu-err{color:#cf574d}
+.set-desc.moyu-err b{color:#cf574d}
 .quick-time{display:flex;flex-wrap:wrap;gap:6px}
 .quick-time button{
   border:1px solid var(--line);background:#fff;border-radius:9px;

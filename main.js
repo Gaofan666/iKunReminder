@@ -6,9 +6,10 @@
      · 宠物模式：只剩动画的小窗、悬浮置顶，右键弹原生菜单
      · 屏幕缩放（DPI）适配：窗口逻辑尺寸 = 物理设计尺寸 ÷ k，k 见 ui-scale.js
    ========================================================================= */
-const { app, BrowserWindow, ipcMain, Menu, screen, Tray, nativeImage, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen, Tray, nativeImage, powerMonitor, globalShortcut, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
 const UI = require('./ui-scale.js');
 
 /* 自动更新（electron-updater）。require 失败不影响软件本体 ——
@@ -64,6 +65,8 @@ const DIAG = (function () {
        （比如启动 8 秒后才会跑的「自动检查更新」） */
     m = /^--diag-wait=(\d+)$/.exec(a);
     if (m) out.wait = parseInt(m[1], 10);
+    /* --diag-moyu：自检时连着摸鱼两次，验证「藏 → 恢复」这条链路 */
+    if (a === '--diag-moyu') out.moyu = true;
   });
   return out;
 })();
@@ -468,6 +471,16 @@ function createWindow() {
             });
             await new Promise(function (r) { setTimeout(r, 700); });
           }
+          /* 一键摸鱼：连着切两次，看窗口是不是「藏 → 恢复」 */
+          if (DIAG.moyu) {
+            diagLog('moyu-step1-before', { visible: win.isVisible() });
+            moyuToggle();
+            await new Promise(function (r) { setTimeout(r, 700); });
+            diagLog('moyu-step2-hidden', { visible: win.isVisible() });
+            moyuToggle();
+            await new Promise(function (r) { setTimeout(r, 700); });
+            diagLog('moyu-step3-shown', { visible: win.isVisible() });
+          }
           const shot = await runDiagnose();
           diagLog('result', shot);
           console.log('[DIAG-RESULT] ' + JSON.stringify(shot));
@@ -626,10 +639,13 @@ function toggleWindow() {
   else showWindow();
 }
 
-function hideToTray() {
+/* silent=true 时不弹「躲进托盘了」的提示气泡 —— 一键摸鱼要的就是低调，
+   这时候冒个气泡反而把注意力吸过来 */
+function hideToTray(silent) {
   if (!win) return;
   hideBubble();                 // 气泡是独立小窗，收托盘时要一起收掉
   win.hide();
+  if (silent) return;
   if (!balloonShown && tray && typeof tray.displayBalloon === 'function') {
     balloonShown = true;
     try {
@@ -1485,7 +1501,8 @@ function updatePrefFile() { return path.join(app.getPath('userData'), 'update-se
 
 function loadUpdatePref() {
   try {
-    const o = JSON.parse(fs.readFileSync(updatePrefFile(), 'utf8'));
+    /* 同 loadMoyuPref：手改过的文件可能带 BOM，先去干净再解析 */
+    const o = JSON.parse(fs.readFileSync(updatePrefFile(), 'utf8').replace(/^\uFEFF/, ''));
     if (o && typeof o.autoCheck === 'boolean') updateAutoCheck = o.autoCheck;
   } catch (e) { /* 首次运行没这个文件，用默认值 */ }
 }
@@ -1653,6 +1670,356 @@ ipcMain.handle('update-set-auto-check', (e, on) => {
   return updateAutoCheck;
 });
 
+/* ============================================================ 一键摸鱼（老板键）
+   只由全局快捷键触发（设置页里没有按钮）：
+     · 按一次 → 把桌面上所有窗口收起来（等于按 Win+D），再自动打开用户指定的
+                程序 / 文档：文档会自动最大化，程序只要打开就行。
+     · 再按一次 → 把刚才收起来的窗口全部还原，伪装软件留着不动。
+   桌面宠物不动（按需求：不藏小鸡）。
+   快捷键和伪装目标都存在 userData\moyu.json。 */
+const MOYU_DEFAULT_ACCEL = 'Ctrl+Alt+M';
+
+/* 默认值之外再备一排：Ctrl+Alt+M 在不少机器上会被别的软件占掉
+   （开发这台就被占了，独立探针实测 ❌）。只要用户没自己改过，
+   注册失败就按这个顺序顺位往后试，试到能用为止。 */
+const MOYU_FALLBACK_ACCELS = [
+  'Ctrl+Shift+M', 'Ctrl+Alt+H', 'Ctrl+Shift+H',
+  'Ctrl+Alt+Q', 'Ctrl+Shift+Q', 'Alt+Shift+M', 'Alt+Shift+H',
+  'Ctrl+Alt+F9', 'Ctrl+Shift+F9', 'F9', 'F10'
+];
+
+/* 这些后缀算「程序」：打开就完事，不去抢最大化。
+   其余（doc/docx/pdf/txt…）都当文档，开完再最大化。 */
+const MOYU_PROGRAM_EXT = ['exe', 'lnk', 'bat', 'cmd', 'com', 'msc', 'ps1', 'url'];
+
+let moyuOn = true;
+let moyuAccel = MOYU_DEFAULT_ACCEL;
+let moyuActiveAccel = null;   // 当前真正注册成功的那一个
+let moyuError = '';
+let moyuResult = '';          // ok | off | empty | taken | invalid
+let moyuTarget = '';          // 伪装目标（程序或文档的完整路径）
+let moyuRunning = false;      // 是否正处在「摸鱼中」
+let moyuCustom = false;       // 快捷键是不是用户自己录的
+let moyuAutoPicked = false;   // 这次是不是自动顺位换了一个组合
+let moyuGoChild = null;       // 「收起桌面 + 打开目标」那个 PowerShell 进程
+
+function moyuPrefFile() { return path.join(app.getPath('userData'), 'moyu.json'); }
+
+function loadMoyuPref() {
+  try {
+    /* 去掉可能存在的 UTF-8 BOM：用记事本手改过这个文件就会带上，
+       而 JSON.parse 碰到 BOM 会直接抛错，那样配置就被静默忽略了 */
+    const raw = fs.readFileSync(moyuPrefFile(), 'utf8').replace(/^\uFEFF/, '');
+    const o = JSON.parse(raw);
+    if (o) {
+      if (typeof o.on === 'boolean') moyuOn = o.on;
+      if (typeof o.accel === 'string' && o.accel) moyuAccel = o.accel;
+      if (typeof o.target === 'string') moyuTarget = o.target;
+      if (typeof o.custom === 'boolean') moyuCustom = o.custom;
+    }
+  } catch (e) { /* 首次运行没这个文件，用默认值 */ }
+}
+
+function saveMoyuPref() {
+  try {
+    fs.writeFileSync(moyuPrefFile(),
+      JSON.stringify({ on: moyuOn, accel: moyuAccel, target: moyuTarget, custom: moyuCustom }, null, 2), 'utf8');
+  } catch (e) { }
+}
+
+function moyuIsDoc(p) {
+  const ext = String(p).split('.').pop().toLowerCase();
+  return MOYU_PROGRAM_EXT.indexOf(ext) < 0;
+}
+
+function moyuSnapshot() {
+  return {
+    on: moyuOn,
+    accel: moyuAccel,
+    /* active：这一刻快捷键是否真的挂在系统上了（页面靠它判断成败） */
+    active: !!moyuActiveAccel,
+    used: moyuActiveAccel || '',
+    error: moyuError,
+    result: moyuResult,
+    defaultAccel: MOYU_DEFAULT_ACCEL,
+    custom: moyuCustom,
+    autoPicked: moyuAutoPicked,
+    target: moyuTarget,
+    targetName: moyuTarget ? path.basename(moyuTarget) : '',
+    targetIsDoc: !!moyuTarget && moyuIsDoc(moyuTarget),
+    running: moyuRunning
+  };
+}
+
+/* ---------- 用 PowerShell 操作桌面窗口 ----------
+   走 -EncodedCommand（base64）而不是临时 .ps1 文件：
+   一是省得往磁盘写脚本（杀毒软件对 AppData 里执行脚本很敏感），
+   二是彻底绕开引号/换行的转义问题。 */
+function psRun(script, done) {
+  const b64 = Buffer.from(script, 'utf16le').toString('base64');
+  return execFile('powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', b64],
+    { windowsHide: true, timeout: 30000 },
+    function (err) {
+      if (err) diagLog('moyu-ps-error', { message: String((err && err.message) || err) });
+      if (typeof done === 'function') done(err);
+    });
+}
+
+/* 用 EnumWindows 逐个精确最小化，而不是 Shell 的 MinimizeAll()。
+   原因：MinimizeAll 是「显示桌面」那套状态，紧接着 Start-Process 打开新窗口时
+   会把它顶掉 —— 实测出现「文档打开了、但自己的窗口又弹回来了」。
+   自己枚举还顺带能记住到底最小化了哪些窗口，还原时只还原这些。 */
+const MOYU_WINAPI = [
+  'Add-Type @"',
+  'using System;',
+  'using System.Collections.Generic;',
+  'using System.Runtime.InteropServices;',
+  'public class KkWin {',
+  '  delegate bool EnumProc(IntPtr h, IntPtr l);',
+  '  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);',
+  '  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);',
+  /* IsIconic / ShowWindow 要从 PowerShell 直接调，必须是 public ——
+     static extern 默认是 private，漏了 public 会报 "does not contain a method named" */
+  '  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);',
+  '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+  '  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);',
+  '',
+  /* 前台窗口属于哪个进程；拿不到返回 0 */
+  '  public static int ForegroundPid() {',
+  '    IntPtr h = GetForegroundWindow();',
+  '    if (h == IntPtr.Zero) return 0;',
+  '    uint pid; GetWindowThreadProcessId(h, out pid);',
+  '    return (int)pid;',
+  '  }',
+  '  public static void MaximizeForeground() { ShowWindow(GetForegroundWindow(), 3); }',
+  '  [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);',
+  '  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
+  '  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);',
+  '  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);',
+  '',
+  '  public static IntPtr[] MinimizeAll(int selfPid) {',
+  '    var list = new List<IntPtr>();',
+  '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
+  '      if (!IsWindowVisible(h)) return true;',
+  '      if (GetWindowTextLength(h) == 0) return true;',
+  '      if ((GetWindowLong(h, -20) & 0x00000080) != 0) return true;',   // WS_EX_TOOLWINDOW
+  '      uint pid; GetWindowThreadProcessId(h, out pid);',
+  '      if ((int)pid == selfPid) return true;',
+  '      if (IsIconic(h)) return true;',                                 // 本来就最小化的不动
+  '      list.Add(h);',
+  '      ShowWindow(h, 6);',                                             // SW_MINIMIZE
+  '      return true;',
+  '    }, IntPtr.Zero);',
+  '    return list.ToArray();',
+  '  }',
+  '',
+  '  public static void Restore(string csv) {',
+  '    if (csv == null) return;',
+  '    foreach (var s in csv.Split(new char[] { (char)44 })) {',
+  '      long v; if (!long.TryParse(s, out v)) continue;',
+  '      ShowWindow(new IntPtr(v), 9);',                                 // SW_RESTORE
+  '    }',
+  '  }',
+  '}',
+  '"@'
+].join('\n');
+
+/* 「窗口句柄清单」存在这里，还原时按它精确恢复 */
+function moyuStateFile() { return path.join(app.getPath('userData'), 'moyu-windows.txt'); }
+
+/* 按一次：收起桌面 → 打开伪装目标（文档再最大化） */
+function moyuGo() {
+  if (moyuRunning) return;
+  moyuRunning = true;
+
+  /* 自己的主窗口直接藏掉（任务栏图标一起没）——
+     用最小化的话任务栏会留一条自己的程序名，摸鱼就露馅了 */
+  hideToTray(true);
+
+  const stateFile = moyuStateFile().replace(/'/g, "''");
+  const t = moyuTarget.replace(/'/g, "''");          // PowerShell 单引号串里要写成 ''
+  const isDoc = moyuTarget ? moyuIsDoc(moyuTarget) : false;
+
+  const lines = [
+    "$ErrorActionPreference = 'SilentlyContinue'",
+    MOYU_WINAPI,
+    /* 排除自己这个进程的窗口（已经用 hideToTray 藏了） */
+    '$hs = [KkWin]::MinimizeAll(' + process.pid + ')',
+    "$csv = (($hs | ForEach-Object { $_.ToInt64().ToString() }) -join ',')",
+    "[System.IO.File]::WriteAllText('" + stateFile + "', $csv)",
+    "$target = '" + t + "'",
+    "if ($target -ne '') { Start-Process -FilePath $target | Out-Null }"
+  ];
+
+  if (isDoc) {
+    lines.push(
+      /* 盯着「前台窗口」而不是「新进程」：
+         Win11 的记事本是标签页式的，打开 txt 不会产生新进程，
+         光靠认新进程会漏掉。Start-Process 之后被激活的那个窗口就是目标。 */
+      '$done = $false',
+      'for ($i = 0; $i -lt 36 -and -not $done; $i++) {',
+      '  Start-Sleep -Milliseconds 250',
+      '  $fp = [KkWin]::ForegroundPid()',
+      '  if ($fp -eq 0 -or $fp -eq ' + process.pid + ') { continue }',
+      '  $nm = (Get-Process -Id $fp -ErrorAction SilentlyContinue).ProcessName',
+      "  if ($nm -match '^(powershell|pwsh|electron|explorer)$') { continue }",
+      '  [KkWin]::MaximizeForeground()',
+      '  $done = $true',
+      '}'
+    );
+  }
+
+  moyuGoChild = psRun(lines.join('\n'));
+  send('moyu-changed', moyuSnapshot());
+}
+
+/* 再按一次：把刚才收起来的窗口全部还原，伪装软件留着不动 */
+function moyuBack() {
+  if (!moyuRunning) return;
+  moyuRunning = false;
+
+  /* 先把还在跑的「找窗口最大化」那个 PowerShell 掐掉。
+     否则用户按得太快时，它会在还原之后才去最大化某个窗口，看着莫名其妙。 */
+  if (moyuGoChild) {
+    try { moyuGoChild.kill(); } catch (e) { }
+    moyuGoChild = null;
+  }
+
+  const stateFile = moyuStateFile().replace(/'/g, "''");
+  psRun([
+    "$ErrorActionPreference = 'SilentlyContinue'",
+    MOYU_WINAPI,
+    "[KkWin]::Restore([System.IO.File]::ReadAllText('" + stateFile + "'))"
+  ].join('\n'));
+
+  showWindow();          // 自己也回来
+  send('moyu-changed', moyuSnapshot());
+}
+
+function moyuToggle() {
+  if (moyuRunning) moyuBack(); else moyuGo();
+}
+
+/* 把当前设置应用到系统：先撤掉旧的注册，再注册新的。
+   注册失败（被别的软件占用 / 组合键不合法）要说清原因，别静静失败。 */
+function applyMoyuShortcut() {
+  if (moyuActiveAccel) {
+    try { globalShortcut.unregister(moyuActiveAccel); } catch (e) { }
+    moyuActiveAccel = null;
+  }
+  moyuError = '';
+  moyuAutoPicked = false;
+
+  if (!moyuOn) { moyuResult = 'off'; return moyuSnapshot(); }
+  if (moyuCustom && !moyuAccel) {
+    moyuResult = 'empty';
+    moyuError = '还没有设置快捷键';
+    return moyuSnapshot();
+  }
+
+  /* 用户自己录的：只试那一个，失败了要说清；
+     还在用默认值：默认被占了就顺位往后试，别让用户自己去猜哪个能用 */
+  let tries;
+  if (moyuCustom) {
+    tries = [moyuAccel];
+  } else {
+    tries = [moyuAccel].concat(MOYU_FALLBACK_ACCELS).filter(function (a, i, arr) {
+      return a && arr.indexOf(a) === i;
+    });
+  }
+
+  for (let i = 0; i < tries.length; i++) {
+    const a = tries[i];
+    let ok = false;
+    try {
+      ok = globalShortcut.register(a, moyuToggle);
+    } catch (e) {
+      moyuError = String((e && e.message) || e);
+      continue;
+    }
+    if (ok) {
+      moyuActiveAccel = a;
+      moyuResult = 'ok';
+      if (a !== moyuAccel) { moyuAccel = a; moyuAutoPicked = true; }
+      saveMoyuPref();          // 记住实际能用的那个，下次直接用它
+      return moyuSnapshot();
+    }
+  }
+
+  moyuResult = 'taken';
+  moyuError = moyuCustom
+    ? '这个组合键已经被系统或别的软件占用了，换一个试试'
+    : '常用的几个组合键都被占用了，请手动录一个（比如 F8 或 Ctrl+Shift+J）';
+  return moyuSnapshot();
+}
+
+ipcMain.handle('moyu-get', () => moyuSnapshot());
+
+ipcMain.handle('moyu-set', (e, cfg) => {
+  if (cfg && typeof cfg === 'object') {
+    if (typeof cfg.on === 'boolean') moyuOn = cfg.on;
+    if (typeof cfg.accel === 'string') {
+      moyuAccel = cfg.accel.trim();
+      moyuCustom = !!moyuAccel;      // 用户亲手录的，之后不再自动顺位
+    }
+  }
+  saveMoyuPref();
+  return applyMoyuShortcut();
+});
+
+/* 选一个「伪装目标」：摸鱼时自动打开它 */
+ipcMain.handle('moyu-pick', async () => {
+  try {
+    const r = await dialog.showOpenDialog(win && !win.isDestroyed() ? win : null, {
+      title: '选一个程序或文档（摸鱼时自动打开它）',
+      buttonLabel: '就用这个',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: '程序或文档',
+          extensions: ['exe', 'lnk', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+            'pdf', 'txt', 'md', 'rtf', 'csv', 'odt', 'wps', 'et', 'dps']
+        },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    });
+    if (r && !r.canceled && r.filePaths && r.filePaths[0]) {
+      moyuTarget = r.filePaths[0];
+      saveMoyuPref();
+    }
+  } catch (e) {
+    diagLog('moyu-pick-error', { message: String((e && e.message) || e) });
+  }
+  return moyuSnapshot();
+});
+
+ipcMain.handle('moyu-clear-target', () => {
+  moyuTarget = '';
+  saveMoyuPref();
+  return moyuSnapshot();
+});
+
+/* 录制快捷键期间先把全局热键摘掉 —— 否则用户按到旧组合，
+   会当场触发一次摸鱼（整个桌面被收走），根本没法录 */
+ipcMain.handle('moyu-suspend', (e, on) => {
+  if (on) {
+    if (moyuActiveAccel) {
+      try { globalShortcut.unregister(moyuActiveAccel); } catch (err) { }
+      moyuActiveAccel = null;
+    }
+    return moyuSnapshot();
+  }
+  return applyMoyuShortcut();
+});
+
+ipcMain.handle('moyu-reset', () => {
+  moyuAccel = MOYU_DEFAULT_ACCEL;
+  moyuCustom = false;              // 回到「自动顺位」模式
+  saveMoyuPref();
+  return applyMoyuShortcut();
+});
+
 /* ------------------------------------------------------------ 生命周期 */
 const gotLock = app.requestSingleInstanceLock();
 
@@ -1688,8 +2055,21 @@ if (!gotLock) {
     loadUpdatePref();
     initUpdater();
     scheduleUpdateCheck();
+
+    /* 一键摸鱼：读偏好 → 注册全局快捷键。
+       这里必须 try 住：快捷键注册失败绝不能把启动流程带崩。 */
+    loadMoyuPref();
+    try {
+      diagLog('moyu', applyMoyuShortcut());
+    } catch (e) {
+      moyuError = String((e && e.message) || e);
+      moyuResult = 'invalid';
+      diagLog('moyu-error', { message: moyuError });
+    }
   });
   app.on('before-quit', () => { quitting = true; });
+  /* 退出时把全局快捷键摘掉，否则会残留在系统里（下次别的软件可能注册不上） */
+  app.on('will-quit', () => { try { globalShortcut.unregisterAll(); } catch (e) { } });
   app.on('window-all-closed', () => { /* 有托盘常驻，不退出 */ });
   /* 点任务栏 / 桌面图标重新激活：自启隐藏状态下要能正常叫出来 */
   app.on('activate', () => {

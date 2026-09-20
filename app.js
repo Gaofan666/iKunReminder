@@ -339,7 +339,15 @@
     btnUpdCheck: $('#btnUpdCheck'),
     btnUpdDownload: $('#btnUpdDownload'),
     btnUpdInstall: $('#btnUpdInstall'),
-    chkUpdAuto: $('#chkUpdAuto')
+    chkUpdAuto: $('#chkUpdAuto'),
+    /* 一键摸鱼 */
+    chkMoyu: $('#chkMoyu'),
+    moyuKey: $('#moyuKey'),
+    moyuReset: $('#moyuReset'),
+    moyuDesc: $('#moyuDesc'),
+    moyuPick: $('#moyuPick'),
+    moyuClear: $('#moyuClear'),
+    moyuTarget: $('#moyuTarget')
   };
 
   /* 桌面版（Electron）才有：抢前台 / 托盘 / 宠物模式 / 电源事件 */
@@ -1342,7 +1350,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.1 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.2.2 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1474,6 +1482,209 @@
 
     /* 首屏主动拉一次：窗口刷新后主进程的 send 是收不到的，只能自己问 */
     native.updateGetState().then(renderUpdate).catch(function () { });
+  }
+
+  /* ------------------------------------------------------------ 一键摸鱼
+     快捷键由主进程注册（globalShortcut），这里只负责录制和回显。
+     录制时用【捕获阶段】监听 + stopPropagation，把按键吃掉，
+     免得按 W 触发「立刻喝水」、按空格触发暂停计时。 */
+  const MOYU_RESULT = {
+    ok: '已生效',
+    off: '已关闭',
+    empty: '没设置快捷键',
+    taken: '被占用了',
+    invalid: '不合法'
+  };
+
+  let moyuRecording = false;
+
+  function prettyAccel(a) {
+    return String(a || '').split('+').join(' + ');
+  }
+
+  /* 键盘事件 → Electron 加速键（Ctrl+Alt+M 这种）。不合法返回空串。 */
+  function accelFromEvent(e) {
+    const k = e.key;
+    /* 只按修饰键本身不算，等用户再按一个真键 */
+    if (k === 'Control' || k === 'Alt' || k === 'Shift' || k === 'Meta' ||
+        k === 'AltGraph' || k === 'CapsLock' || k === 'Dead') return '';
+
+    let key = '';
+    if (/^[a-zA-Z]$/.test(k)) key = k.toUpperCase();
+    else if (/^[0-9]$/.test(k)) key = k;
+    else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(k)) key = k.toUpperCase();
+    else {
+      const map = {
+        ' ': 'Space', 'ArrowUp': 'Up', 'ArrowDown': 'Down', 'ArrowLeft': 'Left', 'ArrowRight': 'Right',
+        'Escape': 'Esc', 'Enter': 'Return', 'Tab': 'Tab', 'Backspace': 'Backspace', 'Delete': 'Delete',
+        'Insert': 'Insert', 'Home': 'Home', 'End': 'End', 'PageUp': 'PageUp', 'PageDown': 'PageDown',
+        'PrintScreen': 'PrintScreen', ',': 'Comma', '.': 'Period', '/': 'Slash', ';': 'Semicolon',
+        "'": 'Quote', '[': 'BracketLeft', ']': 'BracketRight', '\\': 'Backslash',
+        '-': 'Minus', '=': 'Plus', '`': 'Backquote'
+      };
+      key = map[k] || '';
+    }
+    if (!key) return '';
+
+    /* 必须有 Ctrl / Alt / Win，或者干脆用功能键 ——
+       否则会抢走正常打字（Shift+A 这种也不算，太容易误触） */
+    const strong = e.ctrlKey || e.altKey || e.metaKey;
+    const isFn = /^F([1-9]|1[0-9]|2[0-4])$/.test(key);
+    if (!strong && !isFn) return '';
+
+    const mods = [];
+    if (e.ctrlKey) mods.push('Ctrl');
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    if (e.metaKey) mods.push('Super');
+    return mods.concat([key]).join('+');
+  }
+
+  function onMoyuKey(e) {
+    if (!moyuRecording) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.key === 'Escape') {
+      stopMoyuRecord();
+      setCaption('已取消录制快捷键');
+      return;
+    }
+
+    const accel = accelFromEvent(e);
+    if (!accel) {
+      /* 只按了修饰键，或是不允许的组合：闪一下红边，继续等 */
+      if (el.moyuKey) {
+        el.moyuKey.classList.add('bad');
+        setTimeout(function () { if (el.moyuKey) el.moyuKey.classList.remove('bad'); }, 450);
+      }
+      return;
+    }
+
+    stopMoyuRecord();
+    native.moyuSet({ accel: accel }).then(function (st) {
+      renderMoyu(st);
+      if (st && st.active) setCaption('摸鱼快捷键已设为 ' + prettyAccel(accel));
+    }).catch(function () { });
+  }
+
+  function stopMoyuRecord() {
+    if (!moyuRecording) return;
+    moyuRecording = false;
+    if (el.moyuKey) el.moyuKey.classList.remove('rec');
+    document.removeEventListener('keydown', onMoyuKey, true);
+    /* 录制期间主进程把全局热键摘掉了，这里重新注册回去 */
+    if (native && native.moyuSuspend) {
+      native.moyuSuspend(false).then(renderMoyu).catch(function () { });
+    }
+  }
+
+  function startMoyuRecord() {
+    if (!native || !native.moyuSet || moyuRecording) return;
+    moyuRecording = true;
+    if (el.moyuKey) {
+      el.moyuKey.classList.add('rec');
+      el.moyuKey.textContent = '请按组合键…（Esc 取消）';
+    }
+    /* 先把全局热键摘掉：否则用户按到旧组合，窗口会当场被收走 */
+    if (native.moyuSuspend) native.moyuSuspend(true).catch(function () { });
+    /* 捕获阶段 + stopPropagation，把按键吃掉，不让它触发页面快捷键 */
+    document.addEventListener('keydown', onMoyuKey, true);
+  }
+
+  function renderMoyu(st) {
+    if (!st) return;
+    if (el.chkMoyu) el.chkMoyu.checked = !!st.on;
+
+    if (el.moyuKey && !moyuRecording) {
+      el.moyuKey.textContent = st.accel ? prettyAccel(st.accel) : '点这里，然后按组合键';
+      el.moyuKey.classList.toggle('bad', !!st.on && !st.active);
+    }
+
+    if (el.moyuTarget) {
+      if (st.target) {
+        el.moyuTarget.textContent = (st.targetIsDoc ? '📄 文档：' : '🖥 程序：') + st.targetName
+          + (st.targetIsDoc ? '（打开后会自动最大化）' : '（打开就行，不最大化）');
+      } else {
+        el.moyuTarget.textContent = '还没选。不选也行 —— 那就只把桌面收干净，不打开任何东西。';
+      }
+    }
+    if (el.moyuClear) el.moyuClear.disabled = !st.target;
+
+    if (el.moyuDesc) {
+      let d;
+      if (!st.on) {
+        d = '一键摸鱼已关闭。勾上「启用一键摸鱼」就能用快捷键了。';
+      } else if (!st.active) {
+        d = (st.error || '快捷键没注册上') + '（可以点「恢复默认」换成 Ctrl + Alt + M）';
+      } else if (st.running) {
+        d = '正在摸鱼中：再按一次 ' + prettyAccel(st.accel) + ' 就把刚才收起来的窗口全部还原。';
+      } else {
+        d = '快捷键 ' + prettyAccel(st.accel) + ' 已生效：按一下收起桌面'
+          + (st.target ? '并打开 ' + st.targetName : '') + '，再按一下还原。'
+          + (st.autoPicked ? '（默认的 Ctrl + Alt + M 被别的软件占了，自动换成了这个）' : '');
+      }
+      el.moyuDesc.textContent = d;
+      el.moyuDesc.className = 'set-desc' + ((st.on && !st.active) ? ' moyu-err' : '');
+    }
+  }
+
+  function bindMoyu() {
+    if (!el.moyuKey) return;                // 页面里没这块 UI
+
+    if (!native || !native.moyuGet) {
+      el.moyuKey.disabled = true;
+      el.moyuKey.textContent = '仅桌面版可用';
+      [el.chkMoyu, el.moyuReset, el.moyuPick, el.moyuClear].forEach(function (n) {
+        if (n) n.disabled = true;
+      });
+      return;
+    }
+
+    if (el.chkMoyu) {
+      el.chkMoyu.addEventListener('change', function (e) {
+        const want = e.target.checked;
+        native.moyuSet({ on: want }).then(function (st) {
+          renderMoyu(st);
+          setCaption(!want ? '一键摸鱼已关闭'
+            : (st && st.active ? '一键摸鱼已开启' : '一键摸鱼已开启，但快捷键没注册上'));
+        }).catch(function () { e.target.checked = !want; });
+      });
+    }
+
+    if (el.moyuKey) el.moyuKey.addEventListener('click', startMoyuRecord);
+
+    if (el.moyuReset) {
+      el.moyuReset.addEventListener('click', function () {
+        stopMoyuRecord();
+        native.moyuReset().then(function (st) {
+          renderMoyu(st);
+          setCaption('已恢复默认快捷键 ' + prettyAccel(st && st.defaultAccel));
+        }).catch(function () { });
+      });
+    }
+
+    if (el.moyuPick && native.moyuPick) {
+      el.moyuPick.addEventListener('click', function () {
+        native.moyuPick().then(function (st) {
+          renderMoyu(st);
+          if (st && st.target) setCaption('伪装目标已设为 ' + st.targetName);
+          else setCaption('没有选择文件');
+        }).catch(function () { });
+      });
+    }
+
+    if (el.moyuClear && native.moyuClearTarget) {
+      el.moyuClear.addEventListener('click', function () {
+        native.moyuClearTarget().then(function (st) {
+          renderMoyu(st);
+          setCaption('已清除伪装目标，以后按快捷键就只收桌面');
+        }).catch(function () { });
+      });
+    }
+
+    if (native.onMoyuChanged) native.onMoyuChanged(renderMoyu);
+    native.moyuGet().then(renderMoyu).catch(function () { });
   }
 
   /* -------------------------------------------------- 备忘 / 待办 事件绑定 */
@@ -2259,6 +2470,7 @@
     bindSettings();
     bindDesktopPet();
     bindUpdate();
+    bindMoyu();
   }
 
   /* ---------------------------------------------------------- 启动 */

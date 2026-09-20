@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.2.1</span>
+    <span class="tb-ver" id="tbVer">v3.2.2</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -193,6 +193,36 @@
     </div>
     <div class="set-row">
       <p class="set-desc" id="updNote" hidden></p>
+    </div>
+  </section>
+
+  <!-- 一键摸鱼（老板键）：只由快捷键触发，卡片里不放按钮。
+       按一次收起桌面所有窗口并打开指定程序/文档，再按一次全部还原 -->
+  <section class="card set-col">
+    <div class="col-head"><h2>🐟 一键摸鱼</h2></div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkMoyu"><span>启用一键摸鱼</span></label>
+      <p class="set-desc">开着的时候，按下面的快捷键就会：<b>先把桌面上所有窗口收起来</b>，
+        再<b>自动打开你指定的程序或文档</b> —— 文档会自动最大化，程序打开就行。
+        再按一次快捷键，刚才收起来的窗口<b>全部还原</b>（伪装软件留着不动）。
+        桌面上的小鸡不受影响。</p>
+    </div>
+    <div class="set-row">
+      <p class="moyu-label">伪装目标</p>
+      <div class="moyu-row">
+        <button class="btn" id="moyuPick">📄 选择文件</button>
+        <button class="btn ghost sm" id="moyuClear">清除</button>
+      </div>
+      <p class="set-desc" id="moyuTarget">还没选。不选也行 —— 那就只把桌面收干净，不打开任何东西。</p>
+    </div>
+    <div class="set-row">
+      <p class="moyu-label">快捷键</p>
+      <div class="moyu-row">
+        <button class="btn moyu-key" id="moyuKey" title="点一下，然后按下你想用的组合键">点这里，然后按组合键</button>
+        <button class="btn ghost sm" id="moyuReset">恢复默认</button>
+      </div>
+      <p class="set-desc" id="moyuDesc">默认是 <b>Ctrl + Alt + M</b>。
+        要包含 Ctrl 或 Alt，也可以直接用 F1～F12 这种功能键 —— 免得跟打字冲突。</p>
     </div>
   </section>
 </main>
