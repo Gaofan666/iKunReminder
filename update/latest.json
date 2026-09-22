@@ -1,20 +1,20 @@
 {
-  "version": "3.5.1",
-  "releaseDate": "2026-09-22T12:10:01.099Z",
-  "notes": "## iKunReminder v3.5.1\n\n1. 🧹 点「🎨 打开皮肤文件夹」之后不再弹那句「已打开皮肤文件夹：D:\\...」了 —— 文件夹本身已经弹出来了，再报一遍路径是多余的（只有**打不开**的时候才会提示一句）\n2. 📝 顺手把皮肤下拉框的提示文案里的说明文件名改对了（是 `README.md`）\n\n功能上和 v3.5.0 一样：重复待办、自定义皮肤更新不再被删等等都在。\n\n**下载**：`iKunReminder-setup-v3.5.1.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 115645201,
-  "sha512": "OemSYRD1aRM1OpwCR0TAT23S3OeOqWHD31lS8oKdeN2ZOEYXvutXLnlxE7Jd6RsGeH9QEvW+tE6mQYAdbWhk/A==",
+  "version": "3.6.0",
+  "releaseDate": "2026-09-22T16:15:31.147Z",
+  "notes": "## iKunReminder v3.6.0\n\n这次加了一整个新页面：**📖 日记**（顶部标签栏里，和主界面 / 待办 / 设置并列）。\n\n1. 📖 **一天一篇，纯文字** —— 今天那张永远在最上面，打开就能写、**边写边自动存**；往下翻就是以前写的，越往下越旧。**只有写过的日子才会出现在列表里**，不会一堆空卡片占地方\n2. ✏️ **想改哪篇点「编辑」** —— 旧日记平时是只读的，点了「编辑」才变成输入框，改完点「保存」；点「取消」或按 Esc 就当没改过（不会手一滑就把写好的东西改了）。今天那张：没写的时候直接就能写，写过之后就和其他日子一样需要点「编辑」\n3. 🗓 **可以补写以前某天** —— 昨天忘了写？点右上角「＋ 补写某天」选个日期，那天的卡片会亮出来直接写，写完按日期插回正确的位置\n4. ⬇ **导出为 txt 可以选日期范围** —— 从 / 到两个日期随便挑，也有「最近 7 天 / 30 天 / 一年 / 全部」四个快捷档，选的时候还会告诉你这个范围里有几篇。导出的文件按时间正序，带星期和农历\n5. 🌙 **每篇旁边显示农历**（和桌面日历一个来源），👁 页顶还会随机显示一句**惜时 / 自省的古典诗词**——每次进日记页换一句，一共 19 句，出处都核对过（《礼记·大学》《论语》、陶渊明、朱熹、颜真卿、韩愈……）\n6. 🔤 **字号** —— 日记正文默认 **16px**，页面上「A− / A+」可以调，**12 到 24 一共 7 档**；古诗词固定 18px，日期、周几、农历、按钮各有各的大小。调字号**不会打断你正在写的内容**\n7. 🗑 每篇可以单独删除（会先问一句「删了就找不回来了」）\n8. 🖥 托盘右键菜单也加了「📖 日记」，点一下直接打开日记页\n\n图标用的是 **📖 蓝白翻开的书**（之前那版紫色笔记本看着不顺眼）。\n\n**下载**：`iKunReminder-setup-v3.6.0.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 115655379,
+  "sha512": "9G/7ykirskn/SXZtTzL/22KVOKnKnt2JCbpLDZHxlY17ZI4zlHW7KKWstDOL9czts/YqPH8+HnjWTxwOc59cbA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.1/iKunReminder-setup-v3.5.1.exe.part1",
-      "size": 57822601,
-      "sha512": "ZHbKtriC5abJxjoxfAzqiABfIxE3TAS8KX8sI2Wsz5GHC+WWBTlRRvaypbl+FKmYrlmrAYiUmAiUs6GJE6vioQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.6.0/iKunReminder-setup-v3.6.0.exe.part1",
+      "size": 57827690,
+      "sha512": "+ICjhX/jBm+DGE6xynmt0BIqs1EQ9HYzHYK+Yt6UrEM8npTYukJf6XIRAPWakgR7Cgue6XcOdfS3j4Pdh3SBVA==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.1/iKunReminder-setup-v3.5.1.exe.part2",
-      "size": 57822600,
-      "sha512": "AYzqh0UAcmD/MfzOvZpsmOLGWp95k3NIIM479TzFVVe9EHCwbePmdCazC26Lnm9KsdEn5AdYbjGl5s2o74kF3A==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.6.0/iKunReminder-setup-v3.6.0.exe.part2",
+      "size": 57827689,
+      "sha512": "CTqAm0jmfRwpOCyXx9gzKxOiPpomlTQ2tr+JSFPYLBVFhwbSp0zWV/vhE0q2zXYQSe6z/TT6qvB41p8usf32Mw==",
       "index": 2
     }
   ]
