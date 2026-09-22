@@ -1,20 +1,20 @@
 {
-  "version": "3.4.0",
-  "releaseDate": "2026-09-22T10:11:44.492Z",
-  "notes": "## iKunReminder v3.4.0\n\n1. 📅 **新增「桌面日历」** —— 桌面上多一块日历：**左边是备忘录、右边是月历**，哪天有事一眼就能看见。主界面「🐣 桌面宠物 / 🌙 护眼模式」那一行勾上「📅 桌面日历」就出来（托盘菜单、桌面宠物右键菜单里也有同一个开关）。它能拖动、会记住位置，右键还有「上一月 / 回到今天 / 下一月 / 隐藏」\n2. 🎯 **待办可以分「高 / 中 / 低」三档优先级**了 —— 在新增（或修改）待办时选，日历里就用**红 / 橙 / 蓝**三种颜色画出来：高优先级排在最前，一天超过 3 条时显示「+N 条」。**主界面待办页一个字都没改**，还是原来的样子\n3. 🈷 **格子里带农历**（廿九 / 初一这种，初一显示月份），一眼看出农历日子\n4. 🖱 **点日历里某一天，能看到当天清单**并直接**勾完成、✏️ 编辑、🗑 删除**（删除会先问一句）；格子里字太小/太大都能调，窗口 940×680\n5. 🎨 **日历主题和透明度都能自己调**（设置 → 桌面日历）：**浅色 / 深色**一键切换（日历右上角那个 🌙 / ☀ 也能切），**不透明度滑杆**从 35% 到 100% 随便拖\n6. ✍️ **日历左边那栏能直接加备忘录**（点 ＋ 写一条回车就存），和主界面是同一份数据，点一下就能勾完成\n7. 🖥 **主界面可以拖到屏幕外面去了** —— 嫌它挡着别的软件，就往边上推，只留一条边露在屏幕里；想拿回来一拖就回来。要是忘了它在哪，从托盘点「显示主界面」会**自动把它拉回屏幕中间**\n8. 🐟 **修好了「老板键连击会凭空触发」** —— 以前按住 Ctrl 不放时，系统每隔几十毫秒补发的按键被当成了「连按」，于是「按两下 + 第三下稍微按久一点」就误触发摸鱼。现在**按住不放不算**；顺便给整串连击加了个总时长限制：三下要在 1 秒内按完、相邻两下不超过 0.5 秒\n9. 🪟 **修好了「开机时桌面日历压在主界面上」** —— 以前勾着日历重启，日历会盖住主界面、点不动；现在主界面始终在日历上面\n10. 📝 顺手把设置页里那些「讲原理」的话（显卡伽马表、注册表、键盘钩子之类）换成了人话，只讲怎么用\n\n**下载**：`iKunReminder-setup-v3.4.0.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 115635706,
-  "sha512": "3Hj/fRWGFYaiecB8fzSYm3GXfEELC2N0TG4OOobHImaYyrch8LUaN3ZF/TAzwwOenxYxYY4T4QIDXL40GH02hg==",
+  "version": "3.5.0",
+  "releaseDate": "2026-09-22T11:59:35.077Z",
+  "notes": "## iKunReminder v3.5.0\n\n1. 🔁 **待办可以重复了** —— 新增（或修改）待办时多了一行「重复」，可以选：\n   - **每天**\n   - **每周**（挑星期几，可以多选，比如周一 + 周四）\n   - **每月几号**，或者 **每月最后一天**\n   - **每年**（同月同日）\n\n   点勾**不是变灰，而是自动排下一期**（提醒时刻不变），并直接告诉你下次什么时候提醒。待办列表和桌面日历里都会挂一个 🔁 标记，写明它是「每周一、四」还是「每月 15 号」\n2. 📅 **「每月 31 号」碰上 2 月怎么办** —— 按行业标准来（Google 日历、iCalendar 标准都是这么定的）：**短月直接跳过**，不会硬凑到 28 号；**要每个月都提醒就选「每月最后一天」**。同理「每年 2 月 29」只在闰年提醒。另外完成得晚了也不会连环催你：下一期一定排到「还没到」的那个周期（比如 1 月的月租拖到 9 月才勾，下次直接排 10 月）\n3. 🎨 **自己做的宠物皮肤，更新不会再被删了** —— 这是这次的重点修复。皮肤原来推荐放在安装目录里，而安装程序在更新时会把整个安装目录清空重建，皮肤就跟着没了（有朋友反馈过）。现在：\n   - 安装程序更新前**先把皮肤整个备份**，装完**再放回来**；\n   - 程序自己还会在 `%APPDATA%` 里留一份备份，万一哪次没搬好，**下次启动自动补回来**；\n   - 你**故意删掉**的皮肤不会又冒出来。\n   放在旧的安装目录位置、还没更新过的皮肤，从这一版开始也会被保护\n4. 📂 设置页新增 **「🎨 打开皮肤文件夹」** 按钮（旁边显示真实路径）；那个文件夹里带一份完整说明：skin.json 怎么写、精灵图怎么排、出问题怎么查\n5. 🧪 顺手把自检补全了，都能一键回归：重复规则的 6 个边界用例（短月跳过、闰年、每周多选…）、皮肤「整目录被清空后自愈」、以及安装程序那段搬运逻辑（单独编译真 NSIS 脚本跑一遍）\n\n**下载**：`iKunReminder-setup-v3.5.0.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 115644705,
+  "sha512": "oopQvP9pZecwxNRaLLiARUh5TdrMkT+urdS0oZgnxq8bqKtgm8rbddMUknXkygtKqx/dX9xw4lriG7tTrxtYSA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.4.0/iKunReminder-setup-v3.4.0.exe.part1",
-      "size": 57817853,
-      "sha512": "d8CkhzPqdK2WdnC2yv0cmWvGjsc2B/ZxtbzQiUq6TDae2QkY2QVhZo+KcB71TyjfjQdaYVsQzGwE/eyGAmehOw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.0/iKunReminder-setup-v3.5.0.exe.part1",
+      "size": 57822353,
+      "sha512": "RCxOXtsh6nJatMcKroVoBSiXihjWumhbh0vBacnGxOFz/OWrdlKB+nSEPdJhWCZADYrYf8i3pDCB787wVzoARQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.4.0/iKunReminder-setup-v3.4.0.exe.part2",
-      "size": 57817853,
-      "sha512": "pgXvF/8cIOV9ALL6/X/i7E75cQgsR4rWqkXy1LVU7yX9shBtPHcfyCVL8taV7FiI8NihA8T5KkfjB0ccufjQoA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.0/iKunReminder-setup-v3.5.0.exe.part2",
+      "size": 57822352,
+      "sha512": "RkYUl2hF8MP9Hpft9Oekt6lXEkKMJxgig5xeZoBmHBOQr28UyizMmPyAWKwjqeZeOsh3ehMOZyXzc6cl/acGOA==",
       "index": 2
     }
   ]
