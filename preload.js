@@ -77,6 +77,8 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   hideToTray: () => ipcRenderer.invoke('hide'),
   showWindow: () => ipcRenderer.invoke('show-window'),
   openDataDir: () => ipcRenderer.invoke('open-data-dir'),
+  /* 日记导出：文本由页面拼好，主进程弹「另存为」写文件，返回路径（取消=空串） */
+  diaryExport: (text, suggested) => ipcRenderer.invoke('diary-export', String(text || ''), suggested),
   quit: () => ipcRenderer.invoke('quit'),
 
   /* 手动拖窗（主界面标题栏） */
@@ -93,6 +95,7 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onShowShichen: (cb) => ipcRenderer.on('show-shichen', () => cb()),
   onAddItem: (cb) => ipcRenderer.on('add-item', () => cb()),
   onShowTodo: (cb) => ipcRenderer.on('show-todo', () => cb()),
+  onShowDiary: (cb) => ipcRenderer.on('show-diary', () => cb()),
   onShowSettings: (cb) => ipcRenderer.on('show-settings', () => cb()),
   onPower: (cb) => ipcRenderer.on('power', (e, kind) => cb(kind)),
   onWinVisible: (cb) => ipcRenderer.on('win-visible', (e, vis) => cb(vis)),

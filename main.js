@@ -60,7 +60,7 @@ const DIAG = (function () {
     /* --diag-pet：自检时顺手打开桌面宠物，验证它和主界面能同时存在 */
     if (a === '--diag-pet') out.pet = true;
     /* --diag-tab=home|todo|settings：自检时切到指定页再截图 */
-    m = /^--diag-tab=(home|todo|settings)$/.exec(a);
+    m = /^--diag-tab=(home|todo|diary|settings)$/.exec(a);
     if (m) out.tab = m[1];
     /* --diag-wait=<ms>：截图前多等一会儿，用来测异步的东西
        （比如启动 8 秒后才会跑的「自动检查更新」） */
@@ -91,6 +91,8 @@ const DIAG = (function () {
     /* --diag-cal：桌面日历端到端自检（造一批三档优先级的待办 → 开日历 →
        查网格/颜色/切月/当天清单 → 再用主界面真实弹窗存一条，验证 prio 落盘） */
     if (a === '--diag-cal') out.cal = true;
+    /* --diag-diary：日记页端到端自检（写今天 / 点旧日记改 / 删除 / 导出） */
+    if (a === '--diag-diary') out.diary = true;
     /* --diag-skins：用户皮肤目录 / 说明文档 / 「被安装程序清掉后能不能自愈」 */
     if (a === '--diag-skins') out.skins = true;
     /* --diag-repeat：重复待办端到端自检（走真实弹窗 + 真实勾完成），
@@ -128,8 +130,24 @@ function effScale(d) {
    所以关键节点同时写文件。正常启动（不带 --diag）一概不写。
    ⚠️ 打包后 __dirname 在 app.asar 里，写不进去 —— 依次退回「exe 同级目录」
    和 userData，保证打包版也能留下自检日志。 */
-function diagLog(tag, obj) {
-  if (!DIAG) return;
+let diagDiarySeeded = false;      // 日记自检：种完「以前的日记」要重载一次页面，用它挡住重复种
+/* 自检产物的落脚点：和 diagLog 一样，打包后 __dirname 在 app.asar 里写不进去，
+   依次退回「exe 同级目录」和 userData，保证打包版的自检也能把文件落下来。 */
+function diagFilePath(name) {
+  const cands = [path.join(__dirname, '.diag', name)];
+  try { cands.push(path.join(path.dirname(app.getPath('exe')), name)); } catch (e) { }
+  try { cands.push(path.join(app.getPath('userData'), name)); } catch (e) { }
+  for (let i = 0; i < cands.length; i++) {
+    try {
+      fs.mkdirSync(path.dirname(cands[i]), { recursive: true });
+      fs.appendFileSync(cands[i], '');          // 试写一下确认可写（不会清空已有内容）
+      return cands[i];
+    } catch (e) { /* 换下一个 */ }
+  }
+  return cands[0];
+}
+
+function diagLog(tag, obj) {  if (!DIAG) return;
   const line = new Date().toISOString() + ' [' + tag + '] ' + JSON.stringify(obj || {}) + '\n';
   const cands = [path.join(__dirname, '.diag', 'trace.log')];
   try { cands.push(path.join(path.dirname(app.getPath('exe')), 'trace.log')); } catch (e) { }
@@ -745,6 +763,324 @@ function createWindow() {
              3) 点有事的格子 → 当天清单出来且条数对；
              4) 点「下一月」→ 标题月份变了；
              5) 存一张日历窗截图，人眼确认外观。 */
+          /* 日记页自检：写今天 → 点旧日记改 → 删除 → 导出。
+             ⚠️ 先往 localStorage 里种两条「以前写的」，再【重载一次】让程序读进去
+             （页面只在启动时读一次存储，种完不重载是看不见的）；
+             reload 会让 did-finish-load 再触发一次，所以用一个标志位挡住重复种数据。 */
+          if (DIAG.diary) {
+            const waitD = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const dayKey = function (off) {
+              const d = new Date();
+              d.setDate(d.getDate() + off);
+              const p = function (n) { return n < 10 ? '0' + n : String(n); };
+              return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+            };
+            if (!diagDiarySeeded) {
+              diagDiarySeeded = true;
+              const seed = {};
+              seed[dayKey(-5)] = '五天前：把周报写完，下午开了个会。';
+              seed[dayKey(-2)] = '前天：爬山，腿到现在还酸。';
+              await win.webContents.executeJavaScript(
+                'localStorage.setItem("kunkun.diary.v1", ' + JSON.stringify(JSON.stringify(seed)) + '); true;', true);
+              diagLog('diary-0-种两天旧日记', { 种了: Object.keys(seed) });
+              win.webContents.reload();
+              return;                                  // 本轮到此为止，重载后再接着验
+            }
+
+            /* 切到日记页 */
+            await win.webContents.executeJavaScript(
+              'document.getElementById("tabDiary").click(); true;', true);
+            await waitD(700);
+            const view = await win.webContents.executeJavaScript(
+              '(function(){var items=document.querySelectorAll("#diaryList .diary-item");' +
+              'var first=items[0];var second=items[1];' +
+              'return {日记页显示了吗:!document.getElementById("pageDiary").hidden,' +
+              ' 标签高亮:document.getElementById("tabDiary").classList.contains("on"),' +
+              ' 卡片数:items.length,' +
+              ' 日期顺序:Array.prototype.map.call(items,function(i){return i.dataset.key;}),' +
+              ' 第一张是今天吗:first?first.classList.contains("today"):null,' +
+              ' 今天那张是输入框吗:!!(first&&first.querySelector(".diary-edit")),' +
+              ' 旧卡片是只读正文吗:!!(second&&second.querySelector(".diary-body")),' +
+              ' 旧卡片里有内容吗:second?second.querySelector(".diary-body").textContent.slice(0,12):"",' +
+              ' 农历标签:Array.prototype.map.call(document.querySelectorAll(".diary-lunar"),function(s){return s.textContent;}),' +
+              ' 滚动位置:document.getElementById("diaryList")?document.getElementById("diaryList").scrollTop:null,' +
+              ' 随机古诗句:document.getElementById("diaryQuote")?document.getElementById("diaryQuote").textContent.slice(0,26):"",' +
+              ' 卡片上没有导出按钮了吗:document.querySelectorAll(\'#diaryList button[data-role="export-one"]\').length===0,' +
+              ' 旧卡片有编辑按钮吗:!!(second&&second.querySelector(\'button[data-role="edit"]\')),' +
+              ' 导出按钮在吗:!!document.getElementById("btnDiaryExport")};})()', true);
+            diagLog('diary-1-初始视图', view);
+            /* 截一张日记页的图（这时候 3 张卡片都有内容，最好看） */
+            try {
+              await waitD(300);
+              const shotD = await win.capturePage();
+              fs.writeFileSync(path.join(__dirname, '.diag', 'diary-page.png'), shotD.toPNG());
+            } catch (eShot) { diagLog('diary-shot-error', String(eShot && eShot.message || eShot)); }
+
+            /* ① 今天：在输入框里写 → 等防抖（500ms）→ 落盘 */
+            await win.webContents.executeJavaScript(
+              '(function(){var ta=document.querySelector("#diaryList .diary-item.today .diary-edit");' +
+              'if(!ta)return false;ta.value="今天把日记页写完了，挺顺手。";' +
+              'ta.dispatchEvent(new Event("input",{bubbles:true}));return true;})()', true);
+            await waitD(1000);
+            diagLog('diary-2-今天写完自动存', await win.webContents.executeJavaScript(
+              '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.diary.v1")||"{}");}catch(e){}' +
+              'var keys=Object.keys(raw);' +
+              'return {篇数:keys.length,' +
+              ' 今天存进去了:keys.some(function(k){return raw[k].indexOf("日记页")>=0;}),' +
+              ' 空的不留键:!keys.some(function(k){return !String(raw[k]).trim();})};})()', true));
+
+            /* ② 旧日记：点正文【不该】进编辑，必须点「编辑」按钮；保存/取消都要能走通 */
+            const editStep = await win.webContents.executeJavaScript(
+              '(function(){var items=document.querySelectorAll("#diaryList .diary-item");' +
+              'var old=items[items.length-1];if(!old)return {error:"没有旧日记卡片"};' +
+              'var key=old.dataset.key;' +
+              'old.querySelector(".diary-body").click();' +
+              'var opened=!!document.querySelector(\'#diaryList .diary-item[data-key="\'+key+\'"] .diary-edit\');' +
+              'var b=old.querySelector(\'button[data-role="edit"]\');if(!b)return {error:"没有编辑按钮"};' +
+              'b.click();' +
+              'return {key:key, 点正文就进编辑了吗:opened};})()', true);
+            await waitD(600);
+            diagLog('diary-3-点编辑按钮才进编辑', {
+              点的是: editStep.key,
+              点正文不误触: editStep.点正文就进编辑了吗 === false,
+              现在变成输入框了吗: await win.webContents.executeJavaScript(
+                '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + editStep.key + '"]\');' +
+                'return !!(it&&it.querySelector(".diary-edit")&&it.querySelector(\'button[data-role="save"]\'));})()', true)
+            });
+
+            /* ③ 取消：改了但不保存 → 内容必须原样 */
+            const cancelStep = await win.webContents.executeJavaScript(
+              '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + editStep.key + '"]\');' +
+              'var ta=it.querySelector(".diary-edit");var before=ta.value;' +
+              'ta.value="【这段不该被保存】";' +
+              'it.querySelector(\'button[data-role="cancel"]\').click();' +
+              'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.diary.v1")||"{}");}catch(e){}' +
+              'return {原文:before.slice(-8), 存的是:raw[' + JSON.stringify(editStep.key) + '].slice(-8)};})()', true);
+            await waitD(400);
+            diagLog('diary-4-取消不保存', {
+              改了点什么: '【这段不该被保存】',
+              存储里没被改: cancelStep.存的是 === cancelStep.原文,
+              又回到只读了吗: await win.webContents.executeJavaScript(
+                '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + editStep.key + '"]\');' +
+                'return !!(it&&it.querySelector(".diary-body")&&!it.querySelector(".diary-edit"));})()', true)
+            });
+
+            /* ④ 再进来改并「保存」→ 落到存储里 */
+            await win.webContents.executeJavaScript(
+              '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + editStep.key + '"]\');' +
+              'it.querySelector(\'button[data-role="edit"]\').click();return true;})()', true);
+            await waitD(500);
+            await win.webContents.executeJavaScript(
+              '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + editStep.key + '"]\');' +
+              'var ta=it.querySelector(".diary-edit");ta.value=ta.value+"【自检补了一句】";' +
+              'it.querySelector(\'button[data-role="save"]\').click();return true;})()', true);
+            await waitD(500);
+            diagLog('diary-5-点保存才落盘', {
+              存进去了吗: await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.diary.v1")||"{}");}catch(e){}' +
+                'return !!raw[' + JSON.stringify(editStep.key) + ']&&raw[' + JSON.stringify(editStep.key) +
+                '].indexOf("自检补了一句")>=0;})()', true),
+              改完收回只读了吗: await win.webContents.executeJavaScript(
+                '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + editStep.key + '"]\');' +
+                'return !!(it&&it.querySelector(".diary-body")&&!it.querySelector(".diary-edit"));})()', true)
+            });
+
+            /* ⑤ 导出：先看对话框的范围提示，再只导「今天」这一天，验证范围真的生效 */
+            const todayKey = dayKey(0);
+            /* 顺手截一张对话框的图 */
+            try {
+              await win.webContents.executeJavaScript(
+                'document.getElementById("btnDiaryExport").click(); true;', true);
+              await waitD(500);
+              const shotE = await win.capturePage();
+              fs.writeFileSync(path.join(__dirname, '.diag', 'diary-export-dialog.png'), shotE.toPNG());
+              await win.webContents.executeJavaScript(
+                'document.getElementById("deCancel").click(); true;', true);
+              await waitD(300);
+            } catch (eShot2) { diagLog('diary-shot2-error', String(eShot2 && eShot2.message || eShot2)); }
+            const expStep = await win.webContents.executeJavaScript(
+              '(function(){document.getElementById("btnDiaryExport").click();' +
+              'var ov=document.getElementById("diaryExportOverlay");' +
+              'var open=ov?!ov.hidden:null;' +
+              'var defFrom=document.getElementById("deFrom").value, defTo=document.getElementById("deTo").value;' +
+              'document.getElementById("deFrom").value=' + JSON.stringify(todayKey) + ';' +
+              'document.getElementById("deTo").value=' + JSON.stringify(todayKey) + ';' +
+              'document.getElementById("deFrom").dispatchEvent(new Event("change",{bubbles:true}));' +
+              'var hint=document.getElementById("deHint").textContent;' +
+              'document.getElementById("deOk").click();' +
+              'return {弹窗开了吗:open, 默认范围:defFrom+"~"+defTo, 只导今天时的提示:hint};})()', true);
+            await waitD(900);
+            let expTxt = '';
+            try { expTxt = fs.readFileSync(diagFilePath('diary-export.txt'), 'utf8'); }
+            catch (e) { }
+            const expLines = expTxt.split(/\r?\n/);
+            diagLog('diary-6-按范围导出', {
+              对话框: expStep,
+              文件里的标题: expLines[0],
+              只含今天: expTxt.indexOf(todayKey) >= 0 &&
+                expTxt.indexOf(dayKey(-2)) < 0 && expTxt.indexOf(dayKey(-5)) < 0,
+              文件字节: expTxt.length,
+              带农历: /农历/.test(expTxt),
+              弹窗关掉了吗: await win.webContents.executeJavaScript(
+                'document.getElementById("diaryExportOverlay").hidden', true)
+            });
+
+            /* ⑦ 今天那张卡片：写之前是输入框；写了内容（重排之后）就该变成「只读 + 编辑」 */
+            const todayFlip = await win.webContents.executeJavaScript(
+              '(function(){document.getElementById("tabTodo").click();' +
+              'document.getElementById("tabDiary").click();' +          /* 切走再切回来，强制重排 */
+              'var it=document.querySelector("#diaryList .diary-item.today");' +
+              'if(!it)return {error:"没有今天的卡片"};' +
+              'return {写完之后还是输入框吗:!!it.querySelector(".diary-edit"),' +
+              ' 有编辑按钮吗:!!it.querySelector(\'button[data-role="edit"]\'),' +
+              ' 正文在吗:!!it.querySelector(".diary-body")};})()', true);
+            await waitD(500);
+            /* 点「编辑」应该又能改 */
+            const todayEdit = await win.webContents.executeJavaScript(
+              '(function(){var it=document.querySelector("#diaryList .diary-item.today");' +
+              'var b=it.querySelector(\'button[data-role="edit"]\');if(!b)return {error:"没有编辑按钮"};' +
+              'b.click();var it2=document.querySelector("#diaryList .diary-item.today");' +
+              'return {点编辑后能改了吗:!!(it2&&it2.querySelector(".diary-edit")),' +
+              ' 有保存按钮吗:!!(it2&&it2.querySelector(\'button[data-role="save"]\'))};})()', true);
+            await win.webContents.executeJavaScript(
+              '(function(){var it=document.querySelector("#diaryList .diary-item.today");' +
+              'var b=it.querySelector(\'button[data-role="cancel"]\');if(b)b.click();return true;})()', true);
+            await waitD(300);
+            diagLog('diary-8-今天的卡片', { 写完重排后: todayFlip, 点编辑: todayEdit });
+            /* 截一张「今天已经写过」的图：这时它应该和旧日记一样是只读 + 编辑按钮 */
+            try {
+              await waitD(300);
+              const shotT = await win.capturePage();
+              fs.writeFileSync(path.join(__dirname, '.diag', 'diary-page-written.png'), shotT.toPNG());
+            } catch (eShot3) { diagLog('diary-shot3-error', String(eShot3 && eShot3.message || eShot3)); }
+
+            /* ⑧ 补写某天：选个以前的日子 → 卡片亮出来能写 → 保存后就变成只读 + 编辑 */
+            const backKey = dayKey(-3);
+            const backOpen = await win.webContents.executeJavaScript(
+              '(function(){document.getElementById("btnDiaryBackfill").click();' +
+              'var ov=document.getElementById("diaryBackfillOverlay");' +
+              /* ⚠️ 这里别再取反了：直接记「有没有露出来」，自检里踩过双重否定 */
+              'var shown=ov?ov.hidden===false:null;' +
+              'var d=document.getElementById("dbDate");' +
+              'var def=d.value;d.value=' + JSON.stringify(backKey) + ';' +
+              'var maxOk=d.max===' + JSON.stringify(dayKey(0)) + ';' +
+              'document.getElementById("dbOk").click();' +
+              'return {弹窗露出来了吗:shown, 默认补哪天:def, 上限是今天吗:maxOk};})()', true);
+            await waitD(600);
+            const backWrite = await win.webContents.executeJavaScript(
+              '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + backKey + '"]\');' +
+              'if(!it)return {error:"补写的那天没出现卡片"};' +
+              'var ta=it.querySelector(".diary-edit");' +
+              'var hasSave=!!it.querySelector(\'button[data-role="save"]\');' +
+              'if(!ta)return {error:"补写的卡片没有输入框"};' +
+              'ta.value="三天前：翻了下旧笔记，顺手整理了一遍。";' +
+              'it.querySelector(\'button[data-role="save"]\').click();' +
+              'return {能写吗:true, 有保存按钮:hasSave};})()', true);
+            await waitD(500);
+            diagLog('diary-9-补写某天', {
+              补的是: backKey,
+              打开弹窗: backOpen,
+              写的过程: backWrite,
+              存进去了吗: await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.diary.v1")||"{}");}catch(e){}' +
+                'return !!raw[' + JSON.stringify(backKey) + '];})()', true),
+              保存后变只读了吗: await win.webContents.executeJavaScript(
+                '(function(){var it=document.querySelector(\'#diaryList .diary-item[data-key="' + backKey + '"]\');' +
+                'return !!(it&&it.querySelector(".diary-body")&&it.querySelector(\'button[data-role="edit"]\'));})()', true),
+              插在正确位置了吗: await win.webContents.executeJavaScript(
+                '(function(){return Array.prototype.map.call(document.querySelectorAll("#diaryList .diary-item"),' +
+                'function(i){return i.dataset.key;}).join(" > ");})()', true)
+            });
+            const allStep = await win.webContents.executeJavaScript(
+              '(function(){document.getElementById("btnDiaryExport").click();' +
+              'var q=document.querySelector(\'#deQuick button[data-all="1"]\');if(q)q.click();' +
+              'return {全部档提示:document.getElementById("deHint").textContent};})()', true);
+            await win.webContents.executeJavaScript(
+              'document.getElementById("deCancel").click(); true;', true);
+            diagLog('diary-7-全部档', allStep);
+
+            /* ⑨ 字号：把日记页各处的实际字号量出来（顺便验设置里「日记文字大小」真能改） */
+            const fsProbe = function () {
+              return '(function(){var q=function(s){var n=document.querySelector(s);' +
+                'return n?getComputedStyle(n).fontSize:null;};' +
+                'var p=document.getElementById("pageDiary");' +
+                'return {古诗词:q(".diary-quote"), 日期:q(".diary-date"), 周几:q(".diary-wd"),' +
+                ' 农历:q(".diary-lunar"), 正文:q(".diary-body"), 输入框:q(".diary-edit"),' +
+                ' 卡片按钮:q(".diary-tools button"),' +
+                ' 页面字号变量:p?getComputedStyle(p).getPropertyValue("--diary-fs").trim():null};})()';
+            };
+            await win.webContents.executeJavaScript(
+              'document.getElementById("tabDiary").click(); true;', true);
+            await waitD(500);
+            /* 输入框只在编辑状态才在，先点开今天那张的「编辑」再量 */
+            await win.webContents.executeJavaScript(
+              '(function(){var b=document.querySelector(\'#diaryList .diary-item.today button[data-role="edit"]\');' +
+              'if(b)b.click();return true;})()', true);
+            await waitD(400);
+            const fsBefore = await win.webContents.executeJavaScript(fsProbe(), true);
+            const fsSet = await win.webContents.executeJavaScript(
+              '(function(){var p=document.getElementById("dfPlus");' +
+              'if(!p)return {error:"日记页上没有字号按钮"};' +
+              'for(var i=0;i<12;i++)p.click();' +            /* 一直点到头，看能不能到 24 且停住 */
+              'return {点满之后显示:document.getElementById("dfVal").textContent,' +
+              ' 到顶了会禁用吗:p.disabled};})()', true);
+            await waitD(600);
+            const fsAfter = await win.webContents.executeJavaScript(fsProbe(), true);
+            const fsSaved = await win.webContents.executeJavaScript(
+              '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+              'return raw.diaryFont;})()', true);
+            /* 再一路点到最小，看下限也停得住 */
+            const fsMinClick = await win.webContents.executeJavaScript(
+              '(function(){var m=document.getElementById("dfMinus");' +
+              'for(var i=0;i<12;i++)m.click();' +
+              'return {点到底显示:document.getElementById("dfVal").textContent,' +
+              ' 到底了会禁用吗:m.disabled};})()', true);
+            await waitD(500);
+            const fsMinSize = await win.webContents.executeJavaScript(fsProbe(), true);
+            /* 回到标准档 16，别把自检的状态留给下一次 */
+            const fsBackClick = await win.webContents.executeJavaScript(
+              '(function(){var p=document.getElementById("dfPlus");' +
+              'p.click();p.click();' +                        /* 12 → 14 → 16 */
+              'return {现在显示:document.getElementById("dfVal").textContent};})()', true);
+            await waitD(400);
+            const fsBack = await win.webContents.executeJavaScript(fsProbe(), true);
+            diagLog('diary-10-字号', {
+              默认: fsBefore,
+              连点到最大: { 交互: fsSet, 之后: fsAfter },
+              存进设置了吗: fsSaved,
+              连点到最小: { 交互: fsMinClick, 之后: fsMinSize },
+              回到标准: { 交互: fsBackClick, 之后: fsBack }
+            });
+
+            /* 顺手截一张日记页（字号步进器就在右上角） */
+            try {
+              await waitD(300);
+              const shotF = await win.capturePage();
+              fs.writeFileSync(path.join(__dirname, '.diag', 'diary-fontbox.png'), shotF.toPNG());
+            } catch (eShot4) { diagLog('diary-shot4-error', String(eShot4 && eShot4.message || eShot4)); }
+
+            /* ④ 删除某天（先骗过 window.confirm，自检点不了系统对话框） */
+            const delStep = await win.webContents.executeJavaScript(
+              '(function(){window.confirm=function(){return true;};' +
+              'var items=document.querySelectorAll("#diaryList .diary-item");' +
+              'var old=items[items.length-1];if(!old)return {error:"没有旧日记卡片"};' +
+              'var key=old.dataset.key;' +
+              'var b=old.querySelector(\'button[data-role="del"]\');if(!b)return {error:"没有删除按钮"};' +
+              'b.click();return {key:key};})()', true);
+            await waitD(700);
+            diagLog('diary-5-删除某天', {
+              删的是: delStep.key,
+              卡片还在吗: await win.webContents.executeJavaScript(
+                '(function(){return !!document.querySelector(\'#diaryList .diary-item[data-key="' + delStep.key + '"]\');})()', true),
+              存储里还有吗: await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.diary.v1")||"{}");}catch(e){}' +
+                'return !!raw[' + JSON.stringify(delStep.key) + '];})()', true),
+              剩下的篇数: await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.diary.v1")||"{}");}catch(e){}' +
+                'return Object.keys(raw).length;})()', true)
+            });
+            await waitD(400);
+          }
           /* 用户皮肤自检：目录/说明文档会不会自动备好；被安装程序整目录清掉后能不能自愈。
              ⚠️ 把用户皮肤目录临时指到一个干净的空目录：这才像「装好之后」的布局
              （开发模式下它等于仓库的 skins/，里面全是内置皮肤，造不出「被清空」的场景）。 */
@@ -2080,6 +2416,7 @@ function refreshTrayMenu() {
     { label: '🕰 十二时辰对照表', click: () => { showWindow(); send('show-shichen'); } },
     { label: '＋ 添加提醒事项', click: () => { showWindow(); send('add-item'); } },
     { label: '📝 待办与备忘', click: () => { showWindow(); send('show-todo'); } },
+    { label: '📖 日记', click: () => { showWindow(); send('show-diary'); } },
     { label: '⚙ 设置', click: () => { showWindow(); send('show-settings'); } },
     { type: 'separator' }
   ];
@@ -3512,6 +3849,30 @@ ipcMain.handle('open-data-dir', () => {
     require('electron').shell.openPath(p);
     return true;
   } catch (e) { return false; }
+});
+
+/* 导出日记：弹一个「另存为」，把页面拼好的纯文本写进去。
+   返回存到哪儿了（用户取消就返回空串）。 */
+ipcMain.handle('diary-export', async (e, text, suggested) => {
+  try {
+    /* 自检时别弹系统对话框（自检没法点它）：直接写进 .diag，验证「文本 → 文件」这条链 */
+    if (DIAG && DIAG.diary) {
+      const p = diagFilePath('diary-export.txt');
+      fs.writeFileSync(p, String(text || ''), 'utf8');
+      return p;
+    }
+    const d = await dialog.showSaveDialog(win, {
+      title: '导出日记',
+      defaultPath: path.join(app.getPath('documents'), String(suggested || '我的日记.txt')),
+      filters: [{ name: '文本文件', extensions: ['txt'] }]
+    });
+    if (d.canceled || !d.filePath) return '';
+    fs.writeFileSync(d.filePath, String(text || ''), 'utf8');
+    return d.filePath;
+  } catch (err) {
+    diagLog('diary-export-error', { message: String(err && err.message || err) });
+    return '';
+  }
 });
 
 /* ------------------------------------------- 手动拖窗（比 CSS drag 区域可靠，

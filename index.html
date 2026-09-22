@@ -18,11 +18,12 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.5.1</span>
+    <span class="tb-ver" id="tbVer">v3.6.0</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
     <button class="tab-btn" data-tab="todo" id="tabTodo">📝 待办<em class="tab-badge" id="todoBadge" hidden></em></button>
+    <button class="tab-btn" data-tab="diary" id="tabDiary">📖 日记</button>
     <button class="tab-btn" data-tab="settings" id="tabSettings">⚙ 设置</button>
   </nav>
   <div class="tb-right">
@@ -150,6 +151,78 @@
     <div class="todo-list" id="todoList"></div>
   </section>
 </main>
+
+<!-- ===================== 日记页 =====================
+     一天一篇，纯文字。今天的卡片永远在最上面（直接写、自动保存），
+     往下是以前写过的日子（点一下就能改），条数多了在卡片里滚动。
+     只有写过内容的日子才会出现，所以列表不会一堆空卡片。 -->
+<main class="layout page" id="pageDiary" hidden>
+  <section class="card diary-col">
+    <div class="col-head">
+      <h2>📖 日记</h2>
+      <div class="diary-acts">
+        <!-- 字号调节就放在这一页上：写的时候顺手就能调，不用跑去设置里找 -->
+        <div class="diary-font" id="diaryFontBox" title="日记正文字号">
+          <button type="button" id="dfMinus" title="字小一点">A−</button>
+          <span class="df-val" id="dfVal">16</span>
+          <button type="button" id="dfPlus" title="字大一点">A+</button>
+        </div>
+        <button class="btn sm" id="btnDiaryBackfill" title="昨天忘写了？选个日期补上">＋ 补写某天</button>
+        <button class="btn sm" id="btnDiaryExport" title="选一个日期范围，导出成 txt 文件">⬇ 导出为 txt</button>
+      </div>
+    </div>
+    <!-- 副标题是一句随机古诗词（惜时 / 自省），每次进日记页换一句 -->
+    <p class="col-sub diary-quote" id="diaryQuote">—</p>
+    <div class="diary-list" id="diaryList"></div>
+  </section>
+</main>
+
+<!-- 补写某天 -->
+<div class="overlay modal" id="diaryBackfillOverlay" hidden>
+  <div class="overlay-card item-card">
+    <button class="close" id="dbClose" title="关闭">✕</button>
+    <h3 class="it-title">补写某天</h3>
+    <div class="it-row">
+      <span class="it-label">哪一天</span>
+      <input type="date" id="dbDate">
+    </div>
+    <p class="set-desc">选好之后，那天的卡片会亮出来，写完点「保存」；不想写就点「取消」。</p>
+    <div class="alert-btns">
+      <button class="btn primary big" id="dbOk">去写</button>
+      <button class="btn big" id="dbCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 导出日记：选日期范围 -->
+<div class="overlay modal" id="diaryExportOverlay" hidden>
+  <div class="overlay-card item-card">
+    <button class="close" id="deClose" title="关闭">✕</button>
+    <h3 class="it-title">导出日记</h3>
+    <div class="it-row">
+      <span class="it-label">从</span>
+      <input type="date" id="deFrom">
+    </div>
+    <div class="it-row">
+      <span class="it-label">到</span>
+      <input type="date" id="deTo">
+    </div>
+    <div class="it-row">
+      <span class="it-label">快捷</span>
+      <div class="quick-time" id="deQuick">
+        <button type="button" data-days="7">最近 7 天</button>
+        <button type="button" data-days="30">最近 30 天</button>
+        <button type="button" data-days="365">最近一年</button>
+        <button type="button" data-all="1">全部</button>
+      </div>
+    </div>
+    <p class="set-desc" id="deHint">—</p>
+    <div class="alert-btns">
+      <button class="btn primary big" id="deOk">导出</button>
+      <button class="btn big" id="deCancel">取消</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===================== 设置页 =====================
      三块内容合并成一整张卡片，整体上下滚动（不再分几张卡片互相挤位置）；

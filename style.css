@@ -124,6 +124,84 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .page{padding-top:2px}
 
+/* ---------- 日记页 ----------
+   一天一篇：整页就一张卡片，卡片内部滚动（和设置页一个套路），
+   --page-view-h 由 JS 算出「视口在设计空间里有多高」。 */
+#pageDiary{grid-template-columns:minmax(0,1fr);--diary-fs:16px}
+.diary-col{
+  display:flex;flex-direction:column;
+  max-height:var(--page-view-h,820px);
+  overflow-y:auto;overflow-x:hidden;
+  padding:16px 20px 18px;
+  overscroll-behavior:contain;
+}
+.diary-col::-webkit-scrollbar{width:9px}
+.diary-col::-webkit-scrollbar-track{background:transparent}
+.diary-col::-webkit-scrollbar-thumb{background:rgba(74,155,212,.35);border-radius:5px}
+.diary-list{display:flex;flex-direction:column;gap:14px;margin-top:4px}
+.diary-item{
+  border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.72);
+  padding:12px 14px 14px;transition:.15s;
+}
+.diary-item.today{border-color:rgba(62,154,168,.55);background:rgba(223,240,248,.75)}
+.diary-item.editing{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.14)}
+.diary-head{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}
+.diary-date{font-size:14.5px;font-weight:700;color:var(--text);letter-spacing:.3px}
+.diary-wd{font-size:13.5px;color:var(--dim)}
+.diary-lunar{font-size:13.5px;color:var(--dim);background:rgba(74,155,212,.10);
+  border:1px solid rgba(74,155,212,.22);border-radius:8px;padding:1px 7px}
+/* 卡片右上角的按钮（编辑 / 删除 / 保存 / 取消）：
+   字号别太小 —— 11.5px 又细又淡，看着费劲；默认也别调太透明，不然得凑近看 */
+.diary-tools{margin-left:auto;display:flex;gap:7px;opacity:.82;transition:.15s}
+.diary-item:hover .diary-tools{opacity:1}
+.diary-tools button{
+  border:1px solid var(--line);background:#fff;border-radius:9px;cursor:pointer;
+  font-family:inherit;font-size:13.5px;font-weight:600;letter-spacing:.3px;
+  color:var(--dim);padding:5px 13px;transition:.15s;
+}
+.diary-tools button:hover{color:var(--text);border-color:var(--lake);background:#DFEDF6}
+.diary-tools button.del:hover{color:#fff;background:#cf574d;border-color:#cf574d}
+.diary-tools button.ok{color:#fff;background:var(--lake);border-color:var(--lake)}
+.diary-tools button.ok:hover{background:#348a97;border-color:#348a97}
+/* 副标题位置放一句古诗词（惜时 / 自省）
+   ⚠️ 必须写成 .diary-col .diary-quote：这个元素同时带着 .col-sub，
+   而 .col-sub 的规则在本文件更靠后，同权重会把它盖回 12px（自检里量出来过） */
+.diary-col .diary-quote{
+  font-size:18px;line-height:1.9;color:var(--dim);
+  border-left:3px solid rgba(217,161,95,.55);
+  padding:2px 0 2px 12px;margin:10px 2px 14px;
+}
+/* 右上角那组按钮（字号 A−／A+、补写某天、导出为 txt） */
+.diary-acts{display:flex;align-items:center;gap:8px}
+/* 字号步进器：和标签栏按钮一个气质，小小的不抢戏 */
+.diary-font{
+  display:inline-flex;align-items:center;gap:1px;
+  border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;
+}
+.diary-font button{
+  border:0;background:transparent;cursor:pointer;font-family:inherit;
+  font-size:13px;font-weight:600;color:var(--dim);padding:5px 9px;line-height:1;transition:.15s;
+}
+.diary-font button:hover:not(:disabled){color:var(--text);background:#DFEDF6}
+.diary-font button:disabled{opacity:.32;cursor:default}
+.diary-font .df-val{
+  min-width:26px;text-align:center;font-size:12.5px;color:var(--dim);
+  border-left:1px solid var(--line);border-right:1px solid var(--line);padding:4px 2px;
+}
+.diary-body{
+  font-size:var(--diary-fs,16px);line-height:1.85;color:var(--text);
+  white-space:pre-wrap;word-break:break-word;min-height:22px;cursor:text;
+}
+.diary-body.empty{color:#9fb0bb;font-style:italic}
+.diary-edit{
+  width:100%;box-sizing:border-box;min-height:120px;resize:vertical;
+  font-family:inherit;font-size:var(--diary-fs,16px);line-height:1.85;color:var(--text);
+  background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none;
+}
+.diary-edit:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.14)}
+.diary-hint{margin:6px 2px 0;font-size:11.5px;color:#9fb0bb}
+.diary-empty{padding:40px 10px;text-align:center;color:var(--dim);font-size:13px;line-height:2}
+
 /* ---------- 待办 / 设置 页 ---------- */
 /* 两列保持并排（沿用 .layout 的网格），只把最小高度拉到「填满窗口可用区」，
    这样窗口被拉高时不会下面空一大片；列表自己内部滚动。 */

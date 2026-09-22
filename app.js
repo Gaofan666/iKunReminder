@@ -28,7 +28,8 @@
     settings: 'kunkun.settings.v1',
     stats: 'kunkun.stats.v1',
     todos: 'kunkun.todos.v1',               // 备忘录 + 待办（一次存，省得两套版本号）
-    ui: 'kunkun.ui.v1'                      // 界面偏好（当前标签页、设置项）
+    ui: 'kunkun.ui.v1',                     // 界面偏好（当前标签页、设置项）
+    diary: 'kunkun.diary.v1'                // 日记：{ 'yyyy-mm-dd': '正文' }，一天一篇
   };
 
   /* 提醒事项的候选配色（夏日：晴空蓝 / 草绿 / 阳光黄 / 湖水青 …） */
@@ -181,6 +182,7 @@
     calTheme: 'light',         // 桌面日历主题：light / dark
     calOpacity: 97,            // 桌面日历卡片不透明度（35~100，只影响底色）
     skin: '__default',         // 宠物形象：__default = 代码手绘，其余为 skins/ 里的皮肤
+    diaryFont: 16,             // 日记正文/输入框的字号（页面上 A−/A+ 可调 12~24）
   };
   const PET_SIZE_KEYS = ['max', 'mid', 'min'];
 
@@ -203,6 +205,12 @@
      两者都存在 STORE_KEY.todos 里，一次读写。 */
   let memos = [];
   let todos = [];
+  /* 日记：一天一篇，{ 'yyyy-mm-dd': '正文' }。
+     只有写了内容的日子才留键（写空 = 删掉那天），所以「写过的日子」= 有键的日子。 */
+  let diary = {};
+  let diaryEditKey = '';        // 正在编辑的那天（点旧日记进去改的时候用）
+  let diarySaveTimer = null;
+  let diaryDayKey = '';         // 「今天」是哪天 —— 用来发现跨天（跨了就把今天的卡片换掉）
   /* 优先级三档：桌面日历里用三种颜色画格子里的待办条 */
   const PRIO_KEYS = ['high', 'mid', 'low'];
   const PRIO_LABEL = { high: '高', mid: '中', low: '低' };
@@ -474,6 +482,28 @@
     eyeErr: $('#eyeErr'),
     chkEyeQuitRestore: $('#chkEyeQuitRestore'),
     pageTodo: $('#pageTodo'),
+    pageDiary: $('#pageDiary'),
+    diaryList: $('#diaryList'),
+    btnDiaryExport: $('#btnDiaryExport'),
+    btnDiaryBackfill: $('#btnDiaryBackfill'),
+    diaryQuote: $('#diaryQuote'),
+    dfMinus: $('#dfMinus'),
+    dfPlus: $('#dfPlus'),
+    dfVal: $('#dfVal'),
+    diaryBackfillOverlay: $('#diaryBackfillOverlay'),
+    dbDate: $('#dbDate'),
+    dbOk: $('#dbOk'),
+    dbCancel: $('#dbCancel'),
+    dbClose: $('#dbClose'),
+    diaryExportOverlay: $('#diaryExportOverlay'),
+    deFrom: $('#deFrom'),
+    deTo: $('#deTo'),
+    deQuick: $('#deQuick'),
+    deHint: $('#deHint'),
+    deOk: $('#deOk'),
+    deCancel: $('#deCancel'),
+    deClose: $('#deClose'),
+    tabDiary: $('#tabDiary'),
     chkAutoLaunch: $('#chkAutoLaunch'),
     chkAutoLaunchTodo: $('#chkAutoLaunchTodo'),
     chkTodoCatchUp: $('#chkTodoCatchUp'),
@@ -657,6 +687,9 @@
           settings.calOpacity = Math.min(100, Math.max(35, Math.round(+s.calOpacity)));
         }
         if (typeof s.skin === 'string' && s.skin) settings.skin = s.skin;
+        if (isFinite(+s.diaryFont) && +s.diaryFont > 0) {
+          settings.diaryFont = Math.min(24, Math.max(12, Math.round(+s.diaryFont)));
+        }
       }
     } catch (e) { /* 忽略损坏数据 */ }
     if (!settings.items.length) settings.items = defaultItems();
@@ -1227,12 +1260,475 @@
     if (el.calOpaOut) el.calOpaOut.textContent = settings.calOpacity + '%';
   }
 
-  function loadUiPrefs() {
+  /* ------------------------------------------------------------ 日记
+     存储：{ 'yyyy-mm-dd': '正文' }，一天一篇。写空 = 那天删掉（列表里也就不显示了）。 */
+
+  function diaryKeyOf(d) {
+    const p = n => String(n).padStart(2, '0');
+    const x = d || new Date();
+    return x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate());
+  }
+
+  function loadDiary() {
+    diaryDayKey = diaryKeyOf();
     try {
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY.diary) || '{}');
+      diary = {};
+      if (raw && typeof raw === 'object') {
+        Object.keys(raw).forEach(function (k) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return;          // 只认标准日期键
+          const t = String(raw[k] == null ? '' : raw[k]);
+          if (t.trim()) diary[k] = t.slice(0, 20000);          // 空的不留
+        });
+      }
+    } catch (e) { diary = {}; }
+  }
+
+  function saveDiary() {
+    try { localStorage.setItem(STORE_KEY.diary, JSON.stringify(diary)); } catch (e) { }
+  }
+
+  /* 写某一天：内容为空就把那天的键删掉 */
+  function setDiary(key, text) {
+    const t = String(text == null ? '' : text);
+    if (t.trim()) diary[key] = t;
+    else delete diary[key];
+    saveDiary();
+  }
+
+  /* 按日期排出来：今天永远第一张，然后越新的越靠前（往下翻是以前）。
+     正在编辑的那天（比如刚「补写」的空日子）也要露出来，不然它没有卡片可编辑。 */
+  function sortedDiaryKeys() {
+    const today = diaryKeyOf();
+    const older = Object.keys(diary)
+      .filter(function (k) { return k !== today; })
+      .sort(function (a, b) { return a < b ? 1 : (a > b ? -1 : 0); });
+    if (diaryEditKey && diaryEditKey !== today && older.indexOf(diaryEditKey) < 0) {
+      older.push(diaryEditKey);
+      older.sort(function (a, b) { return a < b ? 1 : (a > b ? -1 : 0); });
+    }
+    return [today].concat(older);      // ⚠️ 今天必须在最前面（自检里踩过一次：concat 到后面去了）
+  }
+
+  /* 农历（和桌面日历一个来源：Chromium 自带的 ICU 中国农历） */
+  const diaryLunarFmt = (function () {
+    try {
+      const f = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', { month: 'long', day: 'numeric' });
+      const probe = f.formatToParts(new Date(2026, 1, 17));
+      const ok = probe.some(function (p) { return p.type === 'month' && p.value.indexOf('月') >= 0; }) &&
+        probe.some(function (p) { return p.type === 'day'; });
+      return ok ? f : null;
+    } catch (e) { return null; }
+  })();
+  const LUNAR_DAY = ['', '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九',
+    '初十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九',
+    '二十', '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
+  function diaryLunar(d) {
+    if (!diaryLunarFmt) return '';
+    try {
+      const parts = diaryLunarFmt.formatToParts(d);
+      let mon = '', day = 0;
+      parts.forEach(function (p) {
+        if (p.type === 'month') mon = p.value;
+        else if (p.type === 'day') day = parseInt(p.value, 10) || 0;
+      });
+      if (!day) return '';
+      return day === 1 ? mon : (LUNAR_DAY[day] || '');
+    } catch (e) { return ''; }
+  }
+
+  /* 日记页副标题：随机显示一句「惜时 / 自省」的古诗词（每次进这一页换一句）。
+     出处都核对过，别随手改文案 —— 引错了比不引还难看。 */
+  const DIARY_QUOTES = [
+    { t: '苟日新，日日新，又日新。', s: '《礼记·大学》' },
+    { t: '吾日三省吾身。', s: '《论语·学而》' },
+    { t: '君子博学而日参省乎己，则知明而行无过矣。', s: '《荀子·劝学》' },
+    { t: '悟已往之不谏，知来者之可追。', s: '陶渊明《归去来兮辞》' },
+    { t: '有则改之，无则加勉。', s: '朱熹《论语集注》' },
+    { t: '盛年不重来，一日难再晨。及时当勉励，岁月不待人。', s: '陶渊明《杂诗》' },
+    { t: '少年易老学难成，一寸光阴不可轻。', s: '朱熹《偶成》' },
+    { t: '一寸光阴一寸金，寸金难买寸光阴。', s: '《增广贤文》' },
+    { t: '明日复明日，明日何其多。我生待明日，万事成蹉跎。', s: '明·钱福《明日歌》' },
+    { t: '少壮不努力，老大徒伤悲。', s: '汉乐府《长歌行》' },
+    { t: '黑发不知勤学早，白首方悔读书迟。', s: '颜真卿《劝学》' },
+    { t: '莫等闲，白了少年头，空悲切。', s: '岳飞《满江红》' },
+    { t: '逝者如斯夫，不舍昼夜。', s: '《论语·子罕》' },
+    { t: '锲而不舍，金石可镂。', s: '《荀子·劝学》' },
+    { t: '不积跬步，无以至千里。', s: '《荀子·劝学》' },
+    { t: '业精于勤，荒于嬉；行成于思，毁于随。', s: '韩愈《进学解》' },
+    { t: '天行健，君子以自强不息。', s: '《周易·乾》' },
+    { t: '静以修身，俭以养德。', s: '诸葛亮《诫子书》' },
+    { t: '莫道桑榆晚，为霞尚满天。', s: '刘禹锡《酬乐天咏老见示》' }
+  ];
+  let diaryQuoteIdx = -1;
+  function updateDiaryQuote() {
+    if (!el.diaryQuote) return;
+    /* 尽量别连着两次抽到同一句 */
+    let i = Math.floor(Math.random() * DIARY_QUOTES.length);
+    if (DIARY_QUOTES.length > 1 && i === diaryQuoteIdx) i = (i + 1) % DIARY_QUOTES.length;
+    diaryQuoteIdx = i;
+    const q = DIARY_QUOTES[i];
+    el.diaryQuote.innerHTML = '';
+    el.diaryQuote.textContent = '「' + q.t + '」 —— ' + q.s;
+  }
+
+  /* 日记字号：写成 CSS 变量挂在日记页上（正文和输入框都读它）。
+     ⚠️ 调字号【不要】重排列表：正在编辑还没保存的旧日记会被重排冲掉，
+     改个 CSS 变量就够了，现有元素会自己跟着变。
+     档位：12/14/16/18/20/22/24（16 是标准档，往上一路开到 24）。 */
+  const DIARY_FS_STEPS = [12, 14, 16, 18, 20, 22, 24];
+  const DIARY_FS_MIN = DIARY_FS_STEPS[0];
+  const DIARY_FS_MAX = DIARY_FS_STEPS[DIARY_FS_STEPS.length - 1];
+  function applyDiaryFont() {
+    const n = Math.min(DIARY_FS_MAX, Math.max(DIARY_FS_MIN, Math.round(+settings.diaryFont || 16)));
+    settings.diaryFont = n;
+    if (el.pageDiary) el.pageDiary.style.setProperty('--diary-fs', n + 'px');
+    if (el.dfVal) el.dfVal.textContent = n;
+    const i = DIARY_FS_STEPS.indexOf(n);
+    if (el.dfMinus) el.dfMinus.disabled = (i <= 0);
+    if (el.dfPlus) el.dfPlus.disabled = (i >= DIARY_FS_STEPS.length - 1);
+  }
+  function stepDiaryFont(dir) {
+    const cur = Math.min(DIARY_FS_MAX, Math.max(DIARY_FS_MIN, Math.round(+settings.diaryFont || 16)));
+    let i = DIARY_FS_STEPS.indexOf(cur);
+    if (i < 0) {                       // 万一存了个不在档位里的值，先归到最近的档
+      i = 0;
+      for (let k = 0; k < DIARY_FS_STEPS.length; k++) if (DIARY_FS_STEPS[k] <= cur) i = k;
+    }
+    const next = DIARY_FS_STEPS[Math.max(0, Math.min(DIARY_FS_STEPS.length - 1, i + dir))];
+    if (next === cur) return;
+    settings.diaryFont = next;
+    applyDiaryFont();
+    saveSettings();
+    Sound.click();
+  }
+
+  function renderDiary() {
+    if (!el.diaryList) return;
+    const todayKey = diaryKeyOf();
+    const keys = sortedDiaryKeys();
+    el.diaryList.innerHTML = '';
+
+    /* 一篇都没有时给个引导（今天的卡片还是要显示的，直接就能写） */
+    const anyContent = keys.some(function (k) { return !!diary[k]; });
+    if (!anyContent) {
+      const tip = document.createElement('div');
+      tip.className = 'diary-empty';
+      tip.innerHTML = '还没写过日记。<br>就在下面这张今天的卡片里写吧，边写边自动存。';
+      el.diaryList.appendChild(tip);
+    }
+
+    keys.forEach(function (key) {
+      const d = new Date(key + 'T00:00:00');
+      const isToday = key === todayKey;
+      const text = diary[key] || '';
+      /* 输入框什么时候出现：
+         · 旧日记：点了「编辑」才出现（不点就是只读，防误改）
+         · 今天：还没写的时候直接就是输入框（每天进来就能写）；一旦有内容就变只读，
+           想改再点「编辑」—— 免得手一滑把写好的东西改了 */
+      const typingToday = isToday && !text.trim();
+      const editing = typingToday || diaryEditKey === key;
+
+      const item = document.createElement('div');
+      item.className = 'diary-item' + (isToday ? ' today' : '') + (editing ? ' editing' : '');
+      item.dataset.key = key;
+
+      const head = document.createElement('div');
+      head.className = 'diary-head';
+      const wk = '日一二三四五六'[d.getDay()];
+      head.innerHTML = '<span class="diary-date"></span><span class="diary-wd"></span>';
+      head.querySelector('.diary-date').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+      /* 今年不写年份（写日记的大多是最近的），翻到去年的才标一下 */
+      const thisYear = new Date().getFullYear();
+      head.querySelector('.diary-wd').textContent = (isToday ? '今天 · ' : '') + '周' + wk +
+        (d.getFullYear() !== thisYear ? ' · ' + d.getFullYear() + '年' : '');
+      const lu = diaryLunar(d);
+      if (lu) {
+        const span = document.createElement('span');
+        span.className = 'diary-lunar';
+        span.textContent = lu;
+        head.appendChild(span);
+      }
+      const tools = document.createElement('div');
+      tools.className = 'diary-tools';
+      if (editing && !typingToday) {
+        /* 正在改（旧日记，或点了「编辑」的今天）：给「保存 / 取消」，不靠失焦保存 */
+        tools.innerHTML = '<button data-role="save" class="ok">保存</button>' +
+          '<button data-role="cancel">取消</button>' +
+          '<button data-role="del" class="del" title="删掉这一天的日记">删除</button>';
+      } else {
+        /* 只读状态：旧日记和「已经写过的今天」都走这里 —— 统一成「点编辑才能改」 */
+        tools.innerHTML = (typingToday ? '' : '<button data-role="edit" title="改这一天的日记">编辑</button>') +
+          '<button data-role="del" class="del" title="删掉这一天的日记">删除</button>';
+      }
+      head.appendChild(tools);
+      item.appendChild(head);
+
+      if (editing) {
+        const ta = document.createElement('textarea');
+        ta.className = 'diary-edit';
+        ta.placeholder = isToday ? '今天干了什么？随手写两句…' : '（这一天的日记）';
+        ta.value = text;
+        ta.dataset.key = key;
+        item.appendChild(ta);
+        if (!typingToday) {
+          const hint = document.createElement('p');
+          hint.className = 'diary-hint';
+          hint.textContent = '改完点「保存」，或者按 Esc 取消';
+          item.appendChild(hint);
+        }
+      } else {
+        const body = document.createElement('div');
+        body.className = 'diary-body' + (text ? '' : ' empty');
+        body.textContent = text || '（这天没写）';
+        item.appendChild(body);
+      }
+      el.diaryList.appendChild(item);
+      const ta = item.querySelector('.diary-edit');
+      if (ta) bindDiaryInput(ta, typingToday);
+    });
+
+    /* 打开日记页时，今天的输入框放在最上面，不用自动聚焦（免得一进来就弹键盘/滚动） */
+    if (el.diaryList.scrollTop) el.diaryList.scrollTop = 0;
+  }
+
+  /* 日记页的点击：旧日记要显式点「编辑」才进编辑（点正文不算，免得误触改坏），
+     编辑中给「保存 / 取消」；每张卡片的「删除」删那天 */
+  function bindDiaryPage() {
+    if (!el.diaryList) return;
+    el.diaryList.addEventListener('click', function (e) {
+      const item = e.target.closest ? e.target.closest('.diary-item') : null;
+      if (!item || !item.dataset.key) return;
+      const key = item.dataset.key;
+      const btn = e.target.closest ? e.target.closest('button[data-role]') : null;
+      if (!btn) return;                       // 点正文不做事（以前是点了就进编辑，容易误触）
+      const role = btn.dataset.role;
+      if (role === 'del') { deleteDiaryDay(key); return; }
+      if (role === 'edit') {
+        diaryEditKey = key;
+        renderDiary();
+        const ta = el.diaryList.querySelector('.diary-item[data-key="' + key + '"] .diary-edit');
+        if (ta) { try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (err) { } }
+        return;
+      }
+      if (role === 'save') {
+        const ta = el.diaryList.querySelector('.diary-item[data-key="' + key + '"] .diary-edit');
+        if (ta) setDiary(key, ta.value);
+        diaryEditKey = '';
+        renderDiary();
+        Sound.click();
+        setCaption('这一天的日记已保存');
+        return;
+      }
+      if (role === 'cancel') {
+        diaryEditKey = '';
+        renderDiary();
+      }
+    });
+    if (el.btnDiaryExport) {
+      el.btnDiaryExport.addEventListener('click', function () { Sound.click(); openDiaryExportDialog(); });
+    }
+    /* 补写某天：选日期 → 那天的卡片亮出来直接写（写完点保存） */
+    if (el.btnDiaryBackfill) {
+      el.btnDiaryBackfill.addEventListener('click', function () { Sound.click(); openDiaryBackfill(); });
+    }
+    if (el.dbOk) el.dbOk.addEventListener('click', function () { Sound.click(); doDiaryBackfill(); });
+    if (el.dbCancel) el.dbCancel.addEventListener('click', closeDiaryBackfill);
+    if (el.dbClose) el.dbClose.addEventListener('click', closeDiaryBackfill);
+    if (el.diaryBackfillOverlay) {
+      el.diaryBackfillOverlay.addEventListener('click', function (e) {
+        if (e.target === el.diaryBackfillOverlay) closeDiaryBackfill();
+      });
+    }
+    /* 导出对话框：起始/结束日期、快捷范围、篇数提示 */
+    [el.deFrom, el.deTo].forEach(function (inp) {
+      if (inp) inp.addEventListener('change', paintDiaryExportHint);
+    });
+    if (el.deQuick) {
+      el.deQuick.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('button[data-days],button[data-all]') : null;
+        if (!b) return;
+        const keys = Object.keys(diary).sort();
+        if (b.dataset.all) {
+          if (el.deFrom) el.deFrom.value = keys[0] || '';
+          if (el.deTo) el.deTo.value = keys[keys.length - 1] || '';
+        } else {
+          const days = Math.max(1, parseInt(b.dataset.days, 10) || 7);
+          const end = new Date();
+          const start = new Date();
+          start.setDate(start.getDate() - (days - 1));
+          if (el.deFrom) el.deFrom.value = diaryKeyOf(start);
+          if (el.deTo) el.deTo.value = diaryKeyOf(end);
+        }
+        paintDiaryExportHint();
+        Sound.click();
+      });
+    }
+    if (el.deOk) el.deOk.addEventListener('click', function () { Sound.click(); doDiaryExport(); });
+    if (el.deCancel) el.deCancel.addEventListener('click', closeDiaryExportDialog);
+    if (el.deClose) el.deClose.addEventListener('click', closeDiaryExportDialog);
+    if (el.diaryExportOverlay) {
+      el.diaryExportOverlay.addEventListener('click', function (e) {
+        if (e.target === el.diaryExportOverlay) closeDiaryExportDialog();
+      });
+    }
+  }
+
+  /* ------------------------------------------------------- 导出（选日期范围） */
+  function diaryKeysInRange(from, to) {
+    return Object.keys(diary).filter(function (k) {
+      return (!from || k >= from) && (!to || k <= to);
+    }).sort();                                  // 按时间正序，读起来顺
+  }
+
+  function paintDiaryExportHint() {
+    if (!el.deHint) return;
+    const from = el.deFrom ? el.deFrom.value : '';
+    const to = el.deTo ? el.deTo.value : '';
+    const n = diaryKeysInRange(from, to).length;
+    el.deHint.textContent = n
+      ? ('这个范围里有 ' + n + ' 篇' + (from || to ? '' : '（全部）'))
+      : '这个范围里还没有日记';
+  }
+
+  function openDiaryExportDialog() {
+    if (!el.diaryExportOverlay) return;
+    const keys = Object.keys(diary).sort();
+    if (!keys.length) { setCaption('还没写过日记，没什么可导出的'); return; }
+    if (el.deFrom) el.deFrom.value = keys[0];
+    if (el.deTo) el.deTo.value = keys[keys.length - 1];
+    paintDiaryExportHint();
+    el.diaryExportOverlay.hidden = false;
+  }
+  function closeDiaryExportDialog() {
+    if (el.diaryExportOverlay) el.diaryExportOverlay.hidden = true;
+  }
+
+  function doDiaryExport() {
+    const from = el.deFrom ? el.deFrom.value : '';
+    const to = el.deTo ? el.deTo.value : '';
+    const keys = diaryKeysInRange(from, to);
+    if (!keys.length) { setCaption('这个范围里没有日记'); return; }
+    const title = (from || to)
+      ? ('我的日记（' + (from || '最早') + ' ~ ' + (to || '今天') + '，共 ' + keys.length + ' 篇）')
+      : ('我的日记（共 ' + keys.length + ' 篇）');
+    const lines = [title, '导出于 ' + fmtTodoTime(Date.now()), ''];
+    keys.forEach(function (k) {
+      const d = new Date(k + 'T00:00:00');
+      const wk = '日一二三四五六'[d.getDay()];
+      const lu = diaryLunar(d);
+      lines.push('══════════════════════════════════');
+      lines.push(k + '（周' + wk + (lu ? ' · 农历' + lu : '') + '）');
+      lines.push('══════════════════════════════════');
+      lines.push(diary[k]);
+      lines.push('');
+    });
+    const text = lines.join('\r\n');
+    const name = '我的日记' + (from && to && (from !== keys[0] || to !== keys[keys.length - 1])
+      ? ('-' + from + '_' + to) : '') + '.txt';
+
+    if (!native || !native.diaryExport) {
+      /* 没有主进程能力（在浏览器里打开）就退回下载 */
+      try {
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+      } catch (e) { }
+      closeDiaryExportDialog();
+      return;
+    }
+    native.diaryExport(text, name).then(function (p) {
+      closeDiaryExportDialog();
+      if (p) setCaption('已导出 ' + keys.length + ' 篇到：<b>' + escapeHtml(p) + '</b>');
+    }).catch(function () { closeDiaryExportDialog(); });
+  }
+
+  /* 输入框里的内容 → 存。
+     autoSave=true（今天、而且还没写）：边写边存（防抖 500ms）+ 失焦立刻存；
+     其它情况（点了「编辑」）：只有点「保存」才写盘，点「取消」或按 Esc 丢掉改动。 */
+  function bindDiaryInput(ta, autoSave) {
+    const key = ta.dataset.key;
+    if (!autoSave) {
+      ta.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); cancelDiaryEdit(); }
+      });
+      return;
+    }
+    ta.addEventListener('input', function () {
+      const v = ta.value;
+      if (diarySaveTimer) clearTimeout(diarySaveTimer);
+      diarySaveTimer = setTimeout(function () {
+        diarySaveTimer = null;
+        setDiary(key, v);
+      }, 500);
+    });
+    ta.addEventListener('blur', function () {
+      if (diarySaveTimer) { clearTimeout(diarySaveTimer); diarySaveTimer = null; }
+      setDiary(key, ta.value);
+    });
+    ta.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); ta.blur(); }
+    });
+  }
+
+  function cancelDiaryEdit() {
+    diaryEditKey = '';
+    renderDiary();
+  }
+
+  /* ------------------------------------------------------------ 补写某天
+     场景：昨天忘了写。选个日期 → 那天在列表里亮出来（空卡片、直接可写），
+     写完点「保存」；点「取消」它就从列表里消失（因为没内容）。 */
+  function openDiaryBackfill() {
+    if (!el.diaryBackfillOverlay) return;
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    if (el.dbDate) {
+      el.dbDate.max = diaryKeyOf();          // 只能补写今天或以前
+      el.dbDate.value = diaryKeyOf(y);       // 默认昨天（最常见的补写对象）
+    }
+    el.diaryBackfillOverlay.hidden = false;
+  }
+  function closeDiaryBackfill() {
+    if (el.diaryBackfillOverlay) el.diaryBackfillOverlay.hidden = true;
+  }
+  function doDiaryBackfill() {
+    const key = el.dbDate ? el.dbDate.value : '';
+    closeDiaryBackfill();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) { setCaption('先选一个日期'); return; }
+    if (key > diaryKeyOf()) { setCaption('只能补写今天或以前的日子'); return; }
+    diaryEditKey = key;
+    renderDiary();
+    const item = el.diaryList.querySelector('.diary-item[data-key="' + key + '"]');
+    if (item && item.scrollIntoView) {
+      try { item.scrollIntoView({ block: 'center' }); } catch (e) { }
+    }
+    const ta = item ? item.querySelector('.diary-edit') : null;
+    if (ta) { try { ta.focus(); } catch (e) { } }
+    if (diary[key]) setCaption('这天已经写过，直接改就行');
+  }
+
+  function deleteDiaryDay(key) {
+    const d = new Date(key + 'T00:00:00');
+    const label = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    if (!window.confirm('删掉 ' + label + ' 的日记？\n\n删了就找不回来了。')) return;
+    setDiary(key, '');
+    if (diaryEditKey === key) diaryEditKey = '';
+    renderDiary();
+    Sound.click();
+    setCaption(label + '的日记已删除');
+  }
+
+  function loadUiPrefs() {    try {
       const raw = JSON.parse(localStorage.getItem(STORE_KEY.ui) || '{}');
       if (typeof raw.todoGrabFront === 'boolean') ui.todoGrabFront = raw.todoGrabFront;
       if (typeof raw.todoCatchUp === 'boolean') ui.todoCatchUp = raw.todoCatchUp;
-      if (raw.tab === 'home' || raw.tab === 'todo' || raw.tab === 'settings') ui.tab = raw.tab;
+      if (raw.tab === 'home' || raw.tab === 'todo' || raw.tab === 'diary' || raw.tab === 'settings') {
+        ui.tab = raw.tab;
+      }
     } catch (e) { }
   }
 
@@ -1677,7 +2173,7 @@
   }
 
   /* ------------------------------------------------------------ 标签页 */
-  const TAB_PAGES = { home: '#app', todo: '#pageTodo', settings: '#pageSettings' };
+  const TAB_PAGES = { home: '#app', todo: '#pageTodo', diary: '#pageDiary', settings: '#pageSettings' };
 
   function openTab(name) {
     if (!TAB_PAGES[name]) name = 'home';
@@ -1685,12 +2181,17 @@
     Object.keys(TAB_PAGES).forEach(function (key) {
       const node = $(TAB_PAGES[key]);
       if (node) node.hidden = (key !== name);
-    });
-    ['home', 'todo', 'settings'].forEach(function (key) {
+      /* 标签高亮也按同一张表来（以前这里写死了三个页签，加页面就会漏） */
       const btn = document.getElementById('tab' + key.charAt(0).toUpperCase() + key.slice(1));
       if (btn) btn.classList.toggle('on', key === name);
     });
     if (name !== 'home') { renderMemos(); renderTodos(); }
+    if (name === 'diary') {
+      renderDiary();
+      updateDiaryQuote();          // 每次进日记页换一句古诗词
+      /* 打开日记页时滚回顶部：今天那篇在最上面 */
+      if (el.diaryList) el.diaryList.scrollTop = 0;
+    }
     saveUiPrefs();
     /* 切页后内容高度变了（待办页更高），重新按当前页排版 */
     requestAnimationFrame(function () { fitApp(); });
@@ -1771,8 +2272,12 @@
       }).catch(function () { });
     }
 
+    /* 日记字号：A−／A+ 就在日记页右上角 */
+    if (el.dfMinus) el.dfMinus.addEventListener('click', function () { stepDiaryFont(-1); });
+    if (el.dfPlus) el.dfPlus.addEventListener('click', function () { stepDiaryFont(1); });
+
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.5.1 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.6.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -2944,6 +3449,12 @@
       }
     }
     if (almanacDate !== todayKey()) renderAlmanac();   // 跨天刷新黄历
+    /* 跨天了：日记页「今天」那张卡片要跟着换日子，正开着就重排一次 */
+    if (diaryDayKey !== todayKey()) {
+      diaryDayKey = todayKey();
+      diaryEditKey = '';
+      if (ui.tab === 'diary') renderDiary();
+    }
     /* 待办到点检查：跟循环提醒各自独立（待办是「具体某个时刻」，
        不受「暂停计时」「睡眠暂停」影响 —— 约了几点就是几点） */
     if (!rt.alertId) {
@@ -3415,6 +3926,7 @@
     }
     /* 托盘 / 桌面宠物右键菜单里的入口 */
     if (native && native.onShowTodo) native.onShowTodo(function () { showWindowSelf(); openTab('todo'); });
+    if (native && native.onShowDiary) native.onShowDiary(function () { showWindowSelf(); openTab('diary'); });
     if (native && native.onShowSettings) native.onShowSettings(function () { showWindowSelf(); openTab('settings'); });
     /* 屏幕缩放变化（换屏 / 改系统缩放）：主进程已经把窗口尺寸改好了，
        这里只需要按新的 k 重排内容 */
@@ -3423,8 +3935,9 @@
       applyVisibility(!document.hidden);
     });
 
-    /* 备忘 / 待办 / 设置 / 桌面宠物 / 软件更新（更新只挂设置页，主界面与待办页不动） */
+    /* 备忘 / 待办 / 日记 / 设置 / 桌面宠物 / 软件更新（更新只挂设置页，主界面与待办页不动） */
     bindTodoPage();
+    bindDiaryPage();
     bindSettings();
     bindDesktopPet();
     bindUpdate();
@@ -3436,6 +3949,7 @@
   function init() {
     loadStore();
     loadTodoStore();
+    loadDiary();
     loadUiPrefs();
     el.chkSound.checked = settings.sound;
     el.chkSpeech.checked = settings.speech;
@@ -3468,6 +3982,9 @@
     renderPanels();
     renderMemos();
     renderTodos();
+    renderDiary();
+    applyDiaryFont();
+    updateDiaryQuote();
     openTab(ui.tab);          // 恢复上次看的页面（默认主界面）
     pushState();
     render();
