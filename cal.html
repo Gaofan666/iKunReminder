@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
+<title>desktop-calendar</title>
+<link rel="stylesheet" href="cal.css">
+</head>
+<body>
+<!-- 桌面待办日历：整窗透明，中间一张圆角卡片，左边备忘录、右边月历。
+     窗口尺寸由主进程定（940 × 600 DIP），内容按 --fit 缩放到实际窗口里。
+     卡片空白处都能拖（按钮/格子/备忘录条目除外），右键出原生菜单。 -->
+<div class="wrap">
+  <div class="cal" id="cal">
+
+    <!-- ===================== 左：备忘录 ===================== -->
+    <aside class="side">
+      <div class="side-head">
+        <span class="side-title">📌 备忘录</span>
+        <span class="side-count" id="memoCount"></span>
+        <button class="icon sm" id="btnAddMemo" title="新增一条备忘">＋</button>
+      </div>
+      <div class="memo-new" id="memoNewRow" hidden>
+        <input type="text" id="memoNew" maxlength="500" placeholder="写一条备忘，回车就存">
+        <button class="icon sm ok" id="memoNewOk" title="保存">✓</button>
+      </div>
+      <div class="memo-list" id="memoList"></div>
+      <div class="side-foot" id="sideFoot">点一条就能勾完成 · 数据与主界面同步</div>
+    </aside>
+
+    <!-- ===================== 右：月历 ===================== -->
+    <section class="main">
+      <header class="head">
+        <button class="nav" id="btnPrev" title="上一月">‹</button>
+        <div class="title" id="title">—</div>
+        <button class="nav" id="btnNext" title="下一月">›</button>
+        <button class="pill" id="btnToday" title="回到今天">今天</button>
+        <span class="grow"></span>
+        <button class="icon" id="btnTheme" title="切换深色 / 浅色主题">🌙</button>
+        <button class="icon" id="btnAdd" title="新增待办（打开主界面的新增窗口）">＋</button>
+        <button class="icon" id="btnSet" title="打开设置">⚙</button>
+        <button class="icon x" id="btnHide" title="隐藏桌面日历（主界面那个勾也会一起取消）">✕</button>
+      </header>
+
+      <div class="week" id="week"></div>
+      <div class="grid" id="grid"></div>
+
+      <div class="legend">
+        <span><i class="dot p-high"></i>高</span>
+        <span><i class="dot p-mid"></i>中</span>
+        <span><i class="dot p-low"></i>低</span>
+        <span class="legend-right" id="legendRight"></span>
+      </div>
+    </section>
+
+    <!-- 点某天 → 当天清单（盖在月历上，能直接勾完成） -->
+    <div class="panel" id="panel" hidden>
+      <div class="panel-head">
+        <span class="panel-title" id="panelTitle">—</span>
+        <button class="icon x" id="panelClose" title="关闭">✕</button>
+      </div>
+      <div class="panel-list" id="panelList"></div>
+    </div>
+
+  </div>
+</div>
+<script src="cal.js"></script>
+</body>
+</html>

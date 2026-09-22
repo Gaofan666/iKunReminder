@@ -88,6 +88,18 @@ const DIAG = (function () {
     if (a === '--diag-eyequit-keep') { out.eyequit = true; out.eyeKeep = true; }
     /* --diag-petclamp：把宠物拖到右下极限，验证它能贴到工作区边缘 */
     if (a === '--diag-petclamp') out.petclamp = true;
+    /* --diag-cal：桌面日历端到端自检（造一批三档优先级的待办 → 开日历 →
+       查网格/颜色/切月/当天清单 → 再用主界面真实弹窗存一条，验证 prio 落盘） */
+    if (a === '--diag-cal') out.cal = true;
+    /* --diag-calstart：模拟「上次勾了桌面日历，这次开机」——
+       日历不许压在主界面上（用户报过：一开机日历盖住界面、点不动） */
+    if (a === '--diag-calstart') out.calstart = true;
+    /* --diag-park：把主界面推到屏幕外面，验证「能推出去、但一定留一条边能抓回来」，
+       再验证从托盘那条路（showWindow）能把它拉回屏内 */
+    if (a === '--diag-park') out.park = true;
+    /* --diag-calshadow：把日历窗摆在屏幕正中并停住，好让外面用 GDI 截屏
+       看清「窗口四周那圈直角阴影」到底是什么（只排查用，不做判断） */
+    if (a === '--diag-calshadow') out.calshadow = true;
   });
   return out;
 })();
@@ -108,13 +120,18 @@ function effScale(d) {
 }
 
 /* 自检探针：Windows 上 Electron 的 console.log 有时不进管道的 stdout，
-   所以关键节点同时写文件。正常启动（不带 --diag）一概不写。 */
+   所以关键节点同时写文件。正常启动（不带 --diag）一概不写。
+   ⚠️ 打包后 __dirname 在 app.asar 里，写不进去 —— 依次退回「exe 同级目录」
+   和 userData，保证打包版也能留下自检日志。 */
 function diagLog(tag, obj) {
   if (!DIAG) return;
-  try {
-    const line = new Date().toISOString() + ' [' + tag + '] ' + JSON.stringify(obj || {}) + '\n';
-    fs.appendFileSync(path.join(__dirname, '.diag', 'trace.log'), line);
-  } catch (e) { /* 忽略 */ }
+  const line = new Date().toISOString() + ' [' + tag + '] ' + JSON.stringify(obj || {}) + '\n';
+  const cands = [path.join(__dirname, '.diag', 'trace.log')];
+  try { cands.push(path.join(path.dirname(app.getPath('exe')), 'trace.log')); } catch (e) { }
+  try { cands.push(path.join(app.getPath('userData'), 'trace.log')); } catch (e) { }
+  for (let i = 0; i < cands.length; i++) {
+    try { fs.appendFileSync(cands[i], line); return; } catch (e) { /* 换下一个 */ }
+  }
 }
 
 function sameScale(a, b) { return Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.001; }
@@ -268,8 +285,9 @@ function applyDisplay(force) {
   }
 
   if (!normalBounds) normalBounds = win.getBounds();
-  /* 桌面宠物是独立窗口，跟着它自己所在的那块屏重新适配 */
+  /* 桌面宠物/桌面日历都是独立窗口，跟着各自所在的那块屏重新适配 */
   applyPetDisplay();
+  applyCalDisplay();
   sendDpiInfo();
 }
 
@@ -714,6 +732,641 @@ function createWindow() {
               setPetOn(false);
             }
           }
+          /* 桌面日历端到端自检：
+             1) 用主界面【真实的】新增待办弹窗塞三条待办（高/中/低各一条，日期不同），
+                顺带验证优先级能存进 localStorage；
+             2) 开日历窗，查 42 个格子、今天的格子有高亮、三条待办落在对的日期、
+                颜色类名分别是 p-high / p-mid / p-low；
+             3) 点有事的格子 → 当天清单出来且条数对；
+             4) 点「下一月」→ 标题月份变了；
+             5) 存一张日历窗截图，人眼确认外观。 */
+          /* 开机恢复桌面日历时的 Z 序自检：日历不许压在主界面上、也不许抢焦点 */
+          if (DIAG.calstart) {
+            const wait6 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            diagLog('calstart-1-开之前', {
+              主界面可见: win.isVisible(),
+              主界面聚焦: win.isFocused(),
+              日历: (calWin && !calWin.isDestroyed()) ? '已存在' : '还没建'
+            });
+            /* 走的正是开机那条路：主界面渲染进程把 calOn 推上来 → setCalOn(true, false) */
+            setCalOn(true, false);
+            await wait6(2000);
+            const order = await windowZOrder();
+            const lines = order.split('\n').filter(function (s) { return s.trim(); });
+            const idxOf = function (kw) {
+              for (let i = 0; i < lines.length; i++) {
+                if (lines[i].indexOf(kw) >= 0) return parseInt(lines[i].split('|')[0], 10);
+              }
+              return -1;
+            };
+            /* Z 序数字越小越靠上。日历窗的标题来自 cal.html 里的 <title>，
+               是 desktop-calendar（不是 BrowserWindow 的 title），用这个认它 */
+            const calIdx = idxOf('desktop-calendar');
+            const mainIdx = (function () {
+              for (let i = 0; i < lines.length; i++) {
+                if (lines[i].indexOf('desktop-calendar') >= 0) continue;
+                if (lines[i].indexOf('desktop-pet') >= 0) continue;
+                return parseInt(lines[i].split('|')[0], 10);
+              }
+              return -1;
+            })();
+            diagLog('calstart-2-开之后', {
+              Z序清单: lines,
+              日历的Z序位: calIdx,
+              主界面的Z序位: mainIdx,
+              主界面在日历上面: mainIdx >= 0 && calIdx >= 0 && mainIdx < calIdx,
+              日历抢焦点了吗: (calWin && !calWin.isDestroyed()) ? calWin.isFocused() : null,
+              主界面还聚焦吗: win.isFocused()
+            });
+          }
+          /* 主界面「推到屏幕外」自检：能推出去、必须留一条边、能被叫回来。
+             ⚠️ 只上下推、x 方向位移保持 0：这台机器两块屏是左右排的，
+             往右推会把窗口推到副屏上（那不算「推出屏幕」），测不出东西。 */
+          if (DIAG.park) {
+            const wait5 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const wa0 = screen.getPrimaryDisplay().workArea;
+            win.setBounds({
+              x: Math.round(wa0.x + (wa0.width - 1180) / 2),
+              y: Math.round(wa0.y + 60), width: 1180, height: 849
+            });
+            await wait5(700);
+            const b0 = win.getBounds();
+            const cx = b0.x + Math.floor(b0.width / 2);
+            const phys = function (r) { return screen.dipToScreenRect(null, r); };
+            const pushY = async function (targetY) {
+              ipcMain.emit('drag-start', {}, { x: cx, y: b0.y + 10 });
+              ipcMain.emit('drag-move', {}, { x: cx, y: targetY });
+              ipcMain.emit('drag-end', {}, {});
+              await wait5(500);
+              return win.getBounds();
+            };
+            /* 往下推：窗口大部分沉到工作区下面 */
+            const b1 = await pushY(wa0.y + wa0.height + 5000);
+            const p1 = phys(b1), wp = phys(wa0);
+            const visBottom = (wp.y + wp.height) - p1.y;
+            diagLog('park-1-往下推', {
+              归位: b0.x + ',' + b0.y,
+              推出去后: b1.x + ',' + b1.y,
+              还露在屏里的高: visBottom,
+              期望露多少: WIN_EDGE_KEEP,
+              留够能抓的边了吗: visBottom >= WIN_EDGE_KEEP - 10,
+              确实推出屏了: p1.y > wp.y + 200
+            });
+            /* 再往上推：只留最上面一条 */
+            const b2 = await pushY(wa0.y - 5000);
+            const p2 = phys(b2);
+            const visTop = (p2.y + p2.height) - wp.y;
+            diagLog('park-2-往上推', {
+              推出去后: b2.x + ',' + b2.y,
+              还露在屏里的高: Math.min(p2.height, visTop),
+              留够能抓的边了吗: Math.min(p2.height, visTop) >= WIN_EDGE_KEEP - 10
+            });
+            /* 托盘 / 菜单那条路叫回来：必须整窗回到屏内 */
+            const rescued = rescueWindowIntoView();
+            await wait5(400);
+            const b3 = win.getBounds();
+            diagLog('park-3-叫回来', {
+              触发了拉回: rescued,
+              拉回后: b3.x + ',' + b3.y,
+              完全在屏内: b3.x >= wa0.x && b3.y >= wa0.y &&
+                b3.x + b3.width <= wa0.x + wa0.width && b3.y + b3.height <= wa0.y + wa0.height
+            });
+          }
+          /* 只排查阴影用：把日历窗摆在主屏正中停住，再用 GDI 截屏把「窗口四周」
+             一起截下来 —— 那圈直角黑影到底是窗口自己的投影还是 CSS 阴影，看一眼就知道。 */
+          if (DIAG.calshadow) {
+            const wait3 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const d0 = screen.getPrimaryDisplay();
+            const wa0 = d0.workArea;
+            const box0 = calWindowBox(wa0);
+            /* 先垫一块深灰底板：卡片到底多透、外面有没有投影，一下就算得出来
+               （底板 RGB 58，如果卡片是 97% 白，卡片区应该接近 249；
+                 如果明显偏灰，说明窗口/页面被整体做了透明） */
+            let backdrop = null;
+            try {
+              backdrop = new BrowserWindow({
+                x: wa0.x, y: wa0.y, width: wa0.width, height: wa0.height,
+                frame: false, backgroundColor: '#3a3a3a', hasShadow: false,
+                resizable: false, skipTaskbar: true, focusable: false, show: false,
+                webPreferences: { contextIsolation: true, nodeIntegration: false }
+              });
+              backdrop.loadURL('data:text/html,<body style="margin:0;background:%233a3a3a"></body>');
+              backdrop.showInactive();
+              await wait3(600);
+            } catch (e0) { diagLog('calshadow-backdrop-error', String(e0 && e0.message || e0)); }
+            setCalOn(true, true);
+            await wait3(1600);
+            if (calWin && !calWin.isDestroyed()) {
+              calWin.setBounds({
+                x: Math.round(wa0.x + (wa0.width - box0.width) / 2),
+                y: Math.round(wa0.y + (wa0.height - box0.height) / 2),
+                width: box0.width, height: box0.height
+              });
+              await wait3(1200);
+              const b = calWin.getBounds();
+              const pr = screen.dipToScreenRect(null, b);
+              const m = 60;
+              const out = path.join(__dirname, '.diag', 'calshadow.png');
+              const ps = [
+                'Add-Type -AssemblyName System.Drawing',
+                '$w=' + (pr.width + m * 2) + ';$h=' + (pr.height + m * 2),
+                '$bmp=New-Object System.Drawing.Bitmap($w,$h)',
+                '$g=[System.Drawing.Graphics]::FromImage($bmp)',
+                '$g.CopyFromScreen(' + (pr.x - m) + ',' + (pr.y - m) + ',0,0,$bmp.Size)',
+                '$bmp.Save("' + out + '",[System.Drawing.Imaging.ImageFormat]::Png)',
+                '$g.Dispose();$bmp.Dispose()',
+                'Write-Output "CAPTURED"'
+              ].join('\n');
+              diagLog('calshadow', {
+                窗口DIP: b.x + ',' + b.y + ' ' + b.width + 'x' + b.height,
+                窗口物理: pr.x + ',' + pr.y + ' ' + pr.width + 'x' + pr.height,
+                截图: out,
+                hasShadow: (typeof calWin.hasShadow === 'function') ? calWin.hasShadow() : '(无此 API)'
+              });
+              psRun(ps, function (e, o) {
+                diagLog('calshadow-shot', { err: String(e || ''), out: String(o || '').trim() });
+              });
+              await wait3(2500);
+            }
+          }
+          if (DIAG.cal) {
+            const wait2 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };            /* 先探一下主界面是否还活着（页面报错时后面的脚本会成片失败，
+               先落一条日志，省得对着「Script failed to execute」猜） */
+            diagLog('cal-0-start', await win.webContents.executeJavaScript(
+              '({有备忘弹窗:!!document.getElementById("memoText"),' +
+              ' 有新增备忘按钮:!!document.getElementById("btnAddMemo"),' +
+              ' 有新增待办按钮:!!document.getElementById("btnAddTodo"),' +
+              ' 有日历勾选:!!document.getElementById("chkDesktopCal")})', true));
+            const pad2 = function (n) { return n < 10 ? '0' + n : String(n); };
+            const dayStr = function (offset) {
+              const d = new Date();
+              d.setDate(d.getDate() + offset);
+              return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+            };
+            const plan = [
+              { text: '【自检】最高优先级', date: dayStr(0), time: '09:30', prio: 'high' },
+              { text: '【自检】中优先级', date: dayStr(1), time: '14:00', prio: 'mid' },
+              { text: '【自检】低优先级', date: dayStr(2), time: '18:30', prio: 'low' }
+            ];
+            /* 0) 再用真实的「新增备忘」弹窗塞两条备忘录（验证左栏那条链路） */
+            const memoAdded = await win.webContents.executeJavaScript(
+              '(function(){var out=[];["周三上午9点参加部门会议","购物清单：生日蛋糕、红酒、水果"].forEach(function(t){' +
+              '  document.getElementById("btnAddMemo").click();' +
+              '  document.getElementById("memoText").value=t;' +
+              '  document.getElementById("memoSave").click();' +
+              '  out.push(document.getElementById("memoOverlay").hidden);});' +
+              'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+              'return {每条都关掉了弹窗:out.every(function(h){return h;}),' +
+              ' 备忘条数:(raw.memos||[]).length};})()', true);
+            diagLog('cal-0-memo', memoAdded);
+
+            /* 1) 全部走真实 UI：点「＋ 新增待办」→ 填表 → 点优先级 → 保存 */
+            const added = await win.webContents.executeJavaScript(
+              '(function(){var out=[];var plan=' + JSON.stringify(plan) + ';' +
+              'plan.forEach(function(p){' +
+              '  document.getElementById("btnAddTodo").click();' +
+              '  document.getElementById("tdText").value=p.text;' +
+              '  document.getElementById("tdDate").value=p.date;' +
+              '  document.getElementById("tdTime").value=p.time;' +
+              '  var seg=document.getElementById("tdPrio");' +
+              '  var btn=seg?seg.querySelector(\'button[data-prio="\'+p.prio+\'"]\'):null;' +
+              '  if(btn)btn.click();' +
+              '  document.getElementById("tdSave").click();' +
+              '  out.push({want:p.prio,overlayOpen:!document.getElementById("todoOverlay").hidden});' +
+              '});' +
+              'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+              'var saved=(raw.todos||[]).filter(function(t){return t.text&&t.text.indexOf("【自检】")===0;})' +
+              '  .map(function(t){return {text:t.text,prio:t.prio,dueAt:t.dueAt};});' +
+              'return {added:out, saved:saved};})()', true);
+            diagLog('cal-1-add', {
+              新增: added.added,
+              存下来的: added.saved.map(function (t) {
+                return t.text + '=' + t.prio + '@' + new Date(t.dueAt).toLocaleString('zh-CN');
+              }),
+              三条都带优先级: added.saved.length === 3 &&
+                added.saved.every(function (t) { return !!t.prio; }),
+              优先级各不同: added.saved.map(function (t) { return t.prio; }).sort().join(',') === 'high,low,mid'
+            });
+
+            /* 1.5) 顺手截一张主界面：新增待办弹窗里的「优先级」那一行。
+                  自检造的待办时间可能已经过了点，会先弹出到点提醒把主界面盖住，
+                  所以截图前先把它收掉（点「稍后再说」= 不改完成状态）。 */
+            try {
+              await win.webContents.executeJavaScript(
+                '(function(){var a=document.getElementById("alertSnooze");' +
+                'var o=document.getElementById("overlay");' +
+                'if(a&&o&&!o.hidden)a.click();' +
+                'document.getElementById("btnAddTodo").click();' +
+                'var seg=document.getElementById("tdPrio");' +
+                'var b=seg?seg.querySelector(\'button[data-prio="high"]\'):null;if(b)b.click();' +
+                'return true;})()', true);
+              await wait2(500);
+              const shotMain = await win.capturePage();
+              fs.writeFileSync(path.join(__dirname, '.diag', 'cal-modal.png'), shotMain.toPNG());
+              await win.webContents.executeJavaScript(
+                'document.getElementById("tdCancel").click(); true;', true);
+            } catch (e5) { diagLog('cal-modal-shot-error', String(e5 && e5.message || e5)); }
+
+            /* 2) 开日历窗，等它把数据画出来 */
+            diagLog('cal-2a', { 开之前: calOn, 窗口在吗: !!(calWin && !calWin.isDestroyed()) });
+            setCalOn(true);
+            await wait2(1600);
+            diagLog('cal-2b', {
+              开之后: calOn,
+              窗口在吗: !!(calWin && !calWin.isDestroyed()),
+              窗口可见: (calWin && !calWin.isDestroyed()) ? calWin.isVisible() : null,
+              窗口尺寸: (calWin && !calWin.isDestroyed())
+                ? (calWin.getBounds().width + 'x' + calWin.getBounds().height) : ''
+            });
+            /* 主界面那个勾必须跟着勾上（主进程 → 页面 的回路） */
+            let chkNow = null;
+            try {
+              chkNow = await win.webContents.executeJavaScript(
+                'document.getElementById("chkDesktopCal").checked', true);
+            } catch (e9) { chkNow = 'ERR: ' + String(e9 && e9.message || e9); }
+            diagLog('cal-2-checkbox', { 主界面勾上了: chkNow });
+            if (!calWin || calWin.isDestroyed()) {
+              diagLog('cal-2-window', { error: '日历窗没起来' });
+            } else {
+              const box = calWin.getBounds();
+              const ui = await calWin.webContents.executeJavaScript(
+                '(function(){try{' +
+                'var cells=document.querySelectorAll(".cell");' +
+                'var bars=document.querySelectorAll(".ev");' +
+                'var kinds={};document.querySelectorAll(".ev").forEach(function(b){' +
+                '  var k=b.className.replace(/\\s*done/,"").trim();kinds[k]=(kinds[k]||0)+1;});' +
+                'var today=document.querySelector(".cell.today");' +
+                'var byKey={};document.querySelectorAll(".cell").forEach(function(c){' +
+                '  var ev=c.querySelectorAll(".ev");if(ev.length){' +
+                '    byKey[c.dataset.key]=Array.prototype.map.call(ev,function(e){' +
+                '      return e.className.replace("ev ","").replace(" done","")+":"+e.textContent;});}});' +
+                'var bg={};["p-high","p-mid","p-low"].forEach(function(p){' +
+                '  var d2=document.createElement("i");d2.className="ev "+p;document.body.appendChild(d2);' +
+                '  bg[p]=getComputedStyle(d2).backgroundImage.slice(0,60);d2.remove();});' +
+                'var todayCell=document.querySelector(".cell.today");' +
+                'return {cells:cells.length, bars:bars.length, kinds:kinds, byKey:byKey, colors:bg,' +
+                ' todayKey:today?today.dataset.key:null, title:document.getElementById("title").textContent,' +
+                ' 农历:todayCell&&todayCell.querySelector(".lunar")?todayCell.querySelector(".lunar").textContent:"(无)",' +
+                ' 农历格子数:document.querySelectorAll(".cell .lunar").length,' +
+                ' 备忘条数:document.querySelectorAll(".memo").length,' +
+                ' 第一条备忘:document.querySelector(".memo .txt")?document.querySelector(".memo .txt").textContent.slice(0,20):"",' +
+                ' 有加号按钮:!!document.getElementById("btnAdd"),' +
+                ' 有设置按钮:!!document.getElementById("btnSet"),' +
+                ' fit:getComputedStyle(document.documentElement).getPropertyValue("--fit")};' +
+                '}catch(e){return {错误:String(e&&e.message||e)};}})()', true);
+              diagLog('cal-2-grid', {
+                窗口: box.width + 'x' + box.height,
+                格子数: ui.cells,
+                小条数: ui.bars,
+                各类条数: ui.kinds,
+                每天的条: ui.byKey,
+                今天的格子: ui.todayKey,
+                标题: ui.title,
+                今天的农历: ui.农历,
+                有农历的格子数: ui.农历格子数,
+                左栏备忘条数: ui.备忘条数,
+                第一条备忘: ui.第一条备忘,
+                '＋和⚙按钮都有': ui.有加号按钮 && ui.有设置按钮,
+                三档颜色: ui.colors,
+                fit: ui.fit,
+                今天的格子在: !!ui.todayKey
+              });
+
+              /* 3) 点「今天」那一格 → 当天清单 */
+              const panel = await calWin.webContents.executeJavaScript(
+                '(function(){try{var c=document.querySelector(".cell.today");if(!c)return {error:"没有今天的格子"};' +
+                'c.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
+                'c.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
+                'var p=document.getElementById("panel");' +
+                'return {open:!p.hidden, 真的显示出来了:getComputedStyle(p).display!=="none",' +
+                ' title:document.getElementById("panelTitle").textContent,' +
+                ' rows:document.querySelectorAll("#panelList .pi").length,' +
+                ' first:document.querySelector("#panelList .pi .txt")?document.querySelector("#panelList .pi .txt").textContent:""};' +
+                '}catch(e){return {错误:String(e&&e.message||e)};}})()',
+                true);
+              diagLog('cal-3-daypanel', panel);
+
+              /* 3.5) 当天清单里的「✏️ 编辑」：应该打开主界面的修改弹窗，
+                     而且带的是这条待办的内容和优先级 */
+              const editReq = await calWin.webContents.executeJavaScript(
+                '(function(){var b=document.querySelector(\'#panelList button[data-act="edit"]\');' +
+                'if(!b)return {error:"清单里没有编辑按钮"};b.click();return {ok:true};})()', true);
+              await wait2(700);
+              const editor = await win.webContents.executeJavaScript(
+                '(function(){var o=document.getElementById("todoOverlay");' +
+                'var on=document.querySelector("#tdPrio button.on");' +
+                'return {弹窗开着:o?!o.hidden:null,' +
+                ' 标题:document.getElementById("tdTitle").textContent,' +
+                ' 内容:document.getElementById("tdText").value,' +
+                ' 优先级:on?on.dataset.prio:null,' +
+                ' 日期:document.getElementById("tdDate").value};})()', true);
+              diagLog('cal-3b-edit', { 点了编辑: editReq, 主界面弹窗: editor });
+              /* 关掉弹窗，别影响后面的步骤 */
+              await win.webContents.executeJavaScript(
+                'document.getElementById("tdCancel").click(); true;', true);
+              await wait2(300);
+
+              /* 4) 翻月（翻出去再翻回来）+「今天」按钮（用户说其实有用，已加回） */
+              const nav = await calWin.webContents.executeJavaScript(
+                '(function(){try{var g=function(id){return document.getElementById(id);};' +
+                'var th=function(){return g("title").textContent;};' +
+                'var t0=th();g("btnNext").click();var t1=th();' +
+                'g("btnPrev").click();var t2=th();' +
+                'g("btnPrev").click();var t3=th();' +
+                /* 键盘也翻月（要派发到 body 上才会冒泡到 document） */
+                'document.body.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));' +
+                'var t4=th();' +
+                'g("btnNext").click();var t5=th();' +
+                'g("btnToday").click();var t6=th();' +
+                'return {当月:t0,下一月:t1,翻回来:t2,再上一月:t3,键盘也翻月:t4,又下一月:t5,点今天回到:t6,' +
+                ' 有今天按钮:!!g("btnToday")};' +
+                '}catch(e){return {error:String(e&&e.message||e)};}})()', true);
+              nav.窗口置顶 = calWin.isAlwaysOnTop();
+              diagLog('cal-4-nav', nav);
+
+              /* 4.6) 主题 + 不透明度：设置页里点了要立刻反映到日历窗，日历里点了要回写设置 */
+              const styleStep = await win.webContents.executeJavaScript(
+                '(function(){var seg=document.getElementById("calThemeSeg");' +
+                'var b=seg?seg.querySelector(\'button[data-theme="dark"]\'):null;if(b)b.click();' +
+                'var o=document.getElementById("calOpa");' +
+                'if(o){o.value="60";o.dispatchEvent(new Event("input",{bubbles:true}));}' +
+                'return {点得到深色按钮:!!b, 滑杆值:o?o.value:"(没有滑杆)"};})()', true);
+              await wait2(600);
+              const styled = await calWin.webContents.executeJavaScript(
+                '(function(){var cs=getComputedStyle(document.getElementById("cal"));' +
+                'var today=document.querySelector(".cell.today");' +
+                'return {主题:document.documentElement.getAttribute("data-theme"),' +
+                ' 卡片底色:cs.backgroundImage.slice(0,60),' +
+                ' 卡片不透明度:cs.opacity,' +
+                ' 不透明度变量:getComputedStyle(document.documentElement).getPropertyValue("--opa").trim(),' +
+                ' 正文颜色:getComputedStyle(document.body).color,' +
+                /* 带待办的格子、色条都在卡片里 → 会跟着整卡一起淡（用户要的一致性） */
+                ' 待办条跟着卡片淡吗:!!(document.querySelector(".cell .ev")||{}).closest && ' +
+                '  !!document.querySelector(".cell .ev").closest(".cal"),' +
+                /* 深色下「今天」那格不能再变成白板 */
+                ' 今天格底色:today?getComputedStyle(today).backgroundColor:"(无)",' +
+                ' 今天格字色:today?getComputedStyle(today.querySelector(".d")).color:"(无)",' +
+                ' 日历里的主题按钮:document.getElementById("btnTheme").textContent};})()',
+                true);
+              diagLog('cal-8-style', { 设置页操作: styleStep, 日历窗: styled });
+
+              /* 再从日历窗那个 🌙/☀ 切回浅色，验证「日历 → 设置页」也是通的 */
+              await calWin.webContents.executeJavaScript(
+                'document.getElementById("btnTheme").click(); true;', true);
+              await wait2(600);
+              diagLog('cal-9-theme-back', await win.webContents.executeJavaScript(
+                '(function(){var seg=document.getElementById("calThemeSeg");' +
+                'var on=seg?seg.querySelector("button.on"):null;' +
+                'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+                'return {设置页高亮:on?on.dataset.theme:null, 存的主题:raw.calTheme,' +
+                ' 存的不透明度:raw.calOpacity};})()', true));
+              /* 不透明度调回默认，免得影响后面的截图 */
+              await win.webContents.executeJavaScript(
+                '(function(){var o=document.getElementById("calOpa");' +
+                'if(o){o.value="97";o.dispatchEvent(new Event("input",{bubbles:true}));' +
+                'o.dispatchEvent(new Event("change",{bubbles:true}));}return true;})()', true);
+              await wait2(300);
+
+              /* 4.5) 左栏直接新增备忘：走 ＋ → 输入 → 回车 这条真实路径 */
+              const memoNew = await calWin.webContents.executeJavaScript(
+                '(function(){var row=document.getElementById("memoNewRow");var before=row.hidden;' +
+                'document.getElementById("btnAddMemo").click();var opened=!row.hidden;' +
+                'var inp=document.getElementById("memoNew");inp.value="【自检】日历里加的备忘";' +
+                'inp.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));' +
+                'return {原来藏着:before, 点加号后展开了:opened, 存完输入框清空:inp.value===""};})()', true);
+              await wait2(600);
+              const memoAfter = await calWin.webContents.executeJavaScript(
+                'document.querySelectorAll(".memo").length', true);
+              const memoStored = await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'var m=(raw.memos||[]).filter(function(x){return x.text.indexOf("日历里加的备忘")>=0;})[0];' +
+                'return m?{text:m.text,done:!!m.done}:null;})()', true);
+              diagLog('cal-4b-addmemo', {
+                交互: memoNew,
+                日历左栏条数: memoAfter,
+                主界面存下来了: memoStored
+              });
+
+              /* 5) 截图（先把当天清单面板关掉再截，它是盖在月历上的覆盖层）。
+                  离屏窗抓 'paint' 那一帧最稳：可见窗会被 DWM 淡出/旧帧坑。 */
+              try {
+                const closedNow = await calWin.webContents.executeJavaScript(
+                  '(function(){var b=document.getElementById("panelClose");if(b)b.click();' +
+                  'return {hidden:document.getElementById("panel").hidden,' +
+                  ' 显示着吗:getComputedStyle(document.getElementById("panel")).display!=="none",' +
+                  ' cells:document.querySelectorAll(".cell").length,' +
+                  ' bars:document.querySelectorAll(".ev").length};})()',
+                  true);
+                diagLog('cal-5-before-shot', closedNow);
+                try { calWin.webContents.invalidate(); } catch (e6) { }
+                await wait2(900);
+                const img = await calWin.capturePage();
+                fs.writeFileSync(path.join(__dirname, '.diag', 'calendar.png'), img.toPNG());
+              } catch (e4) { diagLog('cal-shot-error', String(e4 && e4.message || e4)); }
+
+              /* 6) 反向验证：主界面取消勾选 → 日历窗必须隐藏 */
+              setCalOn(false);
+              await wait2(400);
+              diagLog('cal-5-hide', { 关掉后还可见: !!(calWin && !calWin.isDestroyed() && calWin.isVisible()) });
+
+              /* 6.5) 拖动 + 贴边：日历窗也是 resizable:false，不该被留那圈余量；
+                    顺便验证拖完会记位置（cal-position.json）。
+                    再验「在日历里勾完成」这条最长链路：日历 → 主进程 → 主界面改数据
+                    → 存盘 → 推回日历，四个环节都得对上。 */
+              setCalOn(true);
+              await wait2(600);
+              if (calWin && !calWin.isDestroyed()) {
+                const wa2 = screen.getDisplayNearestPoint({
+                  x: calWin.getBounds().x + 40, y: calWin.getBounds().y + 20
+                }).workArea;
+                const b0 = calWin.getBounds();
+                ipcMain.emit('cal-win-drag-start', {},
+                  { x: b0.x + Math.floor(b0.width / 2), y: b0.y + Math.floor(b0.height / 2) });
+                ipcMain.emit('cal-win-drag-move', {},
+                  { x: wa2.x + wa2.width - 1, y: wa2.y + wa2.height - 1 });
+                ipcMain.emit('cal-win-drag-end', {}, {});
+                await wait2(500);
+                const b1 = calWin.getBounds();
+                const pPet = screen.dipToScreenRect(null, b1);
+                const pWa = screen.dipToScreenRect(null, wa2);
+                diagLog('cal-6-drag', {
+                  拖动前: b0.x + ',' + b0.y,
+                  拖到右下后: b1.x + ',' + b1.y,
+                  右下期望: (wa2.x + wa2.width - b1.width) + ',' + (wa2.y + wa2.height - b1.height),
+                  右边缘余量像素: (pWa.x + pWa.width) - (pPet.x + pPet.width),
+                  下边缘余量像素: (pWa.y + pWa.height) - (pPet.y + pPet.height),
+                  记下位置了吗: !!loadCalPos()
+                });
+
+                /* 打开今天的格子，勾掉第一条，看两边数据是否都变了 */
+                const tick = await calWin.webContents.executeJavaScript(
+                  '(function(){try{' +
+                  'var c=document.querySelector(".cell.today");' +
+                  'if(!c)return {error:"没有今天的格子（当前显示的是"+document.getElementById("title").textContent+"）"};' +
+                  'c.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:2}));' +
+                  'c.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:2}));' +
+                  'var row=document.querySelector("#panelList .pi");' +
+                  'if(!row)return {error:"面板里没有条目"};' +
+                  'var id=row.dataset.id;var txt=row.querySelector(".txt").textContent;' +
+                  'row.click();return {id:id,text:txt};' +
+                  '}catch(e){return {error:String(e&&e.message||e)};}})()', true);
+                await wait2(700);
+                const after = await calWin.webContents.executeJavaScript(
+                  '(function(){var row=document.querySelector("#panelList .pi");' +
+                  'return {面板里标成完成:!!(row&&row.classList.contains("done")),' +
+                  ' 小条也画成完成:document.querySelectorAll(".ev.done").length};})()', true);
+                const stored = await win.webContents.executeJavaScript(
+                  '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                  'var t=(raw.todos||[]).filter(function(x){return x.id===' + JSON.stringify(tick.id) + ';})[0];' +
+                  'return t?{text:t.text,done:!!t.done,prio:t.prio}:null;})()', true);
+                diagLog('cal-7-toggle-done', {
+                  勾的是: tick.text + '（' + tick.id + '）',
+                  日历面板: after.面板里标成完成,
+                  日历小条已完成数: after.小条也画成完成,
+                  主界面存的数据: stored
+                });
+              }
+
+              /* 7) 设计预览：透明窗的 capturePage 只会拿到旧帧（Electron 的老毛病），
+                 所以另开一个【不透明】预览窗、塞一批更密的待办（含一天 5 条 + 已完成的），
+                 摆在屏幕中央，再用整屏截图裁出它 —— 看到的就是真实像素。
+                 顺带验证「一天超过 3 条」时的 +N 溢出显示。 */
+              try {
+                const disp0 = screen.getPrimaryDisplay();
+                const wa0b = disp0.workArea;
+                const pw = CAL_BOX.width, ph = CAL_BOX.height;
+                const preview = new BrowserWindow({
+                  width: pw, height: ph, show: false,
+                  webPreferences: {
+                    /* 离屏渲染：不经过 DWM 合成，抓到的就是页面自己画的那一帧
+                       （可见窗/透明窗的 capturePage 会拿到旧帧或被合成器淡出） */
+                    offscreen: true,
+                    preload: path.join(__dirname, 'cal-preload.js'),
+                    contextIsolation: true, nodeIntegration: false,
+                    backgroundThrottling: false
+                  }
+                });
+                const base0 = new Date();
+                const mk = function (off, hh, mm, prio, text, done) {
+                  const d = new Date(base0.getFullYear(), base0.getMonth(),
+                    base0.getDate() + off, hh, mm, 0, 0);
+                  return {
+                    id: 'pv' + off + '_' + hh + mm, text: text, done: !!done,
+                    dueAt: d.getTime(), prio: prio
+                  };
+                };
+                const demo = [
+                  mk(0, 9, 30, 'high', '给客户回邮件'),
+                  mk(0, 11, 0, 'mid', '交周报'),
+                  mk(0, 14, 0, 'mid', '买牛奶'),
+                  mk(0, 16, 30, 'low', '整理下载文件夹'),
+                  mk(0, 19, 0, 'low', '给绿萝浇水', true),
+                  mk(1, 10, 0, 'high', '体检'),
+                  mk(2, 15, 0, 'mid', '开组会'),
+                  mk(3, 20, 0, 'low', '看电影'),
+                  mk(-3, 9, 0, 'mid', '已经过去的事', true),
+                  mk(5, 12, 0, 'high', '交房租'),
+                  mk(6, 8, 30, 'low', '晨跑'),
+                  mk(9, 18, 0, 'mid', '朋友生日'),
+                  mk(12, 9, 0, 'high', '季度总结'),
+                  mk(17, 20, 30, 'mid', '看球赛')
+                ];
+                const demoMemos = [
+                  { id: 'pm1', text: '周三上午9点参加部门会议', done: false, at: base0.getTime() },
+                  { id: 'pm2', text: '周四下午5点前往金融中心参加培训课程', done: false, at: base0.getTime() },
+                  { id: 'pm3', text: '购物清单：生日蛋糕、红酒、水果、百事可乐、牛排', done: false, at: base0.getTime() },
+                  { id: 'pm4', text: '周日上午10点飞机飞往上海出差', done: false, at: base0.getTime() },
+                  { id: 'pm5', text: '已经办完的一件事', done: true, at: base0.getTime() }
+                ];
+                /* 离屏渲染：抓 'paint' 事件给的那一帧最靠谱
+                   （可见窗会被 DWM 淡出/旧帧坑，隐藏窗的合成器又不一定产新帧） */
+                let lastFrame = null;
+                preview.webContents.on('paint', function (ev, dirty, image) {
+                  lastFrame = image;
+                });
+                preview.loadFile(path.join(__dirname, 'cal.html'));
+                await new Promise(function (r) { preview.webContents.once('did-finish-load', r); });
+                /* 页面本身是透明底（真窗口靠窗口透明看桌面），预览里垫一层中性灰：
+                   ⚠️ 别用近黑 —— 上次垫 #0d1720，结果被误看成「卡片外面有个直角黑框」 */
+                preview.webContents.insertCSS('html,body{background:#8d99a3 !important}');
+                preview.webContents.setFrameRate(30);
+                preview.webContents.send('cal-todos', demo);
+                preview.webContents.send('cal-memos', demoMemos);
+                preview.webContents.send('cal-fit', { width: pw, height: ph });
+                await wait2(1200);
+                const shot0 = lastFrame || await preview.capturePage();
+                fs.writeFileSync(path.join(__dirname, '.diag', 'calendar-demo.png'), shot0.toPNG());
+                diagLog('cal-6-shot', {
+                  来源: lastFrame ? 'paint 事件' : 'capturePage',
+                  尺寸: shot0.getSize()
+                });
+                /* 顺手再截一张深色主题的 */
+                preview.webContents.send('cal-style', { theme: 'dark', opacity: 97 });
+                await wait2(900);
+                if (lastFrame) {
+                  fs.writeFileSync(path.join(__dirname, '.diag', 'calendar-demo-dark.png'),
+                    lastFrame.toPNG());
+                }
+                /* 再来一张「不透明度调到 45%」的：验证网格和色条一起淡（不再有实心白格） */
+                preview.webContents.send('cal-style', { theme: 'light', opacity: 45 });
+                await wait2(900);
+                if (lastFrame) {
+                  fs.writeFileSync(path.join(__dirname, '.diag', 'calendar-demo-fade.png'),
+                    lastFrame.toPNG());
+                }
+                preview.webContents.send('cal-style', { theme: 'light', opacity: 97 });
+                await wait2(400);
+                /* 最后一张：点开「今天」那一格，截当天清单（带 ✏️ 编辑 / 🗑 删除） */
+                await preview.webContents.executeJavaScript(
+                  '(function(){var c=document.querySelector(".cell.today");' +
+                  'if(!c)return false;' +
+                  'c.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:9}));' +
+                  'c.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:9}));' +
+                  'return true;})()', true);
+                await wait2(900);
+                if (lastFrame) {
+                  fs.writeFileSync(path.join(__dirname, '.diag', 'calendar-demo-panel.png'),
+                    lastFrame.toPNG());
+                }
+                diagLog('cal-6-demo', await preview.webContents.executeJavaScript(
+                  '(function(){var c=document.querySelector(".cell.today");' +
+                  'return {今天的小条:c?c.querySelectorAll(".ev").length:-1,' +
+                  ' 溢出标记:c&&c.querySelector(".more")?c.querySelector(".more").textContent:"(无)",' +
+                  ' 已完成的小条:document.querySelectorAll(".ev.done").length,' +
+                  ' 全部小条:document.querySelectorAll(".ev").length,' +
+                  ' 左栏备忘:document.querySelectorAll(".memo").length,' +
+                  ' 已完成的备忘:document.querySelectorAll(".memo.done").length,' +
+                  ' 农历示例:(document.querySelector(".cell .lunar")||{}).textContent||"(无)"};})()', true));
+                preview.destroy();
+              } catch (e7) { diagLog('cal-demo-error', String(e7 && e7.message || e7)); }
+              /* 7.5) 当天清单里的「🗑 删除」：先就地问一句，确认后两边都得没 */
+              const delBefore = await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'return (raw.todos||[]).length;})()', true);
+              const delStep = await calWin.webContents.executeJavaScript(
+                '(function(){var b=document.querySelector(\'#panelList button[data-act="del"]\');' +
+                'if(!b)return {error:"清单里没有删除按钮"};b.click();' +
+                'var c=document.querySelector(".pi.confirming");' +
+                'var txt=c?c.querySelector(".confirm-txt").textContent:null;' +
+                'var ok=c?c.querySelector(\'button[data-act="ok"]\'):null;' +
+                'if(ok)ok.click();' +
+                'return {确认条出来了:!!c, 确认文案:txt};})()', true);
+              await wait2(800);
+              const delAfter = await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'return (raw.todos||[]).length;})()', true);
+              const delCal = await calWin.webContents.executeJavaScript(
+                '(function(){var c=document.querySelector(".cell.today");' +
+                'return {今天还剩几条:c?c.querySelectorAll(".ev").length:-1,' +
+                ' 面板还剩几行:document.querySelectorAll("#panelList .pi").length};})()', true);
+              diagLog('cal-7b-delete', {
+                交互: delStep,
+                主界面待办数: delBefore + ' → ' + delAfter,
+                真的删掉了: delAfter === delBefore - 1,
+                日历: delCal
+              });
+            }
+          }
           /* 退出还原自检：开护眼 → 记下色温 → 走正常退出（app.quit）。
              外面在进程结束后再读一次伽马表：回到原值才算通过。 */
           if (DIAG.eyequit) {
@@ -913,6 +1566,82 @@ function createWindow() {
             if (moyuRunning) moyuBack();
             await new Promise(function (r) { setTimeout(r, 1600); });
             diagLog('tap-4-restored', { running: moyuRunning });
+
+            /* 用户报的场景：连按两下 → 隔很久 → 再按一下，绝不能摸鱼。
+               注入分两次跑，中间在 Node 这边真的等 2.5 秒（远超 500ms 的间隔）。 */
+            const injectTaps = function (times) {
+              const lines = [
+                'Add-Type @"',
+                'using System; using System.Runtime.InteropServices;',
+                'public class KkInjSeq {',
+                '  [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);',
+                '  public static void Tap(int vk, int hold) { keybd_event((byte)vk,0,0,IntPtr.Zero); System.Threading.Thread.Sleep(hold); keybd_event((byte)vk,0,2,IntPtr.Zero); }',
+                '}',
+                '"@',
+                'for ($i = 0; $i -lt ' + times + '; $i++) { [KkInjSeq]::Tap(0x11, 60); Start-Sleep -Milliseconds 110 }'
+              ].join('\n');
+              spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                '-EncodedCommand', Buffer.from(lines, 'utf16le').toString('base64')],
+                { windowsHide: true, stdio: 'ignore' });
+            };
+            diagLog('tap-6-前两下', { running: moyuRunning, note: '先按两下' });
+            injectTaps(2);
+            await new Promise(function (r) { setTimeout(r, 900); });
+            diagLog('tap-7-等很久之后第三下', { running: moyuRunning, note: '隔 2.5 秒再按第三下' });
+            await new Promise(function (r) { setTimeout(r, 1600); });
+            injectTaps(1);
+            await new Promise(function (r) { setTimeout(r, 2000); });
+            diagLog('tap-8-隔很久按第三下的结果', {
+              running: moyuRunning,
+              判定: moyuRunning ? '❌ 不该触发却触发了' : '✅ 没触发（正确）'
+            });
+            if (moyuRunning) moyuBack();
+            await new Promise(function (r) { setTimeout(r, 1200); });
+
+            /* 正常连击还得能触发：两下之后隔 350ms（仍在窗口内）再按第三下 */
+            injectTaps(2);
+            await new Promise(function (r) { setTimeout(r, 380); });
+            injectTaps(1);
+            await new Promise(function (r) { setTimeout(r, 1800); });
+            diagLog('tap-9-正常连击三下', {
+              running: moyuRunning,
+              判定: moyuRunning ? '✅ 正常触发' : '❌ 该触发却没触发'
+            });
+            if (moyuRunning) moyuBack();
+            await new Promise(function (r) { setTimeout(r, 1200); });
+
+            /* 用户报的那个 bug 的真身：按住不放时 Windows 会连续补发 keydown
+               （间隔约 31ms，没有 keyup）。以前每一下都算「一次连击」，
+               于是「前两下 + 第三下按久一点」就凑够三下，凭空摸鱼。
+               注入器不发 keyup 就复刻了这个自动重复。 */
+            const injectHold = function (downs, gapMs) {
+              const lines = [
+                'Add-Type @"',
+                'using System; using System.Runtime.InteropServices;',
+                'public class KkInjHold {',
+                '  [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);',
+                '  public static void Hold(int vk, int downs, int gap) {',
+                '    keybd_event((byte)vk,0,0,IntPtr.Zero);',
+                '    for (int i = 1; i < downs; i++) { System.Threading.Thread.Sleep(gap); keybd_event((byte)vk,0,0,IntPtr.Zero); }',
+                '    System.Threading.Thread.Sleep(60); keybd_event((byte)vk,0,2,IntPtr.Zero);',
+                '  }',
+                '}',
+                '"@',
+                '[KkInjHold]::Hold(0x11, ' + downs + ', ' + gapMs + ')'
+              ].join('\n');
+              spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                '-EncodedCommand', Buffer.from(lines, 'utf16le').toString('base64')],
+                { windowsHide: true, stdio: 'ignore' });
+            };
+            diagLog('tap-10-长按前', { running: moyuRunning, note: '不预先按键，直接按住不放（模拟自动重复）' });
+            injectHold(4, 40);          // 一次长按里补发 4 个 keydown（真实的自动重复就是这个样子）
+            await new Promise(function (r) { setTimeout(r, 2000); });
+            diagLog('tap-11-长按的结果', {
+              running: moyuRunning,
+              判定: moyuRunning ? '❌ 一次长按被算成连击（bug 复现）' : '✅ 一次长按没被算成连击'
+            });
+            if (moyuRunning) moyuBack();
+            await new Promise(function (r) { setTimeout(r, 1200); });
 
             /* 关掉连击：钩子进程必须被收掉 */
             moyuTapOn = false;
@@ -1136,6 +1865,7 @@ function refreshTrayMenu() {
   const tpl = [
     { label: '显示主界面', click: showWindow },
     { label: '桌面宠物（独立小窗，可与主界面同时显示）', type: 'checkbox', checked: petOn, click: (mi) => setPetOn(mi.checked) },
+    { label: '桌面日历（桌面挂件：左边备忘录 + 右边月历）', type: 'checkbox', checked: calOn, click: (mi) => setCalOn(mi.checked, true) },
     { type: 'separator' },
     { label: '🕰 十二时辰对照表', click: () => { showWindow(); send('show-shichen'); } },
     { label: '＋ 添加提醒事项', click: () => { showWindow(); send('add-item'); } },
@@ -1176,9 +1906,27 @@ function alertNow(id) {
   send('tray-alert', id);
 }
 
+/* 用户可以把主界面推到屏幕外面去（暂时不挡东西）。这时候从托盘 / 菜单
+   「显示主界面」把它叫出来，得先把它拉回屏内 —— 否则点半天没反应，
+   会以为程序坏了。窗口只要不是「完整地在某块屏里」，就整体拉回工作区。 */
+function rescueWindowIntoView() {
+  if (!win || win.isDestroyed()) return false;
+  const b = win.getBounds();
+  const d = displayOf(b.x + Math.max(1, b.width) / 2, b.y + Math.max(1, b.height) / 2);
+  const wa = d.workArea;
+  const fullyInside = b.x >= wa.x && b.y >= wa.y &&
+    b.x + b.width <= wa.x + wa.width && b.y + b.height <= wa.y + wa.height;
+  if (fullyInside) return false;
+  const pos = clampToWorkArea(b.x, b.y, b.width, b.height,
+    { x: wa.x + wa.width / 2, y: wa.y + wa.height / 2 }, winInsetDip());
+  win.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
+  return true;
+}
+
 function showWindow() {
   if (!win) { createWindow(); return; }
   if (win.isMinimized()) win.restore();
+  rescueWindowIntoView();
   win.show();
   win.focus();
 }
@@ -1347,6 +2095,12 @@ function applyPetDisplay() {
   layoutPetWin(true);
 }
 
+/* 桌面日历同理：跟着自己所在的屏重新摆一次 */
+function applyCalDisplay() {
+  if (!calWin || calWin.isDestroyed()) return;
+  layoutCalWin();
+}
+
 /* 勾选 / 取消「桌面宠物」 */
 function setPetOn(on) {
   petOn = !!on;
@@ -1397,6 +2151,411 @@ function setPetSkin(id) {
 /* 主界面「宠物形象」下拉框切换 → 主进程统一改桌面宠物（缺这条桌面宠物就不会变） */
 ipcMain.on('skin-changed', (e, id) => { setPetSkin(id); });
 
+/* ============================================================== 桌面日历
+   桌面上的待办日历挂件：左边备忘录、右边月历，每天格子里按优先级画当天的待办。
+   和桌面宠物一样是独立小窗（透明 + 无边框 + 置顶 + 不进任务栏），
+   但数据不归主进程算 —— 主界面把待办/备忘录推过来，这里只做缓存 + 转发：
+       主界面（localStorage 里才是真数据）→ 'cal-todos'/'cal-memos' → 缓存 → 日历窗
+   窗口尺寸固定 940×600 DIP（k≡1，和主界面同一套 DPI 模型）；
+   ⚠️ resizable:false —— 限位时【不能】加「无边框+可调整大小」那圈余量，
+   否则就会像以前的宠物窗一样贴不到桌面边。 */
+const CAL_BOX = { width: 940, height: 680 };
+let calOn = false;              // 用户是否勾选了「桌面日历」
+let calWin = null;
+let calBooted = false;          // 日历页是否已经画好（画好之前不显示，避免闪空窗）
+let calTodos = [];              // 主界面推过来的待办快照
+let calMemos = [];              // 主界面推过来的备忘录快照
+let calStyle = { theme: 'light', opacity: 97 };   // 主题 + 卡片不透明度（主界面设置页持有）
+let calHome = null;             // 拖动后的位置（重排都按它算）
+let calDragState = null;
+
+/* 查本进程各窗口的真实 Z 序（EnumWindows 就是按 Z 序从上往下列的）。
+   用来验证「开机时日历不许压在主界面上」—— Electron 自己看不到 Z 序。 */
+function windowZOrder() {
+  return new Promise(function (res) {
+    const ps = [
+      '$ErrorActionPreference = "SilentlyContinue"',
+      /* 输出统一转 UTF-8，免得窗口标题里的中文在管道里变乱码 */
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      'Add-Type @"',
+      'using System; using System.Text; using System.Runtime.InteropServices;',
+      'public class KkZ {',
+      '  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr p);',
+      '  [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);',
+      '  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);',
+      '  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);',
+      '  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
+      '  public delegate bool EnumProc(IntPtr h, IntPtr p);',
+      '  public static string Dump(int want) {',
+      '    var sb = new StringBuilder(); int i = 0;',
+      '    EnumWindows(delegate(IntPtr h, IntPtr p) {',
+      '      uint wp; GetWindowThreadProcessId(h, out wp);',
+      '      if (wp == (uint)want && IsWindowVisible(h)) {',
+      '        int n = GetWindowTextLength(h); var s = new StringBuilder(n + 2);',
+      '        GetWindowText(h, s, s.Capacity);',
+      '        sb.Append(i).Append(" | ").Append(s.ToString()).Append("\\n");',
+      '      }',
+      '      i++; return true;',
+      '    }, IntPtr.Zero);',
+      '    return sb.ToString();',
+      '  }',
+      '}',
+      '"@',
+      /* ⚠️ 要传 Electron 自己的 pid：脚本跑在 powershell.exe 里，
+         GetCurrentProcess() 拿到的是 PowerShell 的 pid，那样一个窗口都查不到 */
+      'Write-Output ([KkZ]::Dump(' + process.pid + '))'
+    ].join('\n');
+    psRun(ps, function (e, o) { res(String(o || '').trim()); });
+  });
+}
+
+/* 日历窗位置持久化：拖到哪儿下次还在哪儿（和 pet-position.json 一个路子） */
+function calPosFile() {
+  try { return path.join(app.getPath('userData'), 'cal-position.json'); }
+  catch (e) { return null; }
+}
+function loadCalPos() {
+  const f = calPosFile();
+  if (!f) return null;
+  try {
+    const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (j && typeof j.x === 'number' && typeof j.y === 'number') return { x: j.x, y: j.y };
+  } catch (e) { /* 第一次没有 / 文件坏了，就当没存过 */ }
+  return null;
+}
+function saveCalPos(x, y) {
+  const f = calPosFile();
+  if (!f) return;
+  try {
+    fs.writeFileSync(f, JSON.stringify({ x: Math.round(x), y: Math.round(y) }), 'utf8');
+  } catch (e) { /* 存不上不致命 */ }
+}
+/* 存的位置还在不在某块屏的可用区里（拔显示器 / 改分辨率后别让它跑到看不见的地方） */
+function calPosStillOnScreen(p) {
+  if (!p) return false;
+  const wa = displayOf(p.x, p.y).workArea;
+  return p.x >= wa.x && p.y >= wa.y &&
+    p.x <= wa.x + wa.width - 60 && p.y <= wa.y + wa.height - 60;
+}
+
+/* 日历窗该出现在哪：跟着主界面所在的屏走（和宠物同一套判断） */
+function calTargetArea() {
+  let base = null;
+  if (win && !win.isDestroyed()) base = win.getBounds();
+  else if (calWin && !calWin.isDestroyed()) base = calWin.getBounds();
+  const px = base ? base.x + Math.max(1, base.width) / 2 : 0;
+  const py = base ? base.y + 8 : 0;
+  const d = displayOf(px, py);
+  return { display: d, wa: d.workArea };
+}
+
+/* 窗口尺寸：装得下就 940×600，屏幕太小就按可用区缩（页面里有 --fit 跟着缩） */
+function calWindowBox(wa) {
+  return {
+    width: Math.max(320, Math.min(CAL_BOX.width, Math.max(1, wa.width))),
+    height: Math.max(260, Math.min(CAL_BOX.height, Math.max(1, wa.height)))
+  };
+}
+
+function createCalWindow() {
+  if (calWin && !calWin.isDestroyed()) return calWin;
+  const t = calTargetArea();
+  const box = calWindowBox(t.wa);
+
+  /* 初始位置：优先用上次拖到的地方，否则默认右上角（宠物默认在右下，错开） */
+  const saved = loadCalPos();
+  const homePos = calPosStillOnScreen(saved)
+    ? { x: saved.x, y: saved.y }
+    : { x: t.wa.x + t.wa.width - box.width - 28, y: t.wa.y + 28 };
+
+  calWin = new BrowserWindow({
+    x: homePos.x,
+    y: homePos.y,
+    width: box.width,
+    height: box.height,
+    minWidth: 200, minHeight: 200,
+    frame: false,
+    transparent: true,              // 圆角卡片之外要真透明
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    /* Win11 会给无边框窗口自己加圆角+投影，那圈投影是【直角】的，
+       在卡片圆角外会露出直角痕迹 —— 关掉，圆角完全由 CSS 画 */
+    roundedCorners: false,
+    resizable: false,               // 大小固定，不跟着用户拉
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,              // 不进任务栏
+    /* ⚠️ 故意【不】置顶：它是摆在桌面上的挂件，置顶会把别的软件全挡住，
+       点别的窗口就让到后面去，要看它用托盘菜单或主界面那个勾再叫出来。 */
+    focusable: true,                // 要能点格子、能拖
+    show: false,
+    title: '桌面日历',
+    icon: iconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, 'cal-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+      spellcheck: false
+    }
+  });
+  calWin.loadFile(path.join(__dirname, 'cal.html'));
+
+  /* 拖动过程中随时记下位置（松手时再落盘），跟宠物窗一个逻辑 */
+  calWin.on('move', () => {
+    if (!calWin || calWin.isDestroyed()) return;
+    const b = calWin.getBounds();
+    calHome = { x: b.x, y: b.y, width: b.width, height: b.height };
+  });
+  calWin.on('show', () => { if (calWin) calWin.webContents.send('cal-win-visible', true); });
+  calWin.on('closed', () => { calWin = null; calBooted = false; });
+  return calWin;
+}
+
+/* 按可用区摆好日历窗（位置在界内 + 尺寸适配） */
+function layoutCalWin() {
+  if (!calWin || calWin.isDestroyed()) return null;
+  const b = calWin.getBounds();
+  const d = displayOf(b.x + Math.max(1, b.width) / 2, b.y + Math.max(1, b.height) / 2);
+  const box = calWindowBox(d.workArea);
+  /* 位置保持不动，只把尺寸和越界位置拉回来（resizable:false，所以不加 inset） */
+  const pos = clampToWorkArea(b.x, b.y, box.width, box.height,
+    { x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  calWin.setMinimumSize(1, 1);
+  calWin.setBounds({ x: pos.x, y: pos.y, width: box.width, height: box.height });
+  calHome = { x: pos.x, y: pos.y, width: box.width, height: box.height };
+  sendCalFit();
+  return calHome;
+}
+
+/* 告诉日历页「窗口实际多大」，页面按它算整体缩放 */
+function sendCalFit() {
+  if (!calWin || calWin.isDestroyed()) return;
+  const b = calWin.getBounds();
+  calWin.webContents.send('cal-fit', { width: b.width, height: b.height });
+}
+
+/* 待办数据统一从这里进：主界面推的、自检造的，都走同一条路 */
+function applyCalTodos(list) {
+  calTodos = Array.isArray(list) ? list.filter(function (t) {
+    return t && t.id && t.dueAt;
+  }).map(function (t) {
+    return {
+      id: String(t.id),
+      text: String(t.text == null ? '' : t.text).slice(0, 60),
+      done: !!t.done,
+      dueAt: +t.dueAt || 0,
+      prio: (t.prio === 'high' || t.prio === 'low') ? t.prio : 'mid'
+    };
+  }) : [];
+  if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-todos', calTodos);
+  return calTodos;
+}
+
+/* 主题 / 不透明度：主界面设置页推过来，这里只做缓存 + 转发（页面一加载就补发一次） */
+function applyCalStyle(st) {
+  if (st && typeof st === 'object') {
+    calStyle = {
+      theme: st.theme === 'dark' ? 'dark' : 'light',
+      opacity: Math.min(100, Math.max(30, Math.round(Number(st.opacity) || 97)))
+    };
+  }
+  if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-style', calStyle);
+  return calStyle;
+}
+
+/* 备忘录同理（左边那一栏） */
+function applyCalMemos(list) {
+  calMemos = Array.isArray(list) ? list.filter(function (m) {
+    return m && m.id && m.text;
+  }).map(function (m) {
+    return {
+      id: String(m.id),
+      text: String(m.text).slice(0, 500),
+      done: !!m.done,
+      at: +m.at || 0
+    };
+  }) : [];
+  if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-memos', calMemos);
+  return calMemos;
+}
+
+/* 勾选 / 取消「桌面日历」。
+   raise=true 表示这次是【用户主动点的】（主界面勾选 / 托盘菜单）：要把窗口提到最前，
+   否则它不置顶、可能被别的窗口压着，用户会以为没生效；
+   开机恢复（raise=false）就安静地显示，不抢主界面焦点。 */
+function setCalOn(on, raise) {
+  calOn = !!on;
+  if (calOn) showCal(!!raise);
+  else if (calWin && !calWin.isDestroyed()) calWin.hide();
+  refreshTrayMenu();
+  if (win && !win.isDestroyed()) win.webContents.send('cal-on-changed', calOn);
+  return calOn;
+}
+
+/* 把主界面压回日历上面。
+   日历是「桌面挂件」，本来就不该压着主界面；但它是【后创建】的窗口，
+   一开机（上次勾着日历）它会排在 Z 序最上面，把主界面盖住、点不动（用户报过）。
+   所以凡是「不是用户主动弹出日历」的场合，显示完日历都要把主界面 moveTop 一次。
+   moveTop 只改 Z 序、不激活窗口，不会把焦点从别的软件抢过来。 */
+function raiseMainAboveCal() {
+  if (!win || win.isDestroyed()) return false;
+  if (!win.isVisible()) {
+    /* 开机那一瞬间的竞态：主界面还没显示出来（它等 ready-to-show），
+       日历可能先显示了。那就等主界面一显示就把它压回上面去。 */
+    try { win.once('show', function () { raiseMainAboveCal(); }); } catch (e) { }
+    return false;
+  }
+  try { win.moveTop(); return true; } catch (e) { return false; }
+}
+
+function showCal(raise) {
+  const w = createCalWindow();
+  layoutCalWin();
+  const doShow = function () {
+    if (!calWin || calWin.isDestroyed()) return;
+    if (raise) calWin.show();
+    else {
+      calWin.showInactive();
+      raiseMainAboveCal();
+    }
+  };
+  if (calBooted) { doShow(); return; }
+  w.webContents.once('did-finish-load', function () {
+    if (!calOn || !calWin || calWin.isDestroyed()) return;
+    calWin.webContents.send('cal-todos', calTodos);
+    calWin.webContents.send('cal-memos', calMemos);
+    calWin.webContents.send('cal-style', calStyle);
+    sendCalFit();
+    doShow();
+  });
+}
+
+ipcMain.handle('cal-on', (e, on) => setCalOn(on, true));
+ipcMain.handle('cal-on-get', () => calOn);
+ipcMain.handle('cal-hide', () => setCalOn(false));
+
+/* 主界面推待办/备忘录/主题（每次存盘或改设置都会推一次） */
+ipcMain.on('cal-todos', (e, list) => { applyCalTodos(list); });
+ipcMain.on('cal-memos', (e, list) => { applyCalMemos(list); });
+ipcMain.on('cal-style', (e, st) => { applyCalStyle(st); });
+
+/* 日历页画好了：把缓存的数据和窗口尺寸发过去 */
+ipcMain.on('cal-ready', () => {
+  calBooted = true;
+  if (!calWin || calWin.isDestroyed()) return;
+  calWin.webContents.send('cal-todos', calTodos);
+  calWin.webContents.send('cal-memos', calMemos);
+  calWin.webContents.send('cal-style', calStyle);
+  sendCalFit();
+  if (calOn) {
+    /* ⚠️ 这里【不能】用 show()：页面加载完就激活会抢主界面的焦点，
+       而且要紧接着把主界面压回上面去（见 raiseMainAboveCal 的注释） */
+    calWin.showInactive();
+    raiseMainAboveCal();
+  }
+});
+
+/* 日历窗拖动：和宠物同一套限位（不带主窗口那圈余量） */
+ipcMain.on('cal-win-drag-start', (e, pt) => {
+  if (!calWin || calWin.isDestroyed() || !pt) return;
+  calDragState = { x: pt.x, y: pt.y, bounds: calWin.getBounds() };
+});
+
+ipcMain.on('cal-win-drag-move', (e, pt) => {
+  if (!calWin || calWin.isDestroyed() || !calDragState || !pt) return;
+  const b = calDragState.bounds;
+  const pos = clampToWorkArea(
+    Math.round(b.x + (pt.x - calDragState.x)),
+    Math.round(b.y + (pt.y - calDragState.y)),
+    b.width, b.height, pt
+  );
+  calWin.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
+});
+
+ipcMain.on('cal-win-drag-end', () => {
+  if (!calWin || calWin.isDestroyed()) { calDragState = null; return; }
+  const b = calWin.getBounds();
+  const pos = clampToWorkArea(b.x, b.y, b.width, b.height,
+    { x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  if (pos.x !== b.x || pos.y !== b.y) {
+    calWin.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
+  }
+  const nb = calWin.getBounds();
+  calHome = { x: nb.x, y: nb.y, width: nb.width, height: nb.height };
+  saveCalPos(nb.x, nb.y);
+  calDragState = null;
+});
+
+/* 日历里勾「完成」：转给主界面改数据（真数据在它那儿），改完它会推回来 */
+ipcMain.on('cal-toggle-todo-req', (e, id) => {
+  if (!id || !win || win.isDestroyed()) return;
+  win.webContents.send('cal-toggle-todo', String(id));
+});
+
+/* 左栏勾备忘录完成：同上 */
+ipcMain.on('cal-toggle-memo-req', (e, id) => {
+  if (!id || !win || win.isDestroyed()) return;
+  win.webContents.send('cal-toggle-memo', String(id));
+});
+
+/* 左栏直接新增一条备忘：转给主界面写进同一份数据，写完照常推回来 */
+ipcMain.on('cal-add-memo-req', (e, text) => {
+  const t = String(text == null ? '' : text).trim();
+  if (!t || !win || win.isDestroyed()) return;
+  win.webContents.send('cal-add-memo', t.slice(0, 500));
+});
+
+/* 当天清单里点「✏️」：打开主界面的「修改待办」弹窗（真数据在那边） */
+ipcMain.on('cal-edit-todo-req', (e, id) => {
+  if (!id || !win || win.isDestroyed()) return;
+  showWindow();
+  win.webContents.send('cal-edit-todo', String(id));
+});
+
+/* 当天清单里点「🗑」并确认：让主界面删掉（日历里已经确认过一次，不再弹系统对话框） */
+ipcMain.on('cal-delete-todo-req', (e, id) => {
+  if (!id || !win || win.isDestroyed()) return;
+  win.webContents.send('cal-delete-todo', String(id));
+});
+
+/* 日历右上角那个 🌙/☀：真值（settings.calTheme）在主界面，转给它去翻，翻完它会推回来 */
+ipcMain.on('cal-toggle-theme-req', () => {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('cal-toggle-theme');
+});
+
+/* 右上角「＋」：把主界面叫出来并直接打开「新增待办」弹窗 */
+ipcMain.on('cal-add-todo', () => {
+  if (!win || win.isDestroyed()) return;
+  showWindow();
+  win.webContents.send('cal-add-todo');
+});
+
+/* 右上角「⚙」：打开主界面的设置页 */
+ipcMain.on('cal-open-settings', () => {
+  if (!win || win.isDestroyed()) return;
+  showWindow();
+  send('show-settings');
+});
+
+/* 日历窗的右键菜单。和宠物一样拆成模板，方便自检。 */
+function calMenuTemplate() {
+  return [
+    { label: '上一月', click: () => sendCalNav('prev') },
+    { label: '回到今天', click: () => sendCalNav('today') },
+    { label: '下一月', click: () => sendCalNav('next') },
+    { type: 'separator' },
+    { label: '打开主界面', click: () => { showWindow(); send('show-todo'); } },
+    { label: '隐藏桌面日历', click: () => { setCalOn(false); } }
+  ];
+}
+function sendCalNav(dir) {
+  if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-nav', dir);
+}
+ipcMain.handle('cal-win-menu', () => Menu.buildFromTemplate(calMenuTemplate()));
+
 /* ------------------------------------------------------------ 宠物说话
    气泡内容和「下一次提醒」在主界面那边算（它才有那些数据），所以这里转发一次：
    宠物窗点一下 → 向主界面要文字 → 拿到后显示气泡。
@@ -1432,6 +2591,9 @@ function petMenuTemplate() {
   const tpl = [
     { label: '显示主界面', click: () => { showWindow(); } },
     { label: '隐藏桌面宠物', click: () => { setPetOn(false); } },
+    /* 桌面日历的开关也放一份在这儿：用户在宠物身上右键就能顺手把日历开出来，
+       不用专门绕回主界面（托盘菜单里也有同一个） */
+    { label: '📅 显示桌面日历', type: 'checkbox', checked: calOn, click: (mi) => { setCalOn(mi.checked, true); } },
     { type: 'separator' },
     { label: '🕰 十二时辰对照表', click: () => { showWindow(); send('show-shichen'); } },
     { label: '＋ 添加提醒事项', click: () => { showWindow(); send('add-item'); } },
@@ -2009,8 +3171,12 @@ function winInsetDip() {
    Electron 的实现里那圈只在 has_thick_frame() && IsResizable() 时才加：
        if (window_->has_frame() || !window_->has_thick_frame() || !window_->IsResizable()) return {};
    宠物窗是 resizable:false，本身没有那圈，给它留余量就会「贴不到桌面边」。
-   所以 inset 由调用方显式传，主窗口传 winInsetDip()，宠物窗不传（0）。 */
-function clampToWorkArea(x, y, w, h, pt, inset) {
+   所以 inset 由调用方显式传，主窗口传 winInsetDip()，宠物窗不传（0）。
+
+   keep：允许窗口最多「只留这么多 DIP 露在屏幕里」。
+   ⚠️ 这是主窗口才有的：用户要能把界面推到屏幕外面去（暂时不挡东西），
+   只留一条边方便再拖回来。0 = 不许越界（宠物/日历还是老规矩，老老实实待在屏内）。 */
+function clampToWorkArea(x, y, w, h, pt, inset, keep) {
   let wa;
   try {
     wa = screen.getDisplayNearestPoint({ x: Math.round(pt.x), y: Math.round(pt.y) }).workArea;
@@ -2018,20 +3184,28 @@ function clampToWorkArea(x, y, w, h, pt, inset) {
     wa = screen.getPrimaryDisplay().workArea;
   }
   const insetDip = Math.max(0, Math.round(Number(inset) || 0));
+  const keepDip = Math.max(0, Math.round(Number(keep) || 0));
+  /* 允许推到屏幕外的深度（窗口比 keep 大多少，就能把多少推出屏幕） */
+  const overX = keepDip > 0 ? Math.max(0, w - keepDip) : 0;
+  const overY = keepDip > 0 ? Math.max(0, h - keepDip) : 0;
   /* 窗口比工作区还大时（理论上不该发生，但万一）：别把它钉死在左上角 ——
      那会变成「完全拖不动」，而且右/下边缘在屏幕外也就「缩放不了」。
      这种情况允许在「左上角贴边」到「右下边贴边」之间挪动。 */
   const tooWide = w > wa.width;
   const tooTall = h > wa.height;
-  const minX = tooWide ? wa.x - (w - wa.width) : wa.x;
-  const minY = tooTall ? wa.y - (h - wa.height) : wa.y;
-  const maxX = wa.x + Math.max(0, wa.width - w) - (tooWide ? 0 : insetDip);
-  const maxY = wa.y + Math.max(0, wa.height - h) - (tooTall ? 0 : insetDip);
+  const minX = tooWide ? wa.x - (w - wa.width) : wa.x - overX;
+  const minY = tooTall ? wa.y - (h - wa.height) : wa.y - overY;
+  const maxX = wa.x + Math.max(0, wa.width - w) - (tooWide ? 0 : insetDip) + overX;
+  const maxY = wa.y + Math.max(0, wa.height - h) - (tooTall ? 0 : insetDip) + overY;
   return {
     x: Math.min(Math.max(x, minX), Math.max(minX, maxX)),
     y: Math.min(Math.max(y, minY), Math.max(minY, maxY))
   };
 }
+
+/* 主窗口最多能被推到「只留这么多 DIP 露在屏里」。
+   取 72：露出来的那一条通常还盖着自绘标题栏（48 DIP），用户能直接抓住再拖回来。 */
+const WIN_EDGE_KEEP = 72;
 
 ipcMain.on('drag-start', (e, pt) => {
   if (!win || !pt) return;
@@ -2046,17 +3220,18 @@ ipcMain.on('drag-move', (e, pt) => {
   const pos = clampToWorkArea(
     Math.round(b.x + (pt.x - dragState.x)),
     Math.round(b.y + (pt.y - dragState.y)),
-    b.width, b.height, pt, winInsetDip()
+    b.width, b.height, pt, winInsetDip(), WIN_EDGE_KEEP
   );
   win.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
 });
 
 ipcMain.on('drag-end', () => {
-  // 松手再钳一次：万一窗口尺寸或屏幕布局变了，也不会停在界外
+  // 松手再钳一次：万一窗口尺寸或屏幕布局变了，也不会停到「一条边都不剩」的地方
+  //（用户可以把界面推出屏幕，但必须留一条能抓住的边）
   if (win && !win.isDestroyed()) {
     const b = win.getBounds();
     const pos = clampToWorkArea(b.x, b.y, b.width, b.height,
-      { x: b.x + b.width / 2, y: b.y + b.height / 2 }, winInsetDip());
+      { x: b.x + b.width / 2, y: b.y + b.height / 2 }, winInsetDip(), WIN_EDGE_KEEP);
     if (pos.x !== b.x || pos.y !== b.y) {
       win.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
     }
@@ -2085,6 +3260,11 @@ ipcMain.on('state', (e, s) => {
   /* 主界面刚启动时同步过来的桌面宠物开关与形象/大小（主进程才是权威） */
   if (typeof s.petOn === 'boolean' && s.petOn !== petOn) {
     setPetOn(s.petOn);
+    changed = true;
+  }
+  /* 桌面日历经开关同理（这条是主界面同步过来的，不是用户点击，所以不抢焦点） */
+  if (typeof s.calOn === 'boolean' && s.calOn !== calOn) {
+    setCalOn(s.calOn, false);
     changed = true;
   }
   if (typeof s.petSound === 'boolean' && s.petSound !== petSoundOn) {
@@ -2657,7 +3837,8 @@ function moyuSnapshot() {
     tapKeys: MOYU_TAP_KEYS.map(function (k) { return { id: k.id, label: k.label }; }),
     tapReady: moyuTapReady,
     tapError: moyuTapError,
-    tapGap: MOYU_TAP_GAP
+    tapGap: MOYU_TAP_GAP,
+    tapWindow: MOYU_TAP_WINDOW
   };
 }
 
@@ -3169,7 +4350,11 @@ function moyuToggle() {
    7) 这个功能默认关：全局键盘钩子要拉一个长驻进程，而且杀毒软件对钩子比较敏感，
       必须由用户明确勾选才启用。
 */
-const MOYU_TAP_GAP = 500;         // 两次连击之间最多隔多久（毫秒）
+const MOYU_TAP_GAP = 500;         // 相邻两下之间最多隔多久（毫秒）
+/* 一整串连击的总时长上限：三下必须在这段时间内按完。
+   两条一起用才符合直觉：两两不超过 0.5 秒，整串不超过 1 秒。
+   （另外长按的自动重复键一律不算 —— 见 MOYU_TAP_WINAPI 里的 _down） */
+const MOYU_TAP_WINDOW = 1000;
 const MOYU_TAP_POLL = 120;        // 轮询触发文件的间隔
 const MOYU_TAP_WATCH = 5000;      // 看门狗间隔：钩子进程死了要能自己起来
 
@@ -3228,29 +4413,50 @@ const MOYU_TAP_WINAPI = [
   '  const int WH_KEYBOARD_LL = 13;',
   '  const uint WM_KEYDOWN = 0x0100;',
   '  const uint WM_SYSKEYDOWN = 0x0104;',
+  '  const uint WM_KEYUP = 0x0101;',
+  '  const uint WM_SYSKEYUP = 0x0105;',
   '',
   '  static HookProc _proc;               // 必须留引用，被 GC 掉钩子就失效了',
   '  static HashSet<int> _keys = new HashSet<int>();',
+  '  static HashSet<int> _down = new HashSet<int>();   // 现在按着的键（识别长按的自动重复）',
   '  static string _trigger = "";',
-  '  static int _gap = 500;',
+  '  static int _gap = 500;            // 相邻两下之间最多隔多久',
+  '  static int _window = 1000;        // 一整串连击必须在这么久之内完成',
   '  static int _count = 0;',
   '  static int _lastDown = 0;',
+  '  static int _firstDown = 0;        // 这一串的第一下，用来限制整串的总时长',
   '  static bool _otherSince = false;     // 两次连击中间按过别的键 → 这一串不算',
   '',
   '  static IntPtr OnKey(int nCode, IntPtr wParam, IntPtr lParam) {',
   '    if (nCode >= 0) {',
   '      uint m = (uint)wParam;',
-  '      if (m == WM_KEYDOWN || m == WM_SYSKEYDOWN) {',
+  '      if (m == WM_KEYUP || m == WM_SYSKEYUP) {',
+  '        /* 松开：把「按着」的状态清掉。必须在最前面处理，所有键都要清。 */',
+  '        var ku = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));',
+  '        _down.Remove((int)ku.vkCode);',
+  '      } else if (m == WM_KEYDOWN || m == WM_SYSKEYDOWN) {',
   '        var kb = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));',
   '        int vk = (int)kb.vkCode;',
   '        int now = Environment.TickCount;',
   '        if (_keys.Contains(vk)) {',
-  '          if (_otherSince || now - _lastDown > _gap) _count = 0;',
+  '          /* 同一个键还按着又来 keydown = 长按产生的自动重复（间隔约 31ms），',
+  '             这【不算】新的一下。否则「前两下 + 第三下按住不放」会被算成三下，',
+  '             凭空触发摸鱼（用户实测报过）。真漏了 keyup 也有兜底：',
+  '             离上一次计数超过 3 秒就当成状态丢了，这一下重新算。 */',
+  '          if (_down.Contains(vk)) {',
+  '            if (now - _lastDown < 3000) return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);',
+  '            _down.Remove(vk);',
+  '          }',
+  '          _down.Add(vk);',
+  '          /* 两条限制：相邻两下不超过 _gap，整串不超过 _window */',
+  '          if (_otherSince || now - _lastDown > _gap || now - _firstDown > _window) _count = 0;',
+  '          if (_count == 0) _firstDown = now;',
   '          _otherSince = false;',
   '          _count++;',
   '          _lastDown = now;',
   '          if (_count >= 3) {',
   '            _count = 0;',
+  '            _down.Clear();',
   '            /* 必须在这里直接写：实测低级钩子的回调不会唤醒 GetMessage，',
   '               置标志等循环去写是等不到的。只有真连击才写，不影响打字。 */',
   '            try { File.WriteAllText(_trigger, ((uint)Environment.TickCount).ToString()); } catch {}',
@@ -3263,13 +4469,15 @@ const MOYU_TAP_WINAPI = [
   '    return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);',
   '  }',
   '',
-  '  public static void Run(string vks, string trigger, string status, int gapMs) {',
+  '  public static void Run(string vks, string trigger, string status, int gapMs, int windowMs) {',
   '    _keys.Clear();',
   '    foreach (var s in vks.Split(new char[] { (char)44 })) {',
   '      int v; if (int.TryParse(s.Trim(), out v)) _keys.Add(v);',
   '    }',
   '    _trigger = trigger;',
   '    _gap = gapMs;',
+  '    _window = windowMs > 0 ? windowMs : gapMs * 2;',
+  '    _down.Clear();',
   '    _proc = new HookProc(OnKey);',
   '    IntPtr hk = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, IntPtr.Zero, 0);',
   '    if (hk == IntPtr.Zero) {',
@@ -3350,7 +4558,7 @@ function moyuTapStart() {
     "$ErrorActionPreference = 'SilentlyContinue'",
     "$ProgressPreference = 'SilentlyContinue'",
     MOYU_TAP_WINAPI,
-    "[KkTap]::Run('" + def.vks + "', '" + trig + "', '" + stat + "', " + MOYU_TAP_GAP + ')'
+    "[KkTap]::Run('" + def.vks + "', '" + trig + "', '" + stat + "', " + MOYU_TAP_GAP + ', ' + MOYU_TAP_WINDOW + ')'
   ].join('\n');
   const b64 = Buffer.from(script, 'utf16le').toString('base64');
   const c = spawn('powershell.exe',

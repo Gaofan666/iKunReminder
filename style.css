@@ -428,7 +428,27 @@ body.anim-off *::after{animation-play-state:paused !important}
 .seg button.on{
   color:#fff;background:linear-gradient(100deg,var(--sky),var(--lake));
   box-shadow:0 0 14px rgba(217,161,95,.4);
-}kbd{
+}
+/* ---------- 待办优先级三档（新增/编辑待办弹窗里那一行）
+   每档一个小色点；选中的那档整块染成这一档自己的颜色，
+   和桌面日历格子里的颜色一一对应（红=高 / 橙=中 / 蓝=低） */
+.prio-seg button{display:inline-flex;align-items:center;gap:6px;padding:6px 14px}
+.prio-seg button::before{
+  content:'';width:8px;height:8px;border-radius:50%;flex:none;background:currentColor;
+}
+.prio-seg button[data-prio=high]::before{background:#e2574f}
+.prio-seg button[data-prio=mid]::before{background:#dd9a2c}
+.prio-seg button[data-prio=low]::before{background:#3f8fd0}
+.prio-seg button[data-prio=high].on{
+  background:linear-gradient(100deg,#ef7a72,#cf4139);box-shadow:0 0 14px rgba(207,65,57,.34);
+}
+.prio-seg button[data-prio=mid].on{
+  background:linear-gradient(100deg,#efb45e,#c9821a);box-shadow:0 0 14px rgba(201,130,26,.34);
+}
+.prio-seg button[data-prio=low].on{
+  background:linear-gradient(100deg,#6fb0e6,#3779b8);box-shadow:0 0 14px rgba(55,121,184,.34);
+}
+kbd{
   font-family:Consolas,monospace;font-size:11px;padding:1px 6px;border-radius:6px;
   background:rgba(74,155,212,.14);border:1px solid var(--line);color:var(--text);
 }

@@ -1,0 +1,302 @@
+/* =========================================================================
+   桌面待办日历窗的样式
+   -------------------------------------------------------------------------
+   浅色卡片（跟主界面同一套配色：白卡 + 青蓝点缀），窗户外圈真透明，
+   所以它摆在桌面上是个「圆角白卡挂件」。左边备忘录、右边月历。
+   三档优先级各一个颜色，格子里的待办条和弹窗里的圆点共用：
+       高 = 红 / 中 = 橙 / 低 = 蓝（和主界面待办弹窗里的色点一一对应）
+   ========================================================================= */
+
+:root{
+  --p-high:#e2574f;  --p-high-2:#cf4139;
+  --p-mid:#dd9a2c;   --p-mid-2:#c9821a;
+  --p-low:#3f8fd0;   --p-low-2:#3779b8;
+
+  --ink:#24373f;
+  --ink-dim:#5c7484;
+  --ink-soft:#8ba0ad;
+  --lake:#3E9AA8;
+  --sky:#4A9BD4;
+  --clay:#D9A15F;
+  --line:rgba(74,120,150,.22);
+  --line-2:rgba(74,120,150,.14);
+  --cell:rgba(255,255,255,.72);
+  --cell-hover:rgba(223,237,246,.85);
+  --cell-out:rgba(240,246,250,.45);
+  --side-w:250px;
+
+  /* 卡片底色用「RGB 三件套」；整卡的不透明度由 --opa 统一控制
+     （见 .cal 的 opacity —— 网格、色条、文字一起淡。不然调了滑杆会出现
+      「卡片透了、但带待办的那格还是实心白」这种不一致，用户报过） */
+  --card-rgb-top:255,255,255;
+  --card-rgb-bot:243,249,253;
+  --opa:.97;
+  --panel-rgb-top:255,255,255;
+  --panel-rgb-bot:240,248,252;
+  --input-bg:#ffffff;
+  --btn-bg:rgba(255,255,255,.7);
+  --btn-hover:#DFEDF6;
+  --pi-hover:rgba(223,237,246,.9);
+  /* 今天那格 / 已完成的小条 / 非本月日期：都要跟着主题走，
+     否则深色主题下「今天」会变成一块白板 */
+  --today-bg:rgba(223,240,248,.95);
+  --today-border:rgba(62,154,168,.75);
+  --today-ink:#2b7f8d;
+  --ev-done-bg:#c3d0d9;
+  --out-ink:#b3c2cc;
+  --bar-bg:rgba(74,120,150,.28);
+}
+
+/* 深色主题：同一套布局换配色（用户在设置里切，或用日历右上角那个 ☀/🌙） */
+:root[data-theme=dark]{
+  --ink:#e8f1f7;
+  --ink-dim:#9db2c0;
+  --ink-soft:#7b8f9d;
+  --line:rgba(140,190,225,.24);
+  --line-2:rgba(140,190,225,.13);
+  --cell:rgba(255,255,255,.055);
+  --cell-hover:rgba(99,182,234,.18);
+  --cell-out:rgba(255,255,255,.025);
+  --card-rgb-top:26,40,52;
+  --card-rgb-bot:13,22,30;
+  --panel-rgb-top:24,37,48;
+  --panel-rgb-bot:12,21,28;
+  --input-bg:#16242f;
+  --btn-bg:rgba(255,255,255,.07);
+  --btn-hover:rgba(99,182,234,.24);
+  --pi-hover:rgba(99,182,234,.16);
+  --today-bg:rgba(99,182,234,.20);
+  --today-border:rgba(99,182,234,.72);
+  --today-ink:#8fd0f5;
+  --ev-done-bg:rgba(255,255,255,.20);
+  --out-ink:#5c6e7b;
+  --bar-bg:rgba(140,190,225,.3);
+}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0;width:100%;height:100%;overflow:hidden;background:transparent;
+  font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  color:var(--ink);
+  user-select:none;-webkit-user-select:none;
+  cursor:grab;
+}
+body.dragging{cursor:grabbing}
+
+.wrap{position:fixed;inset:0;display:grid;place-items:center}
+
+/* 卡片：设计尺寸 940 × 600，窗口比它小时整体缩放（--fit 由 cal.js 写）。
+   ⚠️ 故意【不写 box-shadow】：窗口是透明无边框的，卡片外面那圈阴影会被窗口矩形裁掉，
+   剩下的那点反而会在四个圆角外露出「直角」痕迹（用户报过）。
+   opacity（不是只给底色加 alpha）才是「不透明度」滑杆的落点：
+   整卡一起淡，网格/色条/文字都跟着变，不会出现某几格还是实心的割裂感。 */
+.cal{
+  position:relative;
+  width:940px;height:680px;padding:12px;
+  display:flex;gap:14px;
+  border-radius:18px;
+  background:linear-gradient(168deg,rgb(var(--card-rgb-top)),rgb(var(--card-rgb-bot)));
+  border:1px solid var(--line);
+  opacity:var(--opa);
+  transform:scale(var(--fit,1));
+  transform-origin:center center;
+  overflow:hidden;
+}
+
+/* ===================== 左：备忘录 ===================== */
+.side{
+  width:var(--side-w);flex:none;min-width:0;
+  display:flex;flex-direction:column;
+  padding:2px 2px 0 4px;
+}
+.side-head{
+  display:flex;align-items:center;gap:8px;height:32px;flex:none;
+  border-bottom:1px solid var(--line-2);padding-bottom:6px;
+}
+.side-title{font-size:16px;font-weight:700;letter-spacing:.4px}
+.side-count{
+  margin-left:auto;font-size:12px;color:var(--ink-soft);
+  background:rgba(74,155,212,.10);border:1px solid var(--line-2);
+  border-radius:9px;padding:1px 7px;
+}
+/* 新增备忘：＋ 展开一条输入行 */
+.icon.sm{width:24px;height:24px;font-size:13px;border-radius:7px}
+.icon.ok:hover{color:#fff;background:var(--lake);border-color:var(--lake)}
+.memo-new{display:flex;align-items:center;gap:5px;margin-top:8px;flex:none}
+/* ⚠️ display:flex 会盖掉 [hidden]，必须显式补一条（踩过一次，别删） */
+.memo-new[hidden]{display:none}
+.memo-new input{
+  flex:1;min-width:0;height:30px;padding:0 10px;
+  font-family:inherit;font-size:13.5px;color:var(--ink);outline:none;
+  background:var(--input-bg);border:1px solid var(--line);border-radius:8px;
+}
+.memo-new input:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.16)}
+.memo-list{flex:1;min-height:0;overflow-y:auto;margin-top:8px;padding-right:3px}
+.memo-list::-webkit-scrollbar{width:6px}
+.memo-list::-webkit-scrollbar-thumb{background:var(--bar-bg);border-radius:3px}
+.memo{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:7px 8px;border-radius:10px;cursor:pointer;transition:background .14s;
+}
+.memo:hover{background:var(--cell-hover)}
+.memo .bullet{
+  width:7px;height:7px;flex:none;margin-top:5px;border-radius:50%;
+  background:var(--clay);box-shadow:0 0 0 3px rgba(217,161,95,.16);
+}
+.memo.done .bullet{background:#b9c8d2;box-shadow:none}
+.memo .txt{
+  flex:1;min-width:0;font-size:14.5px;line-height:20px;color:var(--ink);
+  word-break:break-word;
+}
+.memo.done .txt{color:var(--ink-soft);text-decoration:line-through}
+.memo .when{font-size:11.5px;color:var(--ink-soft);margin-top:3px}
+.side-foot{
+  flex:none;font-size:11.5px;color:var(--ink-soft);
+  padding:7px 4px 2px;border-top:1px solid var(--line-2);line-height:1.6;
+}
+.memo-empty{
+  font-size:13.5px;color:var(--ink-soft);text-align:center;
+  padding:22px 10px;line-height:1.9;
+}
+
+/* ===================== 右：月历 ===================== */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+.head{display:flex;align-items:center;gap:7px;height:34px;flex:none}
+.grow{flex:1}
+.title{
+  min-width:148px;font-size:17.5px;font-weight:700;letter-spacing:.6px;text-align:center;
+  white-space:nowrap;
+}
+.title b{color:var(--lake);font-weight:700}
+.nav{
+  width:28px;height:28px;flex:none;padding:0;cursor:pointer;
+  border:1px solid var(--line);border-radius:9px;color:var(--ink-dim);
+  background:var(--btn-bg);font-family:inherit;font-size:18px;line-height:1;transition:.15s;
+}
+.nav:hover{color:var(--ink);background:var(--btn-hover);border-color:rgba(62,154,168,.45)}
+.pill{
+  height:28px;flex:none;padding:0 11px;cursor:pointer;
+  border:1px solid var(--line);border-radius:9px;color:var(--ink-dim);
+  background:var(--btn-bg);font-family:inherit;font-size:14px;transition:.15s;
+}
+.pill:hover{color:var(--ink);background:var(--btn-hover);border-color:rgba(62,154,168,.45)}
+.icon{
+  width:28px;height:28px;flex:none;padding:0;cursor:pointer;
+  border:1px solid var(--line);border-radius:9px;color:var(--ink-dim);
+  background:var(--btn-bg);font-family:inherit;font-size:15px;line-height:1;transition:.15s;
+}
+.icon:hover{color:var(--ink);background:var(--btn-hover);border-color:rgba(62,154,168,.45)}
+.icon.x:hover{color:#fff;background:var(--p-high);border-color:var(--p-high)}
+
+/* 星期表头 */
+.week{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:4px;
+  height:24px;flex:none;align-items:center;
+  font-size:13.5px;color:var(--ink-dim);text-align:center;letter-spacing:.5px;
+}
+.week span.we{color:#c09150}
+
+/* 网格 */
+.grid{
+  flex:1;min-height:0;
+  display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:4px;
+}
+.cell{
+  position:relative;min-width:0;min-height:0;overflow:hidden;
+  padding:3px 4px 2px;border-radius:9px;cursor:pointer;
+  background:var(--cell);border:1px solid var(--line-2);
+  transition:background .15s,border-color .15s;
+}
+.cell:hover{background:var(--cell-hover);border-color:rgba(62,154,168,.4)}
+.cell.out{background:var(--cell-out)}
+.cell.out .d,.cell.out .lunar{color:var(--out-ink)}
+.cell.today{border-color:var(--today-border);background:var(--today-bg)}
+.cell.sel{border-color:var(--clay);box-shadow:0 0 0 1px rgba(217,161,95,.5)}
+.d{
+  display:flex;align-items:baseline;gap:4px;
+  font-size:16.5px;line-height:19px;font-weight:700;color:var(--ink);
+}
+.cell.today .d{color:var(--today-ink)}
+.lunar{font-size:12px;font-weight:400;color:var(--ink-soft);letter-spacing:.2px}
+
+/* 格子里的待办条：优先级决定颜色 */
+.ev{
+  display:flex;align-items:center;gap:3px;
+  height:19px;line-height:19px;margin-top:2px;padding:0 5px;
+  border-radius:5px;font-size:12.5px;font-weight:600;color:#fff;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ev .t{overflow:hidden;text-overflow:ellipsis}
+.ev.p-high{background:linear-gradient(90deg,#ea6a62,var(--p-high-2))}
+.ev.p-mid{background:linear-gradient(90deg,#e8ab4c,var(--p-mid-2))}
+.ev.p-low{background:linear-gradient(90deg,#5fa3dd,var(--p-low-2))}
+.ev.done{background:var(--ev-done-bg);text-decoration:line-through;font-weight:400}
+.more{font-size:12px;line-height:14px;color:var(--ink-soft);padding-left:4px}
+
+/* 图例 */
+.legend{
+  display:flex;align-items:center;gap:12px;height:22px;flex:none;
+  padding:0 4px;font-size:12.5px;color:var(--ink-dim);
+}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot.p-high{background:var(--p-high)}
+.dot.p-mid{background:var(--p-mid)}
+.dot.p-low{background:var(--p-low)}
+.legend-right{margin-left:auto;color:var(--ink-soft)}
+
+/* ===================== 当天清单面板 ===================== */
+.panel{
+  position:absolute;top:12px;bottom:12px;right:12px;
+  left:calc(var(--side-w) + 26px);
+  z-index:5;display:flex;flex-direction:column;
+  padding:10px 12px 12px;border-radius:14px;
+  background:linear-gradient(168deg,rgb(var(--panel-rgb-top)),rgb(var(--panel-rgb-bot)));
+  border:1px solid var(--line);
+  animation:panelIn .16s ease-out;
+}
+/* ⚠️ 必须显式写：上面那条 display:flex 会盖掉 [hidden] 自带的 display:none，
+   否则这块面板会一直糊在月历上面（自检里踩过一次，别删） */
+.panel[hidden]{display:none}
+@keyframes panelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.panel-head{display:flex;align-items:center;gap:9px;height:38px;flex:none}
+.panel-title{flex:1;min-width:0;font-size:19px;font-weight:700;letter-spacing:.3px}
+.panel-list{flex:1;min-height:0;overflow-y:auto;margin-top:10px;padding-right:4px}
+.panel-list::-webkit-scrollbar{width:6px}
+.panel-list::-webkit-scrollbar-thumb{background:var(--bar-bg);border-radius:3px}
+.pi{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:14px 14px;border-radius:10px;cursor:pointer;transition:background .14s;
+}
+.pi:hover{background:var(--pi-hover)}
+.pi .box{
+  width:24px;height:24px;flex:none;margin-top:2px;border-radius:7px;cursor:pointer;
+  border:1px solid rgba(74,120,150,.45);background:var(--input-bg);
+  display:grid;place-items:center;font-size:16px;color:#fff;
+}
+.pi.done .box{background:var(--lake);border-color:var(--lake)}
+.pi.done .box::after{content:'✓'}
+.pi .body{flex:1;min-width:0}
+.pi .txt{font-size:18px;line-height:26px;color:var(--ink);word-break:break-word}
+.pi.done .txt{color:var(--ink-soft);text-decoration:line-through}
+.pi .meta{font-size:14.5px;color:var(--ink-soft);margin-top:5px;display:flex;align-items:center;gap:7px}
+.pi .meta .dot{width:8px;height:8px}
+/* 每条右边的「编辑 / 删除」两个小按钮 */
+.pi .acts{display:flex;align-items:center;gap:5px;flex:none;margin-left:2px}
+.act{
+  height:34px;padding:0 13px;cursor:pointer;font-family:inherit;font-size:16px;
+  border:1px solid var(--line);border-radius:8px;color:var(--ink-dim);
+  background:var(--btn-bg);transition:.15s;white-space:nowrap;
+}
+.act:hover{color:var(--ink);background:var(--btn-hover);border-color:rgba(62,154,168,.45)}
+.act.danger{color:#fff;background:var(--p-high);border-color:var(--p-high)}
+.act.danger:hover{background:var(--p-high-2);border-color:var(--p-high-2)}
+/* 就地确认删除：整行换成确认条，不弹系统对话框，操作不用离开日历 */
+.pi.confirming{
+  background:rgba(226,87,79,.10);border:1px solid rgba(226,87,79,.35);
+  align-items:center;cursor:default;
+}
+.pi.confirming:hover{background:rgba(226,87,79,.14)}
+.confirm-txt{flex:1;min-width:0;font-size:17px;line-height:24px;color:var(--ink);word-break:break-word}
+.panel-empty{font-size:17px;color:var(--ink-soft);text-align:center;padding:40px 0;line-height:2}

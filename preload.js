@@ -12,6 +12,25 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   getPetOn: () => ipcRenderer.invoke('pet-on-get'),
   setPetSize: (name) => ipcRenderer.invoke('set-pet-size', name),
   getPetSize: () => ipcRenderer.invoke('get-pet-size'),
+
+  /* 桌面日历：另一个独立小窗（透明月历挂件：左备忘录 + 右月历）。
+     待办/备忘录的真数据在页面这边，所以是页面把清单推给主进程，
+     主进程缓存后转发给日历窗；日历窗里勾「完成」再顺着同一条链路回来改数据。 */
+  setCalOn: (on) => ipcRenderer.invoke('cal-on', !!on),
+  getCalOn: () => ipcRenderer.invoke('cal-on-get'),
+  calTodos: (list) => ipcRenderer.send('cal-todos', list),
+  calMemos: (list) => ipcRenderer.send('cal-memos', list),
+  /* 主题 + 卡片不透明度（设置页里调，主进程转发给日历窗） */
+  calStyle: (st) => ipcRenderer.send('cal-style', st),
+  onCalOnChanged: (cb) => ipcRenderer.on('cal-on-changed', (e, on) => cb(on)),
+  onCalToggleTodo: (cb) => ipcRenderer.on('cal-toggle-todo', (e, id) => cb(id)),
+  onCalToggleMemo: (cb) => ipcRenderer.on('cal-toggle-memo', (e, id) => cb(id)),
+  onCalAddMemo: (cb) => ipcRenderer.on('cal-add-memo', (e, text) => cb(text)),
+  /* 日历当天清单里的 ✏️ 编辑 / 🗑 删除 */
+  onCalEditTodo: (cb) => ipcRenderer.on('cal-edit-todo', (e, id) => cb(id)),
+  onCalDeleteTodo: (cb) => ipcRenderer.on('cal-delete-todo', (e, id) => cb(id)),
+  onCalToggleTheme: (cb) => ipcRenderer.on('cal-toggle-theme', () => cb()),
+  onCalAddTodo: (cb) => ipcRenderer.on('cal-add-todo', () => cb()),
   /* 宠物点了说话 → 主进程来要文字，页面用 petTalkData 回过去 */
   onPetTalkRequest: (cb) => ipcRenderer.on('pet-talk-request', () => cb()),
   petTalkData: (data) => ipcRenderer.send('pet-talk-data', data),

@@ -177,6 +177,9 @@
     speech: true,
     petSize: 'max',            // 桌面宠物大小：max 迷你 / mid 小小 / min 超小
     petOn: false,              // 桌面宠物是否显示（独立小窗，可与主界面同时存在）
+    calOn: false,              // 桌面日历是否显示（独立小窗，可与主界面同时存在）
+    calTheme: 'light',         // 桌面日历主题：light / dark
+    calOpacity: 97,            // 桌面日历卡片不透明度（35~100，只影响底色）
     skin: '__default',         // 宠物形象：__default = 代码手绘，其余为 skins/ 里的皮肤
   };
   const PET_SIZE_KEYS = ['max', 'mid', 'min'];
@@ -193,12 +196,18 @@
 
   /* ------------------------------------------------ 备忘 / 待办 / 界面偏好
      memos：{ id, text, done, at }
-     todos：{ id, text, done, at, dueAt, notify, remindAt }
+     todos：{ id, text, done, at, dueAt, notify, remindAt, prio }
        dueAt    用户设的提醒时间（毫秒时间戳）
        remindAt 下次该弹提醒的时间；snooze 会把它往后推，程序重开时它可能已经过期
+       prio     优先级：high / mid / low（桌面日历按它上色），缺省 mid
      两者都存在 STORE_KEY.todos 里，一次读写。 */
   let memos = [];
   let todos = [];
+  /* 优先级三档：桌面日历里用三种颜色画格子里的待办条 */
+  const PRIO_KEYS = ['high', 'mid', 'low'];
+  const PRIO_LABEL = { high: '高', mid: '中', low: '低' };
+  function normPrio(p) { return PRIO_KEYS.indexOf(p) >= 0 ? p : 'mid'; }
+  function prioRank(p) { const i = PRIO_KEYS.indexOf(normPrio(p)); return i < 0 ? 1 : i; }
   const ui = {
     tab: 'home',               // home | todo | settings
     todoGrabFront: true,       // 待办到点是否抢前台
@@ -317,12 +326,18 @@
     tdDate: $('#tdDate'),
     tdTime: $('#tdTime'),
     tdQuick: $('#tdQuick'),
+    tdPrio: $('#tdPrio'),
     tdSave: $('#tdSave'),
     tdCancel: $('#tdCancel'),
     tdClose: $('#tdClose'),
     /* 设置 */
     chkDesktopPet: $('#chkDesktopPet'),
     desktopPetRow: $('#desktopPetRow'),
+    chkDesktopCal: $('#chkDesktopCal'),
+    calThemeSeg: $('#calThemeSeg'),
+    calOpa: $('#calOpa'),
+    calOpaOut: $('#calOpaOut'),
+    chkCalSet: $('#chkCalSet'),
     chkEyeCare: $('#chkEyeCare'),
     eyeCareMsg: $('#eyeCareMsg'),
     chkEyeSet: $('#chkEyeSet'),
@@ -422,6 +437,7 @@
     native.syncState({
       running: rt.running,
       petOn: !!settings.petOn,
+      calOn: !!settings.calOn,
       petSound: settings.sound,
       skin: settings.skin,
       items: settings.items.map(function (it) {
@@ -505,6 +521,11 @@
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
         if (typeof s.petOn === 'boolean') settings.petOn = s.petOn;
+        if (typeof s.calOn === 'boolean') settings.calOn = s.calOn;
+        if (s.calTheme === 'dark' || s.calTheme === 'light') settings.calTheme = s.calTheme;
+        if (isFinite(+s.calOpacity) && +s.calOpacity > 0) {
+          settings.calOpacity = Math.min(100, Math.max(35, Math.round(+s.calOpacity)));
+        }
         if (typeof s.skin === 'string' && s.skin) settings.skin = s.skin;
       }
     } catch (e) { /* 忽略损坏数据 */ }
@@ -1028,6 +1049,7 @@
             at: +t.at || Date.now(),
             dueAt: +t.dueAt || 0,
             remindAt: +t.remindAt || 0,
+            prio: normPrio(t.prio),
             notify: t.notify !== false
           };
         });
@@ -1039,6 +1061,40 @@
     try {
       localStorage.setItem(STORE_KEY.todos, JSON.stringify({ memos: memos, todos: todos }));
     } catch (e) { }
+    pushCalTodos();
+  }
+
+  /* 把待办推给桌面日历窗（只推日历要用的字段；没设日期的待办不进日历）。
+     链路：渲染进程 → 主进程（缓存）→ 日历窗；日历窗打开时会自己来要一次。 */
+  function pushCalTodos() {
+    if (!native || !native.calTodos) return;
+    native.calTodos(todos.filter(function (t) { return t && t.dueAt; }).map(function (t) {
+      return { id: t.id, text: t.text, done: !!t.done, dueAt: t.dueAt, prio: normPrio(t.prio) };
+    }));
+    /* 左边那一栏的备忘录跟着一起推（存盘就推，两边永远一致） */
+    if (native.calMemos) {
+      native.calMemos(memos.map(function (m) {
+        return { id: m.id, text: m.text, done: !!m.done, at: m.at || 0 };
+      }));
+    }
+  }
+
+  /* 桌面日历的主题 / 不透明度：设置页改一下就推一次（主进程再转发给日历窗） */
+  function pushCalStyle() {
+    if (!native || !native.calStyle) return;
+    native.calStyle({ theme: settings.calTheme, opacity: settings.calOpacity });
+  }
+
+  /* 设置页里那两条控件按当前值画一遍（初始化 + 日历里切了主题时同步） */
+  function paintCalStyle() {
+    if (el.calThemeSeg) {
+      const btns = el.calThemeSeg.querySelectorAll('button');
+      for (let i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('on', btns[i].dataset.theme === settings.calTheme);
+      }
+    }
+    if (el.calOpa) el.calOpa.value = String(settings.calOpacity);
+    if (el.calOpaOut) el.calOpaOut.textContent = settings.calOpacity + '%';
   }
 
   function loadUiPrefs() {
@@ -1179,11 +1235,27 @@
   /* ------------------------------------------------------------ 待办弹层 */
   let editingTodoId = null;
 
+  /* 优先级三段按钮：把选中的那档标亮（.on 用的是和「宠物大小」同一套样式） */
+  function paintTodoPrio(p) {
+    const want = normPrio(p);
+    if (!el.tdPrio) return;
+    const btns = el.tdPrio.querySelectorAll('button');
+    for (let i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('on', btns[i].dataset.prio === want);
+    }
+  }
+  function pickedTodoPrio() {
+    if (!el.tdPrio) return 'mid';
+    const on = el.tdPrio.querySelector('button.on');
+    return normPrio(on && on.dataset.prio);
+  }
+
   function openTodoModal(id) {
     editingTodoId = id || null;
     const t = id ? todoById(id) : null;
     el.tdTitle.textContent = t ? '修改待办' : '新增待办';
     el.tdText.value = t ? t.text : '';
+    paintTodoPrio(t ? t.prio : 'mid');
     const due = t && t.dueAt ? new Date(t.dueAt) : (function () {
       const d = new Date(Date.now() + 60 * 60 * 1000);   // 默认「一小时后」
       d.setSeconds(0, 0);
@@ -1225,12 +1297,14 @@
     const due = new Date(+parts[0], +parts[1] - 1, +parts[2], +hm[0] || 0, +hm[1] || 0, 0, 0);
     const dueAt = due.getTime();
     if (!isFinite(dueAt)) return;
+    const prio = pickedTodoPrio();
 
     if (editingTodoId) {
       const t = todoById(editingTodoId);
       if (t) {
         t.text = text.slice(0, 60);
         t.dueAt = dueAt;
+        t.prio = prio;
         /* 改了时间就把「下次提醒」重置到新时间；已经完成的重新变回未完成 */
         t.remindAt = dueAt;
         if (t.done) { t.done = false; t.doneAt = 0; }
@@ -1242,6 +1316,7 @@
         done: false, at: Date.now(),
         dueAt: dueAt,
         remindAt: dueAt,          // 到点就提醒（过期的会在很短时间内被 tick 抓到）
+        prio: prio,
         notify: true
       });
     }
@@ -1388,7 +1463,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.3.1 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.4.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -1858,20 +1933,22 @@
     }
     if (el.tapHint) {
       const gap = st.tapGap || 500;
+      const win = st.tapWindow || 1000;
       let t;
       if (!st.on) {
         t = '一键摸鱼关着，连击也不会生效。';
       } else if (!st.tapOn) {
         t = '除了组合键，还可以用「同一个键连按 3 下」触发（默认 ' + (st.tapKeyLabel || 'Ctrl')
-          + ' 连按 3 下）。这个功能要装一个全局键盘钩子并常驻一个后台进程，'
-          + '所以默认关着，得你手动勾上；钩子只用来数你指定的那个键，不记录任何其他按键。';
+          + ' 连按 3 下）。默认关着，要你自己勾上；开启后会有个小程序在后台专门数这个键，'
+          + '<b>只数你指定的这个键</b>，不记录其它按键、也不上传任何东西。';
       } else if (st.tapError) {
         t = st.tapError;
       } else if (!st.tapReady) {
-        t = '正在启动键盘钩子…';
+        t = '正在启动…';
       } else {
         t = '已生效：' + (st.tapKeyLabel || 'Ctrl') + ' 连按 3 下就摸鱼。'
-          + '两下之间最多隔 ' + gap + ' 毫秒，中间按了别的键就要重新数。';
+          + '三下要在 ' + win + ' 毫秒内按完、两下之间不超过 ' + gap + ' 毫秒，'
+          + '中间按了别的键要重新数；<b>按住不放不算</b>。';
       }
       el.tapHint.textContent = t;
       el.tapHint.className = 'set-desc' + (st.tapOn && st.tapError ? ' moyu-err' : '');
@@ -2052,6 +2129,137 @@
         saveSettings();
         pushState();
       });
+    }
+
+    /* 桌面日历：和桌面宠物同一套（主进程是权威，托盘菜单也能改） */
+    if (el.chkDesktopCal) {
+      el.chkDesktopCal.addEventListener('change', function (e) {
+        const want = e.target.checked;
+        Sound.click();
+        if (native && native.setCalOn) {
+          native.setCalOn(want).then(function (real) {
+            e.target.checked = !!real;
+            settings.calOn = !!real;
+            saveSettings();
+            pushState();
+            if (real) setCaption('桌面日历已显示：拖到顺手的位置，点格子看当天待办');
+          }).catch(function () { e.target.checked = !want; });
+        } else {
+          e.target.checked = false;
+        }
+      });
+    }
+    if (native && native.onCalOnChanged) {
+      native.onCalOnChanged(function (on) {
+        if (el.chkDesktopCal) el.chkDesktopCal.checked = !!on;
+        settings.calOn = !!on;
+        saveSettings();
+        pushState();
+      });
+    }
+    /* 在日历窗里勾了「完成」——改的还是同一份数据，改完照常存盘并推回日历 */
+    if (native && native.onCalToggleTodo) {
+      native.onCalToggleTodo(function (id) {
+        if (!id) return;
+        toggleTodoDone(String(id));
+      });
+    }
+    /* 左栏的备忘录同理 */
+    if (native && native.onCalToggleMemo) {
+      native.onCalToggleMemo(function (id) {
+        if (!id) return;
+        const m = memoById(String(id));
+        if (!m) return;
+        m.done = !m.done;
+        saveTodoStore();
+        renderMemos();
+        Sound.click();
+      });
+    }
+    /* 日历左栏直接新增一条备忘：写进同一份数据，存完推回日历 */
+    if (native && native.onCalAddMemo) {
+      native.onCalAddMemo(function (text) {
+        const t = String(text || '').trim();
+        if (!t) return;
+        memos.unshift({ id: newLocalId('m'), text: t.slice(0, 500), done: false, at: Date.now() });
+        saveTodoStore();
+        renderMemos();
+        Sound.click();
+      });
+    }
+    /* 日历右上角「＋」：直接把主界面的新增待办弹窗打开 */
+    if (native && native.onCalAddTodo) {
+      native.onCalAddTodo(function () {
+        showWindowSelf();
+        openTab('todo');
+        openTodoModal(null);
+      });
+    }
+    /* 日历当天清单里点「✏️」：打开修改弹窗（标题栏那个页签也切到待办页） */
+    if (native && native.onCalEditTodo) {
+      native.onCalEditTodo(function (id) {
+        if (!id || !todoById(String(id))) return;
+        showWindowSelf();
+        openTab('todo');
+        openTodoModal(String(id));
+      });
+    }
+    /* 日历里点「🗑」并确认过了：这里直接删，不再弹一次系统对话框 */
+    if (native && native.onCalDeleteTodo) {
+      native.onCalDeleteTodo(function (id) {
+        const t = todoById(String(id));
+        if (!t) return;
+        todos = todos.filter(function (x) { return x.id !== t.id; });
+        saveTodoStore();
+        renderTodos();
+        setCaption('已删除待办：<b>' + escapeHtml(t.text) + '</b>');
+      });
+    }
+    /* 日历右上角那个 🌙/☀：在这里翻设置（真值在这边），翻完推回去 */
+    if (native && native.onCalToggleTheme) {
+      native.onCalToggleTheme(function () {
+        settings.calTheme = settings.calTheme === 'dark' ? 'light' : 'dark';
+        saveSettings();
+        paintCalStyle();
+        pushCalStyle();
+        setCaption(settings.calTheme === 'dark' ? '桌面日历已切成深色' : '桌面日历已切成浅色');
+      });
+    }
+
+    /* 设置页里的「桌面日历」外观：开关（和主界面那一行同一个） + 主题 + 不透明度 */
+    if (el.chkCalSet) {
+      el.chkCalSet.addEventListener('change', function (e) {
+        const want = !!e.target.checked;
+        Sound.click();
+        if (native && native.setCalOn) {
+          native.setCalOn(want).then(function (real) {
+            el.chkCalSet.checked = !!real;
+            if (el.chkDesktopCal) el.chkDesktopCal.checked = !!real;
+            settings.calOn = !!real;
+            saveSettings();
+            pushState();
+          }).catch(function () { e.target.checked = !want; });
+        } else { e.target.checked = false; }
+      });
+    }
+    if (el.calThemeSeg) {
+      el.calThemeSeg.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('button[data-theme]') : null;
+        if (!b) return;
+        settings.calTheme = b.dataset.theme === 'dark' ? 'dark' : 'light';
+        saveSettings();
+        paintCalStyle();
+        pushCalStyle();
+        Sound.click();
+      });
+    }
+    if (el.calOpa) {
+      el.calOpa.addEventListener('input', function (e) {
+        settings.calOpacity = Math.min(100, Math.max(35, Math.round(+e.target.value) || 97));
+        if (el.calOpaOut) el.calOpaOut.textContent = settings.calOpacity + '%';   // 文字跟手
+        pushCalStyle();                                                          // 立刻生效
+      });
+      el.calOpa.addEventListener('change', function () { saveSettings(); });
     }
 
     /* 护眼模式：状态由主进程持有（它要落盘、还要在休眠唤醒后自动重设），
@@ -2743,6 +2951,16 @@
       });
     }
 
+    /* 待办优先级：点哪档亮哪档（保存时按亮着的那档写进 prio） */
+    if (el.tdPrio) {
+      el.tdPrio.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('button[data-prio]') : null;
+        if (!b) return;
+        paintTodoPrio(b.dataset.prio);
+        Sound.click();
+      });
+    }
+
     if (el.skinSel) {
       el.skinSel.addEventListener('change', function () {
         settings.skin = el.skinSel.value || '__default';
@@ -2866,6 +3084,12 @@
     if (native && el.petSizeRow) el.petSizeRow.hidden = false;
     if (native && el.desktopPetRow) el.desktopPetRow.hidden = false;
     if (el.chkDesktopPet) el.chkDesktopPet.checked = !!settings.petOn;
+    if (el.chkDesktopCal) el.chkDesktopCal.checked = !!settings.calOn;
+    /* 待办清单也给桌面日历一份（日历窗可能马上就会来要） */
+    pushCalTodos();
+    pushCalStyle();
+    paintCalStyle();
+    if (native && el.chkCalSet) el.chkCalSet.checked = !!settings.calOn;
     /* 护眼模式的开关状态和色温都在主进程，问它要一次；
        查到「没生效」时也要如实显示（不然用户以为开着，一直等护眼效果） */
     if (native && native.eyeCareGet) {
@@ -2912,6 +3136,14 @@
       native.getPetOn().then(function (on) {
         if (el.chkDesktopPet) el.chkDesktopPet.checked = !!on;
         settings.petOn = !!on;
+      }).catch(function () { });
+    }
+    /* 桌面日历同理 */
+    if (native && native.getCalOn) {
+      native.getCalOn().then(function (on) {
+        if (el.chkDesktopCal) el.chkDesktopCal.checked = !!on;
+        if (el.chkCalSet) el.chkCalSet.checked = !!on;
+        settings.calOn = !!on;
       }).catch(function () { });
     }
   }

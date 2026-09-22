@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.3.1</span>
+    <span class="tb-ver" id="tbVer">v3.4.0</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -73,6 +73,10 @@
       <!-- 护眼模式：直接调显示器色温（降蓝光），和桌面宠物同一行 -->
       <label class="chk big" title="把显示器色温调暖到护眼色温（约 4500K，降蓝光）。直接改显卡伽马表，是真的调色温不是叠黄遮罩；取消勾选立刻恢复原来的色温。开了 HDR 或显卡驱动不支持时会失效。">
         <input type="checkbox" id="chkEyeCare"><span>🌙 护眼模式</span>
+      </label>
+      <!-- 桌面日历：桌面上的透明月历小窗，把带日期的待办按优先级上色画进格子里 -->
+      <label class="chk big" title="桌面上出现一个透明月历小窗，把「有提醒日期」的待办按优先级画进对应格子里（红=高 / 橙=中 / 蓝=低）。可以拖动、可以翻月、点格子能看当天清单并勾完成。">
+        <input type="checkbox" id="chkDesktopCal"><span>📅 桌面日历</span>
       </label>
       <span class="psr-label" id="eyeCareMsg" hidden></span>
     </div>
@@ -156,6 +160,7 @@
     <button class="set-nav-item" data-target="secUpdate">⬆ 软件更新</button>
     <button class="set-nav-item" data-target="secMoyu">🐟 一键摸鱼</button>
     <button class="set-nav-item" data-target="secEye">🌙 护眼模式</button>
+    <button class="set-nav-item" data-target="secCal">📅 桌面日历</button>
   </nav>
 
   <section class="card set-col" id="setCard">
@@ -164,8 +169,7 @@
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkAutoLaunch"><span>开机自动启动</span></label>
       <p class="set-desc">勾上之后，开机时程序会<b>直接藏在右下角托盘里</b>，不会弹出主界面；
-        到点照样会跳出来提醒。用的是当前用户的注册表启动项（不需要管理员权限），
-        也能在「任务管理器 → 启动」里自己关掉。</p>
+        到点照样会跳出来提醒。不需要管理员权限，也能在「任务管理器 → 启动」里自己关掉。</p>
     </div>
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkAutoLaunchTodo"><span>待办到点提醒时抢到最前面</span></label>
@@ -261,9 +265,9 @@
     <div class="col-head set-head" id="secEye"><h2>🌙 护眼模式</h2></div>
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkEyeSet"><span>启用护眼模式</span></label>
-      <p class="set-desc">把屏幕色温调暖、少放出蓝光。<b>直接改显卡的伽马表</b> ——
-        是真的把颜色调暖，不是往屏幕上叠一层黄遮罩。主界面「桌面宠物」那一行也有同一个开关，
-        勾哪边都一样。开了 HDR、或者显卡驱动不接受时，勾了也不会生效（这里会说明原因）。</p>
+      <p class="set-desc">把屏幕调暖、少放蓝光，看久了眼睛不容易累（是真的把颜色调暖，
+        不是叠一层黄颜色）。主界面「桌面宠物」那一行也有同一个开关，勾哪边都一样。
+        开了 HDR、或者显示器不支持的时候，勾了也不会生效（这儿会说明原因）。</p>
     </div>
     <div class="set-row">
       <p class="set-label">色温</p>
@@ -275,7 +279,7 @@
       <p class="set-desc">默认 <b>4500K</b>，和 Windows 夜间模式的中间档差不多。
         数值越小越暖、蓝光越少；<b>6500K 基本就是屏幕原色</b>（等于没开）。
         拖动时会立刻生效，松手就记住；这里拖了会自动把护眼模式打开。
-        有些显卡驱动不接受太暖的值，拖过头时<b>会自动退到它能接受的最暖温度</b>，
+        有些显示器不支持太暖的值，拖过头时<b>会自动退到能接受的最暖温度</b>，
         滑杆也会跟着吸回去。关掉护眼模式会还原成你原来的色温，不会留下痕迹。</p>
       <p class="set-desc eye-err" id="eyeErr" hidden></p>
     </div>
@@ -285,6 +289,34 @@
         <b>取消勾选</b>：退出后屏幕继续保持护眼色温 —— 想让它一直暖着就取消它。
         注意取消之后，退出程序就没法再把色温调回来了；
         要还原得重新打开程序，把上面的「启用护眼模式」取消勾选。</p>
+    </div>
+
+    <hr class="set-sep">
+
+    <!-- 桌面日历：外观设置（开关在主界面那一行 / 托盘菜单里） -->
+    <div class="col-head set-head" id="secCal"><h2>📅 桌面日历</h2></div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkCalSet"><span>显示桌面日历</span></label>
+      <p class="set-desc">桌面上显示一块「左边备忘录、右边月历」的日历。和主界面
+        <b>🐣 桌面宠物</b> 那一行的「📅 桌面日历」是同一个开关，勾哪边都一样；
+        日历右上角的 <b>✕</b> 也能收起来。</p>
+    </div>
+    <div class="set-row">
+      <p class="set-label">主题</p>
+      <div class="seg" id="calThemeSeg">
+        <button type="button" data-theme="light" class="on">☀ 浅色</button>
+        <button type="button" data-theme="dark">🌙 深色</button>
+      </div>
+      <p class="set-desc">深色适合深色壁纸或夜间用。日历右上角的 <b>🌙 / ☀</b> 也能切换。</p>
+    </div>
+    <div class="set-row">
+      <p class="set-label">不透明度</p>
+      <div class="eye-slider">
+        <input type="range" id="calOpa" min="35" max="100" step="1" value="97"
+               title="往左更透明，往右更实">
+        <output class="eye-k" id="calOpaOut">97%</output>
+      </div>
+      <p class="set-desc">往左更透明，往右更实。</p>
     </div>
 
   </section>
@@ -338,6 +370,14 @@
     <div class="it-row">
       <span class="it-label">提醒时间</span>
       <input type="time" id="tdTime">
+    </div>
+    <div class="it-row">
+      <span class="it-label">优先级</span>
+      <div class="seg prio-seg" id="tdPrio">
+        <button type="button" data-prio="high" title="桌面日历里用红色显示">高</button>
+        <button type="button" data-prio="mid" class="on" title="桌面日历里用橙色显示">中</button>
+        <button type="button" data-prio="low" title="桌面日历里用蓝色显示">低</button>
+      </div>
     </div>
     <div class="it-row">
       <span class="it-label">快捷</span>
