@@ -8,7 +8,8 @@
     "start": "electron .",
     "build": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js && electron-builder --win nsis --prepackaged dist/win-unpacked --publish never",
     "build:fast": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js",
-    "build:portable": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js && electron-builder --win portable --prepackaged dist/win-unpacked --publish never"
+    "build:portable": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js && electron-builder --win portable --prepackaged dist/win-unpacked --publish never",
+    "clean:dist": "node build/clean-dist.js"
   },
   "author": "",
   "license": "MIT",
