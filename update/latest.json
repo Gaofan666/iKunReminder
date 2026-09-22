@@ -1,20 +1,20 @@
 {
-  "version": "3.3.0",
-  "releaseDate": "2026-09-22T02:33:46.355Z",
-  "notes": "## iKunReminder v3.3.0\n\n1. 🌙 **修好了「退出程序后屏幕还是暖的」** —— 以前是在退出过程中另起一个独立进程去还原色温，实测这条路根本不成立：Electron 退出时会把子进程一起带走（Windows 的 job object），那个还原进程压根没跑完，屏幕就一直留在暖色上。现在改成**退出之前先把色温还原掉、还原完再退**（最多等 2.5 秒兜底）。实测：退出后色温确实回到原值，两台显示器都还原\n2. ⚙ **新增选项：退出程序时把色温还原**（设置 → 护眼模式）。默认**勾上** = 关掉程序就恢复成你原来的色温；**取消勾选** = 退出后屏幕继续保持护眼色温 —— 想让它一直暖着的人可以用这个\n3. 🚀 **修好了「开机自启勾不上」** —— 这是个**所有机器都会有**的 bug，不是那两台电脑的特殊问题：Electron 在 Windows 上判断自启状态时，要求传入**和写入时完全一样的命令行**去做字符串比对，而我们读的时候没传参数，于是读回来永远是「未开启」，页面就把勾去掉了（但 Run 键其实已经写进去了，所以开机真的会自启 —— 这也是为什么你会觉得「自启是正常的」）。现在读回来带上同样的参数，并且用更稳的「按可执行文件路径匹配」兜底\n4. 🔓 顺带把「被禁用过的自启项」也处理了：如果之前在**任务管理器 → 启动**里、或者被**联想电脑管家 / 华为电脑管家**禁过，只在注册表写一条是不够的（Windows 会跳过被禁用的项），现在会自动把那条「已禁用」记录删掉，勾上就真的能自启\n\n**下载**：`iKunReminder-setup-v3.3.0.exe`（约 110 MB，Windows x64，双击安装）\n",
-  "size": 115608930,
-  "sha512": "5aavSJgaKJNh2/vKSbMwT4YUZlW74yEuoBctkFCuECL7xH6wCMenGGPaOPdIX6GJnICIF1n1aS1+4INHXF45Tw==",
+  "version": "3.3.1",
+  "releaseDate": "2026-09-22T03:14:22.349Z",
+  "notes": "## iKunReminder v3.3.1\n\n1. 🐾 **修好了「桌面宠物拖不到桌面边界」** —— 上一版修主窗口贴边溢出时，给窗口限位统一加了一圈「系统边框余量」（无边框 + 可调整大小的窗口，可视范围比实际坐标向外多一圈）。可宠物窗是**不可调整大小**的，系统根本没给它加那一圈，于是它被凭空留了约 15 个逻辑像素的缝，怎么拖都差一点点贴不到屏幕右边/下边。现在这圈余量改成**只给主窗口**，宠物拖动时不加 —— 实测宠物已经能严丝合缝贴到工作区四边（左/上 0 像素，右/下 0～2 像素）\n2. ✅ 主窗口那边**照旧留着**这圈余量（它确实需要），所以上一版「拖到屏幕边角后抓不住边框、拖不动也缩放不了」的修复没有被改回去\n3. 🔧 顺手把开发用的 DPI 自检脚本更新到现役模型（k≡1、按逻辑像素定尺寸），12 种分辨率 × 缩放组合 + 跨屏重排 + 宠物窗共 40 项全部通过\n\n**下载**：`iKunReminder-setup-v3.3.1.exe`（约 110 MB，Windows x64，双击安装）\n",
+  "size": 115610780,
+  "sha512": "+VctKTaMm47oLRnq7lWLvLJGJ1xZT7/opKgKKB0698LBXSLDJVSL+o1TiLCA+qrWiltxa7AoYBGa9gopP4at7A==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.0/iKunReminder-setup-v3.3.0.exe.part1",
-      "size": 57804465,
-      "sha512": "urLWE28bj/nEiMieKP3yty0qh+uZZq1ABePYLPGzHoNXfKVOvdP2nuxJTyEFd1YXPsJq/avoQx9uPjQMIIGoNA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.1/iKunReminder-setup-v3.3.1.exe.part1",
+      "size": 57805390,
+      "sha512": "yW5LEw+z3hbhPTUC6JqfRB4L1oxEL2pQbufkioBPSMRSb0eqsbfKGOKyxYoJlkOQVmT32hEZDa9qcumcXkDa/g==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.0/iKunReminder-setup-v3.3.0.exe.part2",
-      "size": 57804465,
-      "sha512": "f2I0xdskf0TApgroYJzXsiPib9B7M9ao1fU9lZayvpln+uhH9MqJMkhV5BudgytOTkXY7bgutkICiZSQrXZxzQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.1/iKunReminder-setup-v3.3.1.exe.part2",
+      "size": 57805390,
+      "sha512": "ZZV0KQOJqKw8zWMQI5J/47qsLOl5NCj7wBSeajOrcP1CmQHyHIlPIV9s21ZlKc27areMjs3Mbk1OkkC4RVjJ2Q==",
       "index": 2
     }
   ]
