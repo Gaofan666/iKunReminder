@@ -191,10 +191,12 @@
       show.forEach(function (t) {
         const bar = document.createElement('div');
         bar.className = 'ev ' + prioClass(t.prio) + (t.done ? ' done' : '');
-        bar.title = fmtTime(t.dueAt) + ' · ' + prioText(t.prio) + '优先级 · ' + t.text;
+        bar.title = fmtTime(t.dueAt) + ' · ' + prioText(t.prio) + '优先级 · ' + t.text +
+          (t.repeatText ? '（' + t.repeatText + '）' : '');
         const span = document.createElement('span');
         span.className = 't';
-        span.textContent = t.text;
+        /* 重复待办前面挂个 🔁，一眼看出它每期都会来 */
+        span.textContent = (t.repeatText ? '🔁 ' : '') + t.text;
         bar.appendChild(span);
         cell.appendChild(bar);
       });
@@ -237,7 +239,9 @@
         /* 正在确认删除的那条：整行换成确认条，避免弹系统对话框打断操作 */
         if (t.id === pendingDelete) {
           return '<div class="pi confirming" data-id="' + esc(t.id) + '">' +
-            '<div class="confirm-txt">删除「' + esc(t.text) + '」？</div>' +
+            '<div class="confirm-txt">删除「' + esc(t.text) + '」？' +
+            (t.repeatText ? '<br><span class="warn">这是重复待办（' + esc(t.repeatText) + '），整个周期都会删掉。</span>' : '') +
+            '</div>' +
             '<button class="act danger" data-act="ok">删除</button>' +
             '<button class="act" data-act="cancel">取消</button></div>';
         }
@@ -247,6 +251,7 @@
           '<div class="txt">' + esc(t.text) + '</div>' +
           '<div class="meta"><i class="dot ' + prioClass(t.prio) + '"></i>' +
           '<span>' + prioText(t.prio) + '优先级</span><span>' + fmtTime(t.dueAt) + '</span>' +
+          (t.repeatText ? '<span>🔁 ' + esc(t.repeatText) + '</span>' : '') +
           (t.done ? '<span>已完成</span>' : '') + '</div>' +
           '</div>' +
           /* 编辑走主界面那个「修改待办」弹窗（日期/时间/优先级都在那儿），

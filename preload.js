@@ -102,6 +102,9 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   skinChanged: (id) => ipcRenderer.send('skin-changed', id),
   skinsList: () => ipcRenderer.invoke('skins-list'),
   skinLoad: (id) => ipcRenderer.invoke('skin-load', id),
+  /* 用户皮肤文件夹：拿到路径 / 直接打开它（目录和说明文档会自动建好） */
+  skinsDir: () => ipcRenderer.invoke('skins-dir'),
+  openSkinsDir: () => ipcRenderer.invoke('open-skins-dir'),
 
   /* 屏幕缩放（DPI）：启动时取一次，之后由主进程在换屏/改缩放时推送。
      窗口逻辑尺寸由主进程负责，页面只拿 scale 去算内容缩放，两边不会打架。 */

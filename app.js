@@ -208,6 +208,127 @@
   const PRIO_LABEL = { high: '高', mid: '中', low: '低' };
   function normPrio(p) { return PRIO_KEYS.indexOf(p) >= 0 ? p : 'mid'; }
   function prioRank(p) { const i = PRIO_KEYS.indexOf(normPrio(p)); return i < 0 ? 1 : i; }
+
+  /* ------------------------------------------------------------- 重复规则
+     待办上挂一个 repeat：null = 不重复。四种：
+       { kind:'daily' }
+       { kind:'weekly',  days:[1,3,5] }        周几，1=周一 … 7=周日，可多选
+       { kind:'monthly', mode:'day',  day:31 } 每月几号（短月【跳过】，和 iCalendar/Google 日历一致）
+       { kind:'monthly', mode:'last' }         每月最后一天（要每月都提醒就选这个）
+       { kind:'yearly',  mon:10, day:1 }       每年同月同日（2/29 平年跳过）
+     为什么短月跳过而不是顺延到 28 号：顺延会让「1月31日」和「2月28日」两个不同含义的日子
+     混在一起，3 月又跳回 31 号，节奏是乱的 —— 主流做法都是跳过 + 单独给「最后一天」。 */
+  const DOW_LABEL = ['', '一', '二', '三', '四', '五', '六', '日'];
+
+  function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+  function isoDow(d) { return ((d.getDay() + 6) % 7) + 1; }   // 1=周一 … 7=周日
+
+  /* 把存下来的重复配置洗干净；坏的/认不出来的一律当「不重复」 */
+  function normRepeat(r) {
+    if (!r || typeof r !== 'object') return null;
+    const kind = r.kind;
+    if (kind === 'daily') return { kind: 'daily' };
+    if (kind === 'weekly') {
+      const days = Array.isArray(r.days)
+        ? r.days.map(function (n) { return Math.round(+n); })
+          .filter(function (n, i, a) { return n >= 1 && n <= 7 && a.indexOf(n) === i; })
+          .sort(function (a, b) { return a - b; })
+        : [];
+      return days.length ? { kind: 'weekly', days: days } : null;
+    }
+    if (kind === 'monthly') {
+      if (r.mode === 'last') return { kind: 'monthly', mode: 'last' };
+      const day = Math.round(+r.day);
+      if (day >= 1 && day <= 31) return { kind: 'monthly', mode: 'day', day: day };
+      return null;
+    }
+    if (kind === 'yearly') {
+      const mon = Math.round(+r.mon), day = Math.round(+r.day);
+      if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) {
+        return { kind: 'yearly', mon: mon, day: day };
+      }
+      return null;
+    }
+    return null;
+  }
+
+  /* 一句话说清这个规则（列表小标签、日历清单、设置提示都用它） */
+  function repeatLabel(r) {
+    const rep = normRepeat(r);
+    if (!rep) return '';
+    if (rep.kind === 'daily') return '每天';
+    if (rep.kind === 'weekly') {
+      return '每周' + rep.days.map(function (d) { return DOW_LABEL[d]; }).join('、');
+    }
+    if (rep.kind === 'monthly') {
+      return rep.mode === 'last' ? '每月最后一天' : ('每月 ' + rep.day + ' 号');
+    }
+    return '每年 ' + rep.mon + ' 月 ' + rep.day + ' 日';
+  }
+
+  /* 把时间部分（时分秒）从 oldMs 挪到另一个日期上 —— 重复只换日子，时刻不变 */
+  function withSameTime(ms, y, m, d) {
+    const o = new Date(ms);
+    return new Date(y, m, d, o.getHours(), o.getMinutes(), o.getSeconds(), 0).getTime();
+  }
+
+  /* 下一期：从 fromMs 往后找第一个「符合规则」的日子。
+     · 短月/2月29 这类不存在的日子直接跳过（iCalendar 的规矩）
+     · notBefore 表示「不能早于这个时刻」：完成得晚时一次跳到还没过的那一期，
+       免得刚勾完就立刻又提醒你（逾期也有个限度） */
+  function nextOccurrence(fromMs, r, notBefore) {
+    const rep = normRepeat(r);
+    if (!rep) return 0;
+    const floor = Math.max(fromMs + 1000, +notBefore || 0);
+    const base = new Date(fromMs);
+
+    if (rep.kind === 'daily') {
+      let t = withSameTime(fromMs, base.getFullYear(), base.getMonth(), base.getDate() + 1);
+      let guard = 0;
+      while (t < floor && guard++ < 4000) {
+        const d = new Date(t);
+        t = withSameTime(fromMs, d.getFullYear(), d.getMonth(), d.getDate() + 1);
+      }
+      return t;
+    }
+
+    if (rep.kind === 'weekly') {
+      /* 从第二天起一天天找，最多找 8 周（同一星期几最多 7 天出现一次） */
+      for (let i = 1; i <= 7 * 8; i++) {
+        const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
+        if (rep.days.indexOf(isoDow(d)) >= 0) {
+          const t = withSameTime(fromMs, d.getFullYear(), d.getMonth(), d.getDate());
+          if (t >= floor) return t;
+        }
+      }
+      return 0;
+    }
+
+    if (rep.kind === 'monthly') {
+      /* 往后 24 个月里找（每个月最多试一次，31 号在短月里会被跳过） */
+      for (let i = 1; i <= 24; i++) {
+        const y = base.getFullYear(), m = base.getMonth() + i;
+        const yy = y + Math.floor(m / 12), mm = ((m % 12) + 12) % 12;
+        const last = daysInMonth(yy, mm);
+        const day = rep.mode === 'last' ? last : rep.day;
+        if (day > last) continue;                     // 短月没有这一天 → 跳过
+        const t = withSameTime(fromMs, yy, mm, day);
+        if (t >= floor) return t;
+      }
+      return 0;
+    }
+
+    if (rep.kind === 'yearly') {
+      for (let i = 1; i <= 8; i++) {
+        const yy = base.getFullYear() + i;
+        if (rep.day > daysInMonth(yy, rep.mon - 1)) continue;   // 2/29 撞上平年 → 跳过
+        const t = withSameTime(fromMs, yy, rep.mon - 1, rep.day);
+        if (t >= floor) return t;
+      }
+      return 0;
+    }
+    return 0;
+  }
   const ui = {
     tab: 'home',               // home | todo | settings
     todoGrabFront: true,       // 待办到点是否抢前台
@@ -327,6 +448,13 @@
     tdTime: $('#tdTime'),
     tdQuick: $('#tdQuick'),
     tdPrio: $('#tdPrio'),
+    tdRepeat: $('#tdRepeat'),
+    tdRepeatHint: $('#tdRepeatHint'),
+    tdWeekRow: $('#tdWeekRow'),
+    tdWeekDays: $('#tdWeekDays'),
+    tdMonthRow: $('#tdMonthRow'),
+    tdMonthMode: $('#tdMonthMode'),
+    tdMonthDay: $('#tdMonthDay'),
     tdSave: $('#tdSave'),
     tdCancel: $('#tdCancel'),
     tdClose: $('#tdClose'),
@@ -350,6 +478,8 @@
     chkAutoLaunchTodo: $('#chkAutoLaunchTodo'),
     chkTodoCatchUp: $('#chkTodoCatchUp'),
     btnOpenDataDir: $('#btnOpenDataDir'),
+    btnOpenSkinsDir: $('#btnOpenSkinsDir'),
+    skinsDirPath: $('#skinsDirPath'),
     setAbout: $('#setAbout'),
     /* 设置页左侧导航 */
     setNav: $('#setNav'),
@@ -672,17 +802,10 @@
   function completeAlert() {
     const id = rt.alertId;
     if (!id) return;
-    /* 待办：勾掉完成，不动「每日次数」统计（那是喝水/休息的目标计数） */
+    /* 待办：勾掉完成，不动「每日次数」统计（那是喝水/休息的目标计数）。
+       重复待办走 markTodoDone（会直接排下一期），不要在别处再改一遍数据。 */
     if (alertKind === 'todo') {
-      const td = todoById(id);
-      if (td) {
-        td.done = true;
-        td.doneAt = Date.now();
-        td.remindAt = 0;
-        saveTodoStore();
-        renderTodos();
-      }
-      Sound.confirm();
+      markTodoDone(id);
       closeAlert();
       return;
     }
@@ -1050,6 +1173,7 @@
             dueAt: +t.dueAt || 0,
             remindAt: +t.remindAt || 0,
             prio: normPrio(t.prio),
+            repeat: normRepeat(t.repeat),
             notify: t.notify !== false
           };
         });
@@ -1069,7 +1193,13 @@
   function pushCalTodos() {
     if (!native || !native.calTodos) return;
     native.calTodos(todos.filter(function (t) { return t && t.dueAt; }).map(function (t) {
-      return { id: t.id, text: t.text, done: !!t.done, dueAt: t.dueAt, prio: normPrio(t.prio) };
+      return {
+        id: t.id, text: t.text, done: !!t.done, dueAt: t.dueAt,
+        prio: normPrio(t.prio),
+        /* 重复规则一起推给日历：格子里挂个 🔁，当天清单里写明"每周一"这种 */
+        repeat: t.repeat || null,
+        repeatText: t.repeat ? repeatLabel(t.repeat) : ''
+      };
     }));
     /* 左边那一栏的备忘录跟着一起推（存盘就推，两边永远一致） */
     if (native.calMemos) {
@@ -1189,6 +1319,14 @@
       meta.innerHTML = '⏰ <b></b> <span class="' + (late ? 'late' : '') + '"></span>';
       meta.querySelector('b').textContent = fmtTodoTime(t.dueAt);
       meta.querySelector('span').textContent = t.done ? '（已完成）' : fmtFromNow(t.dueAt);
+      /* 重复待办挂个小标签，一眼看出它是每期都来的 */
+      if (t.repeat) {
+        const badge = document.createElement('span');
+        badge.className = 'rep-badge';
+        badge.textContent = '🔁 ' + repeatLabel(t.repeat);
+        badge.title = '重复待办：点一下前面的勾 = 完成这一期，会自动排下一期';
+        meta.appendChild(badge);
+      }
       el.todoList.appendChild(row);
     });
   }
@@ -1250,6 +1388,104 @@
     return normPrio(on && on.dataset.prio);
   }
 
+  /* ---------------------------------------------------- 重复：弹窗里那几行 */
+  /* 「每月几号」下拉：1~31 只填一次 */
+  (function fillMonthDays() {
+    const sel = $('#tdMonthDay');
+    if (!sel) return;
+    let html = '';
+    for (let i = 1; i <= 31; i++) html += '<option value="' + i + '">' + i + ' 号</option>';
+    sel.innerHTML = html;
+  })();
+
+  function paintRepeatUI(rep, dueDate) {
+    const r = normRepeat(rep);
+    const kind = r ? r.kind : 'none';
+    if (el.tdRepeat) el.tdRepeat.value = kind;
+    if (el.tdWeekRow) el.tdWeekRow.hidden = kind !== 'weekly';
+    if (el.tdMonthRow) el.tdMonthRow.hidden = kind !== 'monthly';
+    /* 每周：默认勾上「当前选的那天是周几」，用户再自己加减 */
+    const days = (r && r.kind === 'weekly') ? r.days.slice() : [isoDow(dueDate || new Date())];
+    if (el.tdWeekDays) {
+      const btns = el.tdWeekDays.querySelectorAll('button[data-dow]');
+      for (let i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('on', days.indexOf(+btns[i].dataset.dow) >= 0);
+      }
+    }
+    /* 每月：默认「按几号 + 当前这天」 */
+    const mode = (r && r.kind === 'monthly' && r.mode === 'last') ? 'last' : 'day';
+    if (el.tdMonthMode) {
+      const mb = el.tdMonthMode.querySelectorAll('button[data-mode]');
+      for (let i = 0; i < mb.length; i++) {
+        mb[i].classList.toggle('on', mb[i].dataset.mode === mode);
+      }
+    }
+    if (el.tdMonthDay) {
+      const d = (r && r.kind === 'monthly' && r.mode === 'day')
+        ? r.day : (dueDate ? dueDate.getDate() : new Date().getDate());
+      el.tdMonthDay.value = String(Math.min(31, Math.max(1, d)));
+      el.tdMonthDay.hidden = (mode === 'last');
+    }
+    updateRepeatHint(dueDate);
+  }
+
+  /* 那一行右边的小提示：把「会怎么重复」用人话写出来（选每年时尤其有用） */
+  function updateRepeatHint(dueDate) {
+    if (!el.tdRepeatHint) return;
+    const kind = el.tdRepeat ? el.tdRepeat.value : 'none';
+    if (kind === 'none') { el.tdRepeatHint.textContent = ''; return; }
+    if (kind === 'daily') { el.tdRepeatHint.textContent = '每天都提醒'; return; }
+    if (kind === 'weekly') {
+      const on = [];
+      if (el.tdWeekDays) {
+        const btns = el.tdWeekDays.querySelectorAll('button[data-dow]');
+        for (let i = 0; i < btns.length; i++) if (btns[i].classList.contains('on')) on.push(+btns[i].dataset.dow);
+      }
+      el.tdRepeatHint.textContent = on.length
+        ? ('每周' + on.sort(function (a, b) { return a - b; }).map(function (d) { return DOW_LABEL[d]; }).join('、'))
+        : '选星期几';
+      return;
+    }
+    if (kind === 'monthly') {
+      const lastBtn = el.tdMonthMode ? el.tdMonthMode.querySelector('button[data-mode="last"]') : null;
+      el.tdRepeatHint.textContent = (lastBtn && lastBtn.classList.contains('on'))
+        ? '每月最后一天' : ('每月 ' + (el.tdMonthDay ? el.tdMonthDay.value : 1) + ' 号（短月跳过）');
+      return;
+    }
+    if (kind === 'yearly') {
+      const parts = (el.tdDate && el.tdDate.value || '').split('-');
+      el.tdRepeatHint.textContent = parts.length === 3
+        ? ('每年 ' + (+parts[1]) + ' 月 ' + (+parts[2]) + ' 日') : '每年同月同日';
+    }
+  }
+
+  function pickedRepeatUI() {
+    const kind = el.tdRepeat ? el.tdRepeat.value : 'none';
+    if (kind === 'none') return null;
+    if (kind === 'daily') return { kind: 'daily' };
+    if (kind === 'weekly') {
+      const on = [];
+      if (el.tdWeekDays) {
+        const btns = el.tdWeekDays.querySelectorAll('button[data-dow]');
+        for (let i = 0; i < btns.length; i++) if (btns[i].classList.contains('on')) on.push(+btns[i].dataset.dow);
+      }
+      if (!on.length) return { kind: 'weekly', days: [isoDow(new Date())] };
+      return { kind: 'weekly', days: on };
+    }
+    if (kind === 'monthly') {
+      const lastBtn = el.tdMonthMode ? el.tdMonthMode.querySelector('button[data-mode="last"]') : null;
+      if (lastBtn && lastBtn.classList.contains('on')) return { kind: 'monthly', mode: 'last' };
+      return { kind: 'monthly', mode: 'day', day: el.tdMonthDay ? (+el.tdMonthDay.value || 1) : 1 };
+    }
+    if (kind === 'yearly') {
+      const parts = (el.tdDate.value || '').split('-');
+      if (parts.length === 3) return { kind: 'yearly', mon: +parts[1], day: +parts[2] };
+      const now = new Date();
+      return { kind: 'yearly', mon: now.getMonth() + 1, day: now.getDate() };
+    }
+    return null;
+  }
+
   function openTodoModal(id) {
     editingTodoId = id || null;
     const t = id ? todoById(id) : null;
@@ -1263,10 +1499,22 @@
     })();
     el.tdDate.value = localDateValue(due);
     el.tdTime.value = localTimeValue(due);
+    paintRepeatUI(t ? t.repeat : null, due);
     el.todoOverlay.hidden = false;
     setTimeout(function () { try { el.tdText.focus(); } catch (e) { } }, 50);
   }
   function closeTodoModal() { el.todoOverlay.hidden = true; editingTodoId = null; }
+
+  /* 弹窗里当前选的日期（重复那几行要用它算默认值） */
+  function pickedDueDate() {
+    const dv = el.tdDate && el.tdDate.value || '';
+    const parts = dv.split('-');
+    if (parts.length === 3) {
+      const d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+      if (isFinite(d.getTime())) return d;
+    }
+    return new Date();
+  }
 
   /* 快捷档位：几分钟后 / 今天 18:00 / 明天 9:00 */
   function applyTodoQuick(btn) {
@@ -1298,6 +1546,7 @@
     const dueAt = due.getTime();
     if (!isFinite(dueAt)) return;
     const prio = pickedTodoPrio();
+    const repeat = pickedRepeatUI();
 
     if (editingTodoId) {
       const t = todoById(editingTodoId);
@@ -1305,6 +1554,7 @@
         t.text = text.slice(0, 60);
         t.dueAt = dueAt;
         t.prio = prio;
+        t.repeat = repeat;
         /* 改了时间就把「下次提醒」重置到新时间；已经完成的重新变回未完成 */
         t.remindAt = dueAt;
         if (t.done) { t.done = false; t.doneAt = 0; }
@@ -1317,6 +1567,7 @@
         dueAt: dueAt,
         remindAt: dueAt,          // 到点就提醒（过期的会在很短时间内被 tick 抓到）
         prio: prio,
+        repeat: repeat,
         notify: true
       });
     }
@@ -1326,7 +1577,9 @@
     Sound.click();
     requestFit();
     const late = dueAt < Date.now();
-    setCaption(late ? '待办已保存（时间已过，马上会提醒你）' : '待办已保存，到点会提醒你');
+    const repTxt = repeat ? ('，' + repeatLabel(repeat)) : '';
+    setCaption(late ? ('待办已保存（时间已过，马上会提醒你）' + repTxt)
+      : ('待办已保存' + repTxt + '，到点会提醒你'));
   }
 
   function deleteTodo(id) {
@@ -1339,18 +1592,49 @@
     requestFit();
   }
 
+  /* 勾完成。⚠️ 重复待办走的是另一条路：不是「变灰」，而是**排下一期**
+     （用户定的规矩：没完成就一直挂着，完成后才排下一期）。
+     返回 true 表示这是一条重复待办、已经排到下一期了。 */
+  function markTodoDone(id) {
+    const t = todoById(id);
+    if (!t) return false;
+    if (t.repeat) {
+      const next = nextOccurrence(t.dueAt || Date.now(), t.repeat, Date.now() + 60000);
+      if (!next) return false;
+      t.dueAt = next;
+      t.remindAt = next;
+      t.done = false;
+      t.doneAt = 0;
+      saveTodoStore();
+      renderTodos();
+      Sound.confirm();
+      setCaption('这一期完成，下次提醒：<b>' + fmtTodoTime(next) + '</b>');
+      return true;
+    }
+    t.done = true;
+    t.doneAt = Date.now();
+    t.remindAt = 0;                              // 完成了就别再提醒
+    saveTodoStore();
+    renderTodos();
+    requestFit();
+    Sound.click();
+    setCaption('待办已完成：<b>' + escapeHtml(t.text) + '</b>');
+    return true;
+  }
+
   function toggleTodoDone(id) {
     const t = todoById(id);
     if (!t) return;
-    t.done = !t.done;
-    t.doneAt = t.done ? Date.now() : 0;
-    if (t.done) t.remindAt = 0;                  // 完成了就别再提醒
-    else if (t.dueAt && t.dueAt < Date.now()) t.remindAt = Date.now() + 60000;
+    /* 重复待办没有「取消完成」这一说：它一完成就已经排到下一期了 */
+    if (t.repeat) { markTodoDone(id); return; }
+    if (!t.done) { markTodoDone(id); return; }
+    t.done = false;
+    t.doneAt = 0;
+    if (t.dueAt && t.dueAt < Date.now()) t.remindAt = Date.now() + 60000;
     else t.remindAt = t.dueAt;
     saveTodoStore();
     renderTodos();
     Sound.click();
-    if (t.done) setCaption('待办已完成：<b>' + escapeHtml(t.text) + '</b>');
   }
 
   /* -------------------------------------------------------- 待办到点调度 */
@@ -1462,8 +1746,30 @@
       el.btnOpenDataDir.hidden = true;
     }
 
+    /* 皮肤文件夹：按钮点开它；顺手把真实路径填进说明和下拉框提示，
+       省得用户猜「skins/ 到底在哪」 */
+    if (el.btnOpenSkinsDir && native && native.openSkinsDir) {
+      el.btnOpenSkinsDir.addEventListener('click', function () {
+        native.openSkinsDir().then(function (dir) {
+          if (dir) setCaption('已打开皮肤文件夹：<b>' + escapeHtml(dir) + '</b>');
+        }).catch(function () { });
+      });
+    } else if (el.btnOpenSkinsDir) {
+      el.btnOpenSkinsDir.hidden = true;
+    }
+    if (native && native.skinsDir) {
+      native.skinsDir().then(function (dir) {
+        if (!dir) return;
+        if (el.skinsDirPath) el.skinsDirPath.textContent = dir;
+        if (el.skinSel) {
+          el.skinSel.title = '自定义皮肤放进这个文件夹（每个皮肤一个子文件夹）：\n' + dir +
+            '\n软件更新不会删掉它；' + '文件夹里的 README-skins.txt 有做法说明';
+        }
+      }).catch(function () { });
+    }
+
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.4.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.5.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -2958,6 +3264,58 @@
         if (!b) return;
         paintTodoPrio(b.dataset.prio);
         Sound.click();
+      });
+    }
+
+    /* 重复：下拉切换时把对应的子行显出来；每周/每月那两行自己点一下就更新提示 */
+    if (el.tdRepeat) {
+      el.tdRepeat.addEventListener('change', function () {
+        const kind = el.tdRepeat.value;
+        if (el.tdWeekRow) el.tdWeekRow.hidden = kind !== 'weekly';
+        if (el.tdMonthRow) el.tdMonthRow.hidden = kind !== 'monthly';
+        if (kind === 'weekly' && el.tdWeekDays) {
+          /* 刚切到每周：先按当前选的日期勾一天，别让用户面对一个空选择 */
+          const anyOn = el.tdWeekDays.querySelector('button.on');
+          if (!anyOn) {
+            const btn = el.tdWeekDays.querySelector('button[data-dow="' + isoDow(pickedDueDate()) + '"]');
+            if (btn) btn.classList.add('on');
+          }
+        }
+        updateRepeatHint(pickedDueDate());
+        Sound.click();
+      });
+    }
+    if (el.tdWeekDays) {
+      el.tdWeekDays.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('button[data-dow]') : null;
+        if (!b) return;
+        b.classList.toggle('on');
+        updateRepeatHint(pickedDueDate());
+        Sound.click();
+      });
+    }
+    if (el.tdMonthMode) {
+      el.tdMonthMode.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('button[data-mode]') : null;
+        if (!b) return;
+        const btns = el.tdMonthMode.querySelectorAll('button[data-mode]');
+        for (let i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i] === b);
+        if (el.tdMonthDay) el.tdMonthDay.hidden = (b.dataset.mode === 'last');
+        updateRepeatHint(pickedDueDate());
+        Sound.click();
+      });
+    }
+    if (el.tdMonthDay) {
+      el.tdMonthDay.addEventListener('change', function () { updateRepeatHint(pickedDueDate()); });
+    }
+    /* 改了日期，重复提示里的「每年 X 月 X 日」要跟着变 */
+    if (el.tdDate) {
+      el.tdDate.addEventListener('change', function () {
+        updateRepeatHint(pickedDueDate());
+        if (el.tdRepeat && el.tdRepeat.value === 'monthly' && el.tdMonthDay) {
+          el.tdMonthDay.value = String(pickedDueDate().getDate());
+          updateRepeatHint(pickedDueDate());
+        }
       });
     }
 

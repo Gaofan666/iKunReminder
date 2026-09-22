@@ -299,4 +299,5 @@ body.dragging{cursor:grabbing}
 }
 .pi.confirming:hover{background:rgba(226,87,79,.14)}
 .confirm-txt{flex:1;min-width:0;font-size:17px;line-height:24px;color:var(--ink);word-break:break-word}
+.confirm-txt .warn{font-size:14px;color:var(--p-high)}
 .panel-empty{font-size:17px;color:var(--ink-soft);text-align:center;padding:40px 0;line-height:2}

@@ -91,6 +91,11 @@ const DIAG = (function () {
     /* --diag-cal：桌面日历端到端自检（造一批三档优先级的待办 → 开日历 →
        查网格/颜色/切月/当天清单 → 再用主界面真实弹窗存一条，验证 prio 落盘） */
     if (a === '--diag-cal') out.cal = true;
+    /* --diag-skins：用户皮肤目录 / 说明文档 / 「被安装程序清掉后能不能自愈」 */
+    if (a === '--diag-skins') out.skins = true;
+    /* --diag-repeat：重复待办端到端自检（走真实弹窗 + 真实勾完成），
+       重点验「每月 31 号碰上 2 月怎么办」这类边界 */
+    if (a === '--diag-repeat') out.repeat = true;
     /* --diag-calstart：模拟「上次勾了桌面日历，这次开机」——
        日历不许压在主界面上（用户报过：一开机日历盖住界面、点不动） */
     if (a === '--diag-calstart') out.calstart = true;
@@ -740,6 +745,195 @@ function createWindow() {
              3) 点有事的格子 → 当天清单出来且条数对；
              4) 点「下一月」→ 标题月份变了；
              5) 存一张日历窗截图，人眼确认外观。 */
+          /* 用户皮肤自检：目录/说明文档会不会自动备好；被安装程序整目录清掉后能不能自愈。
+             ⚠️ 把用户皮肤目录临时指到一个干净的空目录：这才像「装好之后」的布局
+             （开发模式下它等于仓库的 skins/，里面全是内置皮肤，造不出「被清空」的场景）。 */
+          if (DIAG.skins) {
+            const mirror = skinsMirrorDir();
+            const tmpDir = path.join(app.getPath('userData'), 'diag-skins');
+            const fakeName = '【自检】测试皮肤';
+            const cleanup = function () {
+              try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { }
+              try { fs.rmSync(mirror, { recursive: true, force: true }); } catch (e) { }
+              skinsDirOverride = '';
+            };
+            cleanup();                                     // 干净起步
+            skinsDirOverride = tmpDir;
+            const dir = userSkinsDir();
+            const readme = path.join(dir, 'README.md');
+            const fake = path.join(dir, fakeName);
+
+            ensureUserSkins();                             // 正常情况下启动时就会做
+            diagLog('skins-1-目录与文档', {
+              用户皮肤目录: dir,
+              目录自动建好了吗: fs.existsSync(dir),
+              说明文档自动写了吗: fs.existsSync(readme)
+                ? (fs.readFileSync(readme, 'utf8').length + ' 字节') : '❌ 没有',
+              内置皮肤在别处: process.resourcesPath
+                ? path.join(process.resourcesPath, 'skins') : '(开发模式：仓库 skins/)'
+            });
+
+            /* 造一个「用户自己做的」皮肤：一个子文件夹 + skin.json + 一张图 */
+            try {
+              fs.mkdirSync(fake, { recursive: true });
+              fs.writeFileSync(path.join(fake, 'skin.json'), JSON.stringify({
+                name: '自检皮肤', author: 'diag',
+                frame: { w: 8, h: 8 },
+                animations: { idle: { row: 0, frames: 1, fps: 1 } }
+              }), 'utf8');
+              fs.writeFileSync(path.join(fake, 'sheet.png'), Buffer.from(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+                'base64'));
+            } catch (e) { diagLog('skins-write-error', String(e && e.message || e)); }
+
+            const scanned = scanSkins().map(function (s) { return s.id; });
+            diagLog('skins-2-能不能扫到', {
+              用户目录: listUserSkinDirs(),
+              用户皮肤认出来了吗: scanned.indexOf(fakeName) >= 0,
+              说明文档被误当皮肤了吗: scanned.indexOf('README.md') >= 0
+            });
+
+            /* 镜像（正常情况下每次列皮肤都会顺手做一次） */
+            const m1 = syncSkinsMirror();
+            diagLog('skins-3-镜像到 userData', {
+              动作: m1,
+              镜像里有皮肤吗: fs.existsSync(path.join(mirror, fakeName, 'skin.json'))
+            });
+
+            /* ① 模拟「更新时安装程序把整个安装目录删掉」→ 下次启动应该自愈 */
+            fs.rmSync(dir, { recursive: true, force: true });
+            const wiped = !fs.existsSync(fake);
+            const m2 = syncSkinsMirror();
+            diagLog('skins-4-整目录被清掉后自愈', {
+              模拟清掉成功: wiped,
+              动作: m2,
+              皮肤回来了吗: fs.existsSync(path.join(fake, 'skin.json')),
+              图片也回来了吗: fs.existsSync(path.join(fake, 'sheet.png')),
+              说明文档也回来了吗: fs.existsSync(readme)
+            });
+
+            /* ② 用户【故意】删掉皮肤 → 目录还在、里面空了 → 镜像也要跟着清掉，别复活 */
+            fs.rmSync(fake, { recursive: true, force: true });
+            const dirStillThere = fs.existsSync(dir);
+            const m3 = syncSkinsMirror();
+            const mirrorStillHas = fs.existsSync(path.join(mirror, fakeName));
+            fs.rmSync(dir, { recursive: true, force: true });
+            const m4 = syncSkinsMirror();
+            diagLog('skins-5-故意删掉的别复活', {
+              删完目录还在吗: dirStillThere,
+              删完镜像动作: m3,
+              镜像里还留着吗: mirrorStillHas,
+              再清一次目录的动作: m4,
+              复活了吗: fs.existsSync(fake)
+            });
+
+            cleanup();
+            diagLog('skins-6-清理完毕', {
+              临时目录: fs.existsSync(tmpDir) ? '❌ 还在' : '✅ 已清掉',
+              镜像目录: fs.existsSync(mirror) ? '❌ 还在' : '✅ 已清掉'
+            });
+          }
+          /* 重复待办自检：全部走真实弹窗 + 真实的「点勾完成」，看下一期排到哪天 */
+          if (DIAG.repeat) {
+            const wait7 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const dayStr = function (ms) {
+              const d = new Date(ms);
+              const p = function (n) { return n < 10 ? '0' + n : String(n); };
+              return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+                ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+            };
+            /* 用真实弹窗建一条待办：text / 日期 / 规则（每周星期几、每月按几号或最后一天） */
+            const addTodo = async function (text, dateStr, cfg) {
+              const js = '(function(){try{' +
+                'var g=function(id){return document.getElementById(id);};' +
+                'g("btnAddTodo").click();' +
+                'g("tdText").value=' + JSON.stringify(text) + ';' +
+                'g("tdDate").value=' + JSON.stringify(dateStr) + ';' +
+                'g("tdTime").value="09:30";' +
+                'var seg=g("tdRepeat");seg.value=' + JSON.stringify(cfg.kind) + ';' +
+                'seg.dispatchEvent(new Event("change",{bubbles:true}));' +
+                (cfg.days ? ('var wd=g("tdWeekDays");' +
+                  /* 先全关：切到「每周」时会自动预选「所选日期是周几」那一天，用例要的是干净数据 */
+                  'Array.prototype.forEach.call(wd.querySelectorAll("button[data-dow]"),function(b){' +
+                  'if(b.classList.contains("on"))b.click();});' +
+                  '[' + cfg.days.join(',') + '].forEach(function(d){' +
+                  'var b=wd.querySelector(\'button[data-dow="\'+d+\'"]\');' +
+                  'if(b&&!b.classList.contains("on"))b.click();});') : '') +
+                (cfg.monthMode === 'last'
+                  ? 'var mm=g("tdMonthMode");var lb=mm.querySelector(\'button[data-mode="last"]\');if(lb)lb.click();'
+                  : '') +
+                (cfg.monthDay ? ('g("tdMonthDay").value="' + cfg.monthDay +
+                  '";g("tdMonthDay").dispatchEvent(new Event("change",{bubbles:true}));') : '') +
+                'var weekRowShown=!g("tdWeekRow").hidden, monthRowShown=!g("tdMonthRow").hidden;' +
+                'var hint=g("tdRepeatHint").textContent;' +
+                'g("tdSave").click();' +
+                'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'var t=(raw.todos||[]).filter(function(x){return x.text===' + JSON.stringify(text) + ';})[0];' +
+                'return {id:t?t.id:null, dueAt:t?t.dueAt:0, repeat:t?t.repeat:null,' +
+                ' 每周行:weekRowShown, 每月行:monthRowShown, 提示:hint};' +
+                '}catch(e){return {error:String(e&&e.message||e)};}})()';
+              return win.webContents.executeJavaScript(js, true);
+            };
+            /* 点列表里那条的勾 = 完成这一期 */
+            const complete = async function (id) {
+              await win.webContents.executeJavaScript(
+                '(function(){var row=document.querySelector(\'.todo-item[data-id="' + id + '"]\');' +
+                'if(!row)return false;var b=row.querySelector(\'[data-role="done"]\');' +
+                'if(!b)return false;b.click();return true;})()', true);
+              await wait7(400);
+              return win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'var t=(raw.todos||[]).filter(function(x){return x.id===' + JSON.stringify(id) + ';})[0];' +
+                'return t?{dueAt:t.dueAt, done:!!t.done, repeat:t.repeat}:null;})()', true);
+            };
+
+            const cases = [
+              { name: '每天', date: '2027-03-10', cfg: { kind: 'daily' }, want: '2027-03-11' },
+              { name: '每周一', date: '2027-03-10', cfg: { kind: 'weekly', days: [1] }, want: '2027-03-15' },
+              /* ⚠️ 这两条是这次讨论的核心：31 号碰上只有 28 天的 2 月，一个跳过、一个落到月末 */
+              { name: '每月31号', date: '2027-01-31', cfg: { kind: 'monthly', monthDay: 31 }, want: '2027-03-31' },
+              { name: '每月最后一天', date: '2027-01-31', cfg: { kind: 'monthly', monthMode: 'last' }, want: '2027-02-28' },
+              { name: '每年', date: '2027-03-15', cfg: { kind: 'yearly' }, want: '2028-03-15' },
+              { name: '每年2月29', date: '2028-02-29', cfg: { kind: 'yearly' }, want: '2032-02-29' }
+            ];
+            const rows2 = [];
+            for (let i = 0; i < cases.length; i++) {
+              const c = cases[i];
+              const made = await addTodo('【重复自检】' + c.name, c.date, c.cfg);
+              await wait7(300);
+              if (!made.id) { rows2.push({ 用例: c.name, 建失败: made }); continue; }
+              const after = await complete(made.id);
+              const got = after ? dayStr(after.dueAt).slice(0, 10) : '(空)';
+              rows2.push({
+                用例: c.name,
+                建在: c.date,
+                规则: JSON.stringify(made.repeat),
+                弹窗提示: made.提示,
+                行显示: { 每周行: made.每周行, 每月行: made.每月行 },
+                下一期: got,
+                期望: c.want,
+                对不对: got === c.want,
+                完成状态清了吗: after ? after.done === false : null
+              });
+              await wait7(200);
+            }
+            diagLog('repeat-1-推进规则', rows2.filter(function (r) { return r.用例; }));
+
+            /* 顺手验：重复待办在日历里带 🔁，当天清单里写明规则 */
+            const repTodos = await win.webContents.executeJavaScript(
+              '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+              'return (raw.todos||[]).filter(function(t){return t.repeat;}).length;})()', true);
+            const badges = await win.webContents.executeJavaScript(
+              '(function(){var b=document.querySelectorAll("#todoList .rep-badge");' +
+              'return {列表标签数:b.length, 第一个:b.length?b[0].textContent:"(无)"};})()', true);
+            diagLog('repeat-2-列表标签', { 带重复的待办数: repTodos, 标签: badges });
+
+            /* 清掉自检造的数据，别污染后面的步骤 */
+            await win.webContents.executeJavaScript(
+              '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+              'raw.todos=(raw.todos||[]).filter(function(t){return String(t.text).indexOf("【重复自检】")!==0;});' +
+              'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()', true);
+          }
           /* 开机恢复桌面日历时的 Z 序自检：日历不许压在主界面上、也不许抢焦点 */
           if (DIAG.calstart) {
             const wait6 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -903,8 +1097,11 @@ function createWindow() {
               d.setDate(d.getDate() + offset);
               return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
             };
+            /* ⚠️ 三条的时间都放在「还没到」的时候（今天那条用 23:59）：
+               造出已经过期的待办会立刻弹到点提醒，而且是一条接一条地弹，
+               会把界面盖住、搅乱后面的点击和截图。 */
             const plan = [
-              { text: '【自检】最高优先级', date: dayStr(0), time: '09:30', prio: 'high' },
+              { text: '【自检】最高优先级', date: dayStr(0), time: '23:59', prio: 'high' },
               { text: '【自检】中优先级', date: dayStr(1), time: '14:00', prio: 'mid' },
               { text: '【自检】低优先级', date: dayStr(2), time: '18:30', prio: 'low' }
             ];
@@ -948,17 +1145,28 @@ function createWindow() {
               优先级各不同: added.saved.map(function (t) { return t.prio; }).sort().join(',') === 'high,low,mid'
             });
 
-            /* 1.5) 顺手截一张主界面：新增待办弹窗里的「优先级」那一行。
-                  自检造的待办时间可能已经过了点，会先弹出到点提醒把主界面盖住，
-                  所以截图前先把它收掉（点「稍后再说」= 不改完成状态）。 */
+            /* 1.5) 顺手截一张主界面：新增待办弹窗里的「优先级 / 重复」那几行。
+                  自检造的待办时间可能已经过了点，会【一条接一条】弹到点提醒把主界面盖住，
+                  所以先循环把它收干净（点「稍后再说」= 不改完成状态）。 */
             try {
+              for (let g2 = 0; g2 < 8; g2++) {
+                const hidden = await win.webContents.executeJavaScript(
+                  '(function(){var o=document.getElementById("overlay");' +
+                  'if(!o||o.hidden)return true;' +
+                  'var a=document.getElementById("alertSnooze");if(a)a.click();' +
+                  'return document.getElementById("overlay").hidden;})()', true);
+                if (hidden) break;
+                await wait2(350);
+              }
               await win.webContents.executeJavaScript(
-                '(function(){var a=document.getElementById("alertSnooze");' +
-                'var o=document.getElementById("overlay");' +
-                'if(a&&o&&!o.hidden)a.click();' +
-                'document.getElementById("btnAddTodo").click();' +
+                '(function(){document.getElementById("btnAddTodo").click();' +
                 'var seg=document.getElementById("tdPrio");' +
                 'var b=seg?seg.querySelector(\'button[data-prio="high"]\'):null;if(b)b.click();' +
+                /* 让截图里也能看到「重复」那两行 */
+                'var r=document.getElementById("tdRepeat");if(r){r.value="monthly";' +
+                'r.dispatchEvent(new Event("change",{bubbles:true}));' +
+                'var md=document.getElementById("tdMonthDay");if(md){md.value="15";' +
+                'md.dispatchEvent(new Event("change",{bubbles:true}));}}' +
                 'return true;})()', true);
               await wait2(500);
               const shotMain = await win.capturePage();
@@ -1254,10 +1462,12 @@ function createWindow() {
                     id: 'pv' + off + '_' + hh + mm, text: text, done: !!done,
                     dueAt: d.getTime(), prio: prio
                   };
-                };
-                const demo = [
+                };                const demo = [
                   mk(0, 9, 30, 'high', '给客户回邮件'),
                   mk(0, 11, 0, 'mid', '交周报'),
+                  { id: 'pvr1', text: '交房租', done: false, prio: 'high',
+                    dueAt: mk(0, 15, 0, 'high', 'x').dueAt,
+                    repeat: { kind: 'monthly', mode: 'day', day: 15 }, repeatText: '每月 15 号' },
                   mk(0, 14, 0, 'mid', '买牛奶'),
                   mk(0, 16, 30, 'low', '整理下载文件夹'),
                   mk(0, 19, 0, 'low', '给绿萝浇水', true),
@@ -2346,7 +2556,10 @@ function applyCalTodos(list) {
       text: String(t.text == null ? '' : t.text).slice(0, 60),
       done: !!t.done,
       dueAt: +t.dueAt || 0,
-      prio: (t.prio === 'high' || t.prio === 'low') ? t.prio : 'mid'
+      prio: (t.prio === 'high' || t.prio === 'low') ? t.prio : 'mid',
+      /* 重复规则原样透传给日历页（那边只画「本期」这一条） */
+      repeat: t.repeat || null,
+      repeatText: String(t.repeatText || '')
     };
   }) : [];
   if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-todos', calTodos);
@@ -3065,14 +3278,155 @@ ipcMain.handle('pet-talk-end', () => {
 /* ====================================================== 皮肤（外部接口）
    让用户自己换宠物形象：在 skins/<皮肤名>/ 里放 skin.json + 一张精灵图即可。
 
-   三个位置都会找（方便用户放）：
-     1. 装好后 exe 同级的 skins/          ← 推荐，用户最找得到
-     2. 安装目录 resources/skins/          （打包进去的示例）
-     3. 开发时的 <项目>/skins/
+   两个地方：
+     1. 【用户皮肤】装好后 exe 同级的 skins/   ← 给用户放自己做的，更新时会先备份再放回来
+     2. 【内置皮肤】resources/skins/            ← 打包进去的示例，随版本更新
+     3. 开发时还有 <项目>/skins/（等同内置）
+
+   ⚠️ 为什么用户皮肤非要专门保护：安装程序在更新时会先把整个安装目录递归删掉
+   （electron-builder 的 uninstaller.nsh：RMDir /r $INSTDIR），用户自己塞进去的
+   东西会被一起删（朋友反馈过「更新后自定义皮肤没了」）。所以：
+     · 安装时由 build/installer.nsh 把 skins 先搬到 %TEMP%、装完再放回来；
+     · 程序这边再兜一层：把用户皮肤镜像一份到 userData，万一哪次没保住，下次启动自动补回来。
    皮肤图由主进程读成 data URL 再交给渲染进程，所以不用放宽页面的 CSP。 */
+
+/* 用户皮肤目录：exe 同级（开发时是项目目录），写不进去就退回 userData。
+   ⚠️ 自检用 skinsDirOverride 把它指到一个临时目录，好模拟「装好之后的目录布局」——
+   开发模式下这个目录就是仓库的 skins/，里面本来就有十几个内置皮肤，
+   「整个目录被清空」这种场景在仓库里根本造不出来。 */
+let skinsDirOverride = '';
+function userSkinsDir() {
+  if (skinsDirOverride) return skinsDirOverride;
+  try {
+    const base = app.isPackaged ? path.dirname(app.getPath('exe')) : __dirname;
+    return path.join(base, 'skins');
+  } catch (e) { return path.join(app.getPath('userData'), 'skins'); }
+}
+/* 用户皮肤在 userData 里的镜像（纯兜底，用户看不到） */
+function skinsMirrorDir() { return path.join(app.getPath('userData'), 'skins-backup'); }
+
+/* 说明文档：直接搬 skins/README.md（那份是完整文档，仓库里维护）
+   —— 程序里只留一小段应急文案，万一打包时漏了文档也不至于让用户对着空文件夹发呆 */
+const SKINS_README_FALLBACK = [
+  'iKunReminder 自定义宠物皮肤',
+  '==========================',
+  '',
+  '每个皮肤一个子文件夹，里面放：',
+  '  skin.json    描述文件',
+  '  sheet.png    精灵图（每行一种动作，左到右是帧）',
+  '',
+  '放好之后重启软件，主界面「🎨 宠物形象」里就能选到。',
+  '完整说明（skin.json 怎么写、精灵图怎么排、出问题怎么办）见安装目录下',
+  'resources\\skins\\README.md。',
+  ''
+].join('\r\n');
+
+/* 目录和说明文档：启动时保证存在（安装程序建目录，文档由这里补） */
+function ensureUserSkins() {
+  const dir = userSkinsDir();
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (e) { return dir; }
+  try {
+    const doc = path.join(dir, 'README.md');
+    if (!fs.existsSync(doc)) {
+      /* 内置那份完整文档：打包后在 resources/skins/，开发时在项目根目录的 skins/。
+         两个候选都找一遍（开发模式下 resources 里没有，只有项目里有）。 */
+      const cands = [];
+      if (process.resourcesPath) cands.push(path.join(process.resourcesPath, 'skins', 'README.md'));
+      cands.push(path.join(__dirname, 'skins', 'README.md'));
+      const src = cands.filter(function (c) { return c !== doc && fs.existsSync(c); })[0];
+      if (src) fs.copyFileSync(src, doc);
+      else fs.writeFileSync(doc, SKINS_README_FALLBACK, 'utf8');
+    }
+  } catch (e) { /* 说明文档写不进去不致命 */ }
+  return dir;
+}
+
+/* 用户皮肤目录下的皮肤名单（只看目录） */
+function listUserSkinDirs() {
+  const dir = userSkinsDir();
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true })
+      .filter(function (e) { return e.isDirectory(); })
+      .map(function (e) { return e.name; })
+      .sort();
+  } catch (e) { return []; }
+}
+
+/* 兜底：把用户皮肤镜像到 userData；万一安装时没保住，下次启动从镜像补回来。
+   怎么区分「被安装程序清掉」和「用户自己删了」：
+     · 安装程序更新时是整个安装目录一起没的 → 连 skins 目录本身都不存在了；
+     · 用户删皮肤只会删里面的子文件夹 → 目录还在（里面还有说明文档）。
+   所以只在「目录整个不见了」时才补回来；「目录还在但空了」当作用户主动删的，
+   顺手把镜像也清掉，免得以后又给他变回来。
+   另外：目录不见时【绝不】清镜像（万一补回来失败，镜像还是最后一份底）。
+   只有名单变了才真的复制，别每次启动都写盘。 */
+function skinsSignature(names) {
+  const dir = userSkinsDir();
+  return names.map(function (n) {
+    let t = 0;
+    try { t = fs.statSync(path.join(dir, n)).mtimeMs; } catch (e) { }
+    return n + ':' + Math.round(t);
+  }).join('|');
+}
+
+function syncSkinsMirror() {
+  const dir = userSkinsDir(), mirror = skinsMirrorDir();
+  let mirrored = [];
+  try {
+    mirrored = fs.readdirSync(mirror, { withFileTypes: true })
+      .filter(function (e) { return e.isDirectory(); })
+      .map(function (e) { return e.name; }).sort();
+  } catch (e) { /* 还没有镜像 */ }
+
+  /* ① 整个皮肤目录都不见了（更新时安装目录被清掉的典型特征）→ 从镜像补回来 */
+  if (!fs.existsSync(dir)) {
+    if (!mirrored.length) return 'unchanged';
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      mirrored.forEach(function (n) {
+        fs.cpSync(path.join(mirror, n), path.join(dir, n),
+          { recursive: true, force: false, errorOnExist: false });
+      });
+      ensureUserSkins();                 // 说明文档也一起补回来
+      diagLog('skins-restored', { 从镜像补回: mirrored });
+      return 'restored';
+    } catch (e) {
+      /* 补失败了就把半拉目录清掉，下次启动还能再试（镜像不动） */
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e2) { }
+      diagLog('skins-restore-error', { message: String(e && e.message || e) });
+      return 'restore-failed';
+    }
+  }
+
+  const names = listUserSkinDirs();
+  /* ② 目录还在但一个皮肤都没有 → 用户自己删光了，镜像跟着清掉（别复活） */
+  if (!names.length) {
+    if (mirrored.length) {
+      try { fs.rmSync(mirror, { recursive: true, force: true }); } catch (e) { }
+      return 'mirror-pruned';
+    }
+    return 'unchanged';
+  }
+  /* ③ 名单变了（加了 / 删了皮肤）→ 重建镜像 */
+  if (skinsSignature(names) !== skinsMirrorSig) {
+    try {
+      fs.rmSync(mirror, { recursive: true, force: true });
+      fs.mkdirSync(mirror, { recursive: true });
+      names.forEach(function (n) {
+        fs.cpSync(path.join(dir, n), path.join(mirror, n), { recursive: true, force: true });
+      });
+      skinsMirrorSig = skinsSignature(names);
+      return 'mirrored';
+    } catch (e) { return 'mirror-failed'; }
+  }
+  return 'unchanged';
+}
+let skinsMirrorSig = '';
+
 function skinsDirs() {
-  const list = [];
-  try { list.push(path.join(path.dirname(app.getPath('exe')), 'skins')); } catch (e) { }
+  const list = [ensureUserSkins()];
   if (process.resourcesPath) list.push(path.join(process.resourcesPath, 'skins'));
   list.push(path.join(__dirname, 'skins'));
   return list.filter(function (p, i) { return p && list.indexOf(p) === i; });
@@ -3103,12 +3457,24 @@ function scanSkins() {
 }
 
 ipcMain.handle('skins-list', () => {
+  /* 每次列皮肤时顺手做一次「镜像 / 需要时从镜像补回来」，用户什么都不用管 */
+  syncSkinsMirror();
   const list = [{ id: '__default', name: '篮球男孩', author: '', builtin: true }];
   scanSkins().forEach(function (s) {
     list.push({ id: s.id, name: s.name, author: s.author, builtin: false });
   });
   return list;
 });
+
+/* 设置页那个「🎨 打开皮肤文件夹」：保证目录和说明文档在，然后打开它 */
+ipcMain.handle('open-skins-dir', () => {
+  try {
+    const dir = ensureUserSkins();
+    require('electron').shell.openPath(dir);
+    return dir;
+  } catch (e) { return ''; }
+});
+ipcMain.handle('skins-dir', () => userSkinsDir());
 
 ipcMain.handle('skin-load', (e, id) => {
   if (!id || id === '__default') return { id: '__default', builtin: true };

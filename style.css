@@ -284,6 +284,17 @@ body.anim-off *::after{animation-play-state:paused !important}
   padding:5px 9px;font-family:inherit;font-size:12px;color:var(--dim);cursor:pointer;
 }
 .quick-time button:hover{border-color:var(--lake);color:var(--lake)}
+/* 重复·每周：选中的星期几要一眼看出来 */
+.quick-time button.on{
+  color:#fff;border-color:var(--lake);
+  background:linear-gradient(100deg,var(--sky),var(--lake));
+}
+/* 列表里那个「🔁 每周一」小标签 */
+.rep-badge{
+  display:inline-block;margin-left:6px;padding:0 6px;border-radius:7px;
+  font-size:10.5px;line-height:16px;color:var(--lake);
+  background:rgba(62,154,168,.10);border:1px solid rgba(62,154,168,.28);
+}
 
 .chk.big{font-size:15px;font-weight:600}
 .it-row.col{display:block}

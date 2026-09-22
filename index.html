@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.4.0</span>
+    <span class="tb-ver" id="tbVer">v3.5.0</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -181,7 +181,10 @@
     </div>
     <div class="set-row">
       <button class="btn" id="btnOpenDataDir">📂 打开数据目录</button>
-      <p class="set-desc">提醒事项、备忘、待办这些都存在程序自己的本地存储里；点这里可以看到程序所在目录。</p>
+      <button class="btn" id="btnOpenSkinsDir">🎨 打开皮肤文件夹</button>
+      <p class="set-desc">提醒事项、备忘、待办这些都存在程序自己的本地存储里；点这里可以看到程序所在目录。
+        自定义宠物皮肤放在<b id="skinsDirPath">skins 文件夹</b>里，
+        <b>软件更新不会把它删掉</b>（更新前会自动备份、装完放回来），文件夹里有详细说明。</p>
     </div>
     <div class="set-row">
       <p class="set-desc" id="setAbout"></p>
@@ -378,6 +381,39 @@
         <button type="button" data-prio="mid" class="on" title="桌面日历里用橙色显示">中</button>
         <button type="button" data-prio="low" title="桌面日历里用蓝色显示">低</button>
       </div>
+    </div>
+    <div class="it-row">
+      <span class="it-label">重复</span>
+      <select class="skin-sel" id="tdRepeat">
+        <option value="none">不重复</option>
+        <option value="daily">每天</option>
+        <option value="weekly">每周</option>
+        <option value="monthly">每月</option>
+        <option value="yearly">每年</option>
+      </select>
+      <span class="psr-label" id="tdRepeatHint"></span>
+    </div>
+    <!-- 每周：挑星期几（可多选） -->
+    <div class="it-row" id="tdWeekRow" hidden>
+      <span class="it-label"></span>
+      <div class="quick-time" id="tdWeekDays">
+        <button type="button" data-dow="1">一</button>
+        <button type="button" data-dow="2">二</button>
+        <button type="button" data-dow="3">三</button>
+        <button type="button" data-dow="4">四</button>
+        <button type="button" data-dow="5">五</button>
+        <button type="button" data-dow="6">六</button>
+        <button type="button" data-dow="7">日</button>
+      </div>
+    </div>
+    <!-- 每月：按几号，或「每月最后一天」（短月跳过，和 Google 日历一个规矩） -->
+    <div class="it-row" id="tdMonthRow" hidden>
+      <span class="it-label"></span>
+      <div class="seg" id="tdMonthMode">
+        <button type="button" data-mode="day" class="on">按几号</button>
+        <button type="button" data-mode="last">每月最后一天</button>
+      </div>
+      <select class="skin-sel" id="tdMonthDay"></select>
     </div>
     <div class="it-row">
       <span class="it-label">快捷</span>
