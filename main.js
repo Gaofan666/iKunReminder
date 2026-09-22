@@ -6,7 +6,7 @@
      · 宠物模式：只剩动画的小窗、悬浮置顶，右键弹原生菜单
      · 屏幕缩放（DPI）适配：窗口逻辑尺寸 = 物理设计尺寸 ÷ k，k 见 ui-scale.js
    ========================================================================= */
-const { app, BrowserWindow, ipcMain, Menu, screen, Tray, nativeImage, powerMonitor, globalShortcut, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen, Tray, nativeImage, powerMonitor, globalShortcut, dialog, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
@@ -86,6 +86,8 @@ const DIAG = (function () {
     if (a === '--diag-eyequit') out.eyequit = true;
     /* --diag-eyequit-keep：同上，但把「退出时还原」关掉 —— 验证退出后【保持】暖色 */
     if (a === '--diag-eyequit-keep') { out.eyequit = true; out.eyeKeep = true; }
+    /* --diag-petclamp：把宠物拖到右下极限，验证它能贴到工作区边缘 */
+    if (a === '--diag-petclamp') out.petclamp = true;
   });
   return out;
 })();
@@ -601,6 +603,116 @@ function createWindow() {
             moyuToggle();
             await new Promise(function (r) { setTimeout(r, 700); });
             diagLog('moyu-step3-shown', { visible: win.isVisible() });
+          }
+          /* 宠物贴边自检：把「宠物拖动」那几个真实 IPC 处理函数直接触发一遍，
+             往右下拖到极限，看窗口能不能贴到工作区边缘。
+             （之前给 clampToWorkArea 加了只有主窗口才需要的「Electron 那圈余量」，
+              宠物窗 resizable:false 本身没有那圈，结果被凭空留了条缝、贴不到边。） */
+          if (DIAG.petclamp) {
+            const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            /* 用「抓点 → 目标点」的真实拖法：处理函数算的是 b.x + (pt.x - start.x)，
+               抓点取宠物中心，目标点取该屏工作区角内 1dip 处，两个方向都必然撞到限位。 */
+            const dragTo = async function (pt) {
+              const b0 = petWin.getBounds();
+              ipcMain.emit('pet-win-drag-start', {},
+                { x: b0.x + Math.floor(b0.width / 2), y: b0.y + Math.floor(b0.height / 2) });
+              ipcMain.emit('pet-win-drag-move', {}, pt);
+              ipcMain.emit('pet-win-drag-end', {}, {});
+              await wait(500);   /* 500 > 跨屏重排的 180ms，等的就是「排完之后」的最终位置 */
+              return petWin.getBounds();
+            };
+            /* DIP 直接换物理，别靠 round 猜：贴没贴边以物理像素为准 */
+            const phys = function (r) { return screen.dipToScreenRect(null, r); };
+            const edge = function (dipRect, waDip) {
+              const p = phys(dipRect), w = phys(waDip);
+              return {
+                right: (w.x + w.width) - (p.x + p.width),
+                bottom: (w.y + w.height) - (p.y + p.height),
+                left: p.x - w.x,
+                top: p.y - w.y
+              };
+            };
+            setPetOn(true);
+            await wait(1400);
+            if (!petWin || petWin.isDestroyed()) {
+              diagLog('petclamp', { error: 'pet window not created' });
+            } else {
+              const rows = [];
+              const list = screen.getAllDisplays();
+              for (let i = 0; i < list.length; i++) {
+                const wa = list[i].workArea;
+                const tl = await dragTo({ x: wa.x + 1, y: wa.y + 1 });
+                const br = await dragTo({ x: wa.x + wa.width - 1, y: wa.y + wa.height - 1 });
+                rows.push({
+                  disp: list[i].id + '@' + list[i].scaleFactor,
+                  work: wa.x + ',' + wa.y + ' ' + wa.width + 'x' + wa.height,
+                  petDip: br.width + 'x' + br.height,
+                  tl: tl.x + ',' + tl.y,
+                  /* 距离工作区四边还有多少物理像素：0=贴齐，正数=留缝，负数=压出去了 */
+                  tlEdge: edge(tl, wa),
+                  br: br.x + ',' + br.y,
+                  brEdge: edge(br, wa),
+                  petPhys: JSON.stringify(phys(br))
+                });
+              }
+              /* 直接 setBounds 到左上角，分清「限位算错」还是「系统又挪了」 */
+              const pb = petWin.getBounds();
+              const wa0 = screen.getDisplayNearestPoint({ x: pb.x, y: pb.y }).workArea;
+              petWin.setBounds({ x: wa0.x, y: wa0.y, width: pb.width, height: pb.height });
+              await wait(500);
+              const direct = petWin.getBounds();
+              /* 眼见为实：把宠物停回主屏工作区右下角，截一张右下角实图（物理像素裁剪），
+                 人眼确认宠物的脚/手是不是真的顶到桌面边缘了。 */
+              const wa1 = list[0].workArea;
+              const park = await dragTo({ x: wa1.x + wa1.width - 1, y: wa1.y + wa1.height - 1 });
+              try {
+                const pr = screen.dipToScreenRect(null, list[0].bounds);
+                const srcs = await desktopCapturer.getSources({
+                  types: ['screen'],
+                  thumbnailSize: { width: pr.width, height: pr.height }
+                });
+                /* ⚠️ sources 的顺序不是「主屏优先」，必须按 display_id 挑，否则截到别块屏 */
+                const src = srcs.find(function (s) {
+                  return String(s.display_id) === String(list[0].id);
+                }) || srcs[0];
+                if (src && src.thumbnail && !src.thumbnail.isEmpty()) {
+                  const sz2 = src.thumbnail.getSize();
+                  const cw = Math.min(640, sz2.width), ch = Math.min(460, sz2.height);
+                  const shot = src.thumbnail.crop({
+                    x: Math.max(0, sz2.width - cw), y: Math.max(0, sz2.height - ch),
+                    width: cw, height: ch
+                  });
+                  fs.writeFileSync(path.join(__dirname, '.diag', 'pet-edge.png'), shot.toPNG());
+                }
+              } catch (e2) { diagLog('petclamp-shot-error', String(e2 && e2.message || e2)); }
+              /* 顺带确认主窗口那边没被改坏：它自己是【无边框+可调整大小】，
+                 必须继续留着那圈余量（贴到底会被系统那圈顶出工作区）。
+                 期望：右下 edge 为正数，约等于 winInsetDip()×本屏缩放。 */
+              let mainEdgeNow = null;
+              try {
+                const mw = win.getBounds();
+                const mwa = screen.getDisplayNearestPoint({
+                  x: mw.x + mw.width / 2, y: mw.y + mw.height / 2
+                }).workArea;
+                ipcMain.emit('drag-start', {},
+                  { x: mw.x + Math.floor(mw.width / 2), y: mw.y + Math.floor(mw.height / 2) });
+                ipcMain.emit('drag-move', {},
+                  { x: mwa.x + mwa.width - 1, y: mwa.y + mwa.height - 1 });
+                ipcMain.emit('drag-end', {}, {});
+                await wait(500);
+                mainEdgeNow = edge(win.getBounds(), mwa);
+              } catch (e3) { mainEdgeNow = String(e3 && e3.message || e3); }
+              diagLog('petclamp', {
+                rows: rows,
+                directWant: wa0.x + ',' + wa0.y,
+                directGot: direct.x + ',' + direct.y,
+                directEdge: edge(direct, wa0),
+                parkEdge: edge(park, wa1),
+                mainEdge: mainEdgeNow,
+                mainInset: winInsetDip()
+              });
+              setPetOn(false);
+            }
           }
           /* 退出还原自检：开护眼 → 记下色温 → 走正常退出（app.quit）。
              外面在进程结束后再读一次伽马表：回到原值才算通过。 */
@@ -1891,15 +2003,21 @@ function winInsetDip() {
   } catch (e) { return 10; }
 }
 
-function clampToWorkArea(x, y, w, h, pt) {
+/* 把窗口位置钳进工作区。
+   inset 是「可视窗口比 getBounds() 向外多出的那一圈」（electron#51679），
+   ⚠️ 只有【无边框 + 可调整大小】的主窗口才需要留这条余量 ——
+   Electron 的实现里那圈只在 has_thick_frame() && IsResizable() 时才加：
+       if (window_->has_frame() || !window_->has_thick_frame() || !window_->IsResizable()) return {};
+   宠物窗是 resizable:false，本身没有那圈，给它留余量就会「贴不到桌面边」。
+   所以 inset 由调用方显式传，主窗口传 winInsetDip()，宠物窗不传（0）。 */
+function clampToWorkArea(x, y, w, h, pt, inset) {
   let wa;
   try {
     wa = screen.getDisplayNearestPoint({ x: Math.round(pt.x), y: Math.round(pt.y) }).workArea;
   } catch (err) {
     wa = screen.getPrimaryDisplay().workArea;
   }
-  /* 右边/下边留出那一圈，左边/上边不留（留了会让窗口贴不到左上角，反而更怪） */
-  const inset = winInsetDip();
+  const insetDip = Math.max(0, Math.round(Number(inset) || 0));
   /* 窗口比工作区还大时（理论上不该发生，但万一）：别把它钉死在左上角 ——
      那会变成「完全拖不动」，而且右/下边缘在屏幕外也就「缩放不了」。
      这种情况允许在「左上角贴边」到「右下边贴边」之间挪动。 */
@@ -1907,8 +2025,8 @@ function clampToWorkArea(x, y, w, h, pt) {
   const tooTall = h > wa.height;
   const minX = tooWide ? wa.x - (w - wa.width) : wa.x;
   const minY = tooTall ? wa.y - (h - wa.height) : wa.y;
-  const maxX = wa.x + Math.max(0, wa.width - w) - (tooWide ? 0 : inset);
-  const maxY = wa.y + Math.max(0, wa.height - h) - (tooTall ? 0 : inset);
+  const maxX = wa.x + Math.max(0, wa.width - w) - (tooWide ? 0 : insetDip);
+  const maxY = wa.y + Math.max(0, wa.height - h) - (tooTall ? 0 : insetDip);
   return {
     x: Math.min(Math.max(x, minX), Math.max(minX, maxX)),
     y: Math.min(Math.max(y, minY), Math.max(minY, maxY))
@@ -1928,7 +2046,7 @@ ipcMain.on('drag-move', (e, pt) => {
   const pos = clampToWorkArea(
     Math.round(b.x + (pt.x - dragState.x)),
     Math.round(b.y + (pt.y - dragState.y)),
-    b.width, b.height, pt
+    b.width, b.height, pt, winInsetDip()
   );
   win.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
 });
@@ -1938,7 +2056,7 @@ ipcMain.on('drag-end', () => {
   if (win && !win.isDestroyed()) {
     const b = win.getBounds();
     const pos = clampToWorkArea(b.x, b.y, b.width, b.height,
-      { x: b.x + b.width / 2, y: b.y + b.height / 2 });
+      { x: b.x + b.width / 2, y: b.y + b.height / 2 }, winInsetDip());
     if (pos.x !== b.x || pos.y !== b.y) {
       win.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
     }
