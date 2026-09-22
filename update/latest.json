@@ -1,20 +1,20 @@
 {
-  "version": "3.5.0",
-  "releaseDate": "2026-09-22T11:59:35.077Z",
-  "notes": "## iKunReminder v3.5.0\n\n1. 🔁 **待办可以重复了** —— 新增（或修改）待办时多了一行「重复」，可以选：\n   - **每天**\n   - **每周**（挑星期几，可以多选，比如周一 + 周四）\n   - **每月几号**，或者 **每月最后一天**\n   - **每年**（同月同日）\n\n   点勾**不是变灰，而是自动排下一期**（提醒时刻不变），并直接告诉你下次什么时候提醒。待办列表和桌面日历里都会挂一个 🔁 标记，写明它是「每周一、四」还是「每月 15 号」\n2. 📅 **「每月 31 号」碰上 2 月怎么办** —— 按行业标准来（Google 日历、iCalendar 标准都是这么定的）：**短月直接跳过**，不会硬凑到 28 号；**要每个月都提醒就选「每月最后一天」**。同理「每年 2 月 29」只在闰年提醒。另外完成得晚了也不会连环催你：下一期一定排到「还没到」的那个周期（比如 1 月的月租拖到 9 月才勾，下次直接排 10 月）\n3. 🎨 **自己做的宠物皮肤，更新不会再被删了** —— 这是这次的重点修复。皮肤原来推荐放在安装目录里，而安装程序在更新时会把整个安装目录清空重建，皮肤就跟着没了（有朋友反馈过）。现在：\n   - 安装程序更新前**先把皮肤整个备份**，装完**再放回来**；\n   - 程序自己还会在 `%APPDATA%` 里留一份备份，万一哪次没搬好，**下次启动自动补回来**；\n   - 你**故意删掉**的皮肤不会又冒出来。\n   放在旧的安装目录位置、还没更新过的皮肤，从这一版开始也会被保护\n4. 📂 设置页新增 **「🎨 打开皮肤文件夹」** 按钮（旁边显示真实路径）；那个文件夹里带一份完整说明：skin.json 怎么写、精灵图怎么排、出问题怎么查\n5. 🧪 顺手把自检补全了，都能一键回归：重复规则的 6 个边界用例（短月跳过、闰年、每周多选…）、皮肤「整目录被清空后自愈」、以及安装程序那段搬运逻辑（单独编译真 NSIS 脚本跑一遍）\n\n**下载**：`iKunReminder-setup-v3.5.0.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 115644705,
-  "sha512": "oopQvP9pZecwxNRaLLiARUh5TdrMkT+urdS0oZgnxq8bqKtgm8rbddMUknXkygtKqx/dX9xw4lriG7tTrxtYSA==",
+  "version": "3.5.1",
+  "releaseDate": "2026-09-22T12:10:01.099Z",
+  "notes": "## iKunReminder v3.5.1\n\n1. 🧹 点「🎨 打开皮肤文件夹」之后不再弹那句「已打开皮肤文件夹：D:\\...」了 —— 文件夹本身已经弹出来了，再报一遍路径是多余的（只有**打不开**的时候才会提示一句）\n2. 📝 顺手把皮肤下拉框的提示文案里的说明文件名改对了（是 `README.md`）\n\n功能上和 v3.5.0 一样：重复待办、自定义皮肤更新不再被删等等都在。\n\n**下载**：`iKunReminder-setup-v3.5.1.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 115645201,
+  "sha512": "OemSYRD1aRM1OpwCR0TAT23S3OeOqWHD31lS8oKdeN2ZOEYXvutXLnlxE7Jd6RsGeH9QEvW+tE6mQYAdbWhk/A==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.0/iKunReminder-setup-v3.5.0.exe.part1",
-      "size": 57822353,
-      "sha512": "RCxOXtsh6nJatMcKroVoBSiXihjWumhbh0vBacnGxOFz/OWrdlKB+nSEPdJhWCZADYrYf8i3pDCB787wVzoARQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.1/iKunReminder-setup-v3.5.1.exe.part1",
+      "size": 57822601,
+      "sha512": "ZHbKtriC5abJxjoxfAzqiABfIxE3TAS8KX8sI2Wsz5GHC+WWBTlRRvaypbl+FKmYrlmrAYiUmAiUs6GJE6vioQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.0/iKunReminder-setup-v3.5.0.exe.part2",
-      "size": 57822352,
-      "sha512": "RkYUl2hF8MP9Hpft9Oekt6lXEkKMJxgig5xeZoBmHBOQr28UyizMmPyAWKwjqeZeOsh3ehMOZyXzc6cl/acGOA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.5.1/iKunReminder-setup-v3.5.1.exe.part2",
+      "size": 57822600,
+      "sha512": "AYzqh0UAcmD/MfzOvZpsmOLGWp95k3NIIM479TzFVVe9EHCwbePmdCazC26Lnm9KsdEn5AdYbjGl5s2o74kF3A==",
       "index": 2
     }
   ]
