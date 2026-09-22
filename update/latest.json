@@ -1,20 +1,20 @@
 {
-  "version": "3.3.1",
-  "releaseDate": "2026-09-22T03:14:22.349Z",
-  "notes": "## iKunReminder v3.3.1\n\n1. 🐾 **修好了「桌面宠物拖不到桌面边界」** —— 上一版修主窗口贴边溢出时，给窗口限位统一加了一圈「系统边框余量」（无边框 + 可调整大小的窗口，可视范围比实际坐标向外多一圈）。可宠物窗是**不可调整大小**的，系统根本没给它加那一圈，于是它被凭空留了约 15 个逻辑像素的缝，怎么拖都差一点点贴不到屏幕右边/下边。现在这圈余量改成**只给主窗口**，宠物拖动时不加 —— 实测宠物已经能严丝合缝贴到工作区四边（左/上 0 像素，右/下 0～2 像素）\n2. ✅ 主窗口那边**照旧留着**这圈余量（它确实需要），所以上一版「拖到屏幕边角后抓不住边框、拖不动也缩放不了」的修复没有被改回去\n3. 🔧 顺手把开发用的 DPI 自检脚本更新到现役模型（k≡1、按逻辑像素定尺寸），12 种分辨率 × 缩放组合 + 跨屏重排 + 宠物窗共 40 项全部通过\n\n**下载**：`iKunReminder-setup-v3.3.1.exe`（约 110 MB，Windows x64，双击安装）\n",
-  "size": 115610780,
-  "sha512": "+VctKTaMm47oLRnq7lWLvLJGJ1xZT7/opKgKKB0698LBXSLDJVSL+o1TiLCA+qrWiltxa7AoYBGa9gopP4at7A==",
+  "version": "3.4.0",
+  "releaseDate": "2026-09-22T10:11:44.492Z",
+  "notes": "## iKunReminder v3.4.0\n\n1. 📅 **新增「桌面日历」** —— 桌面上多一块日历：**左边是备忘录、右边是月历**，哪天有事一眼就能看见。主界面「🐣 桌面宠物 / 🌙 护眼模式」那一行勾上「📅 桌面日历」就出来（托盘菜单、桌面宠物右键菜单里也有同一个开关）。它能拖动、会记住位置，右键还有「上一月 / 回到今天 / 下一月 / 隐藏」\n2. 🎯 **待办可以分「高 / 中 / 低」三档优先级**了 —— 在新增（或修改）待办时选，日历里就用**红 / 橙 / 蓝**三种颜色画出来：高优先级排在最前，一天超过 3 条时显示「+N 条」。**主界面待办页一个字都没改**，还是原来的样子\n3. 🈷 **格子里带农历**（廿九 / 初一这种，初一显示月份），一眼看出农历日子\n4. 🖱 **点日历里某一天，能看到当天清单**并直接**勾完成、✏️ 编辑、🗑 删除**（删除会先问一句）；格子里字太小/太大都能调，窗口 940×680\n5. 🎨 **日历主题和透明度都能自己调**（设置 → 桌面日历）：**浅色 / 深色**一键切换（日历右上角那个 🌙 / ☀ 也能切），**不透明度滑杆**从 35% 到 100% 随便拖\n6. ✍️ **日历左边那栏能直接加备忘录**（点 ＋ 写一条回车就存），和主界面是同一份数据，点一下就能勾完成\n7. 🖥 **主界面可以拖到屏幕外面去了** —— 嫌它挡着别的软件，就往边上推，只留一条边露在屏幕里；想拿回来一拖就回来。要是忘了它在哪，从托盘点「显示主界面」会**自动把它拉回屏幕中间**\n8. 🐟 **修好了「老板键连击会凭空触发」** —— 以前按住 Ctrl 不放时，系统每隔几十毫秒补发的按键被当成了「连按」，于是「按两下 + 第三下稍微按久一点」就误触发摸鱼。现在**按住不放不算**；顺便给整串连击加了个总时长限制：三下要在 1 秒内按完、相邻两下不超过 0.5 秒\n9. 🪟 **修好了「开机时桌面日历压在主界面上」** —— 以前勾着日历重启，日历会盖住主界面、点不动；现在主界面始终在日历上面\n10. 📝 顺手把设置页里那些「讲原理」的话（显卡伽马表、注册表、键盘钩子之类）换成了人话，只讲怎么用\n\n**下载**：`iKunReminder-setup-v3.4.0.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 115635706,
+  "sha512": "3Hj/fRWGFYaiecB8fzSYm3GXfEELC2N0TG4OOobHImaYyrch8LUaN3ZF/TAzwwOenxYxYY4T4QIDXL40GH02hg==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.1/iKunReminder-setup-v3.3.1.exe.part1",
-      "size": 57805390,
-      "sha512": "yW5LEw+z3hbhPTUC6JqfRB4L1oxEL2pQbufkioBPSMRSb0eqsbfKGOKyxYoJlkOQVmT32hEZDa9qcumcXkDa/g==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.4.0/iKunReminder-setup-v3.4.0.exe.part1",
+      "size": 57817853,
+      "sha512": "d8CkhzPqdK2WdnC2yv0cmWvGjsc2B/ZxtbzQiUq6TDae2QkY2QVhZo+KcB71TyjfjQdaYVsQzGwE/eyGAmehOw==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.1/iKunReminder-setup-v3.3.1.exe.part2",
-      "size": 57805390,
-      "sha512": "ZZV0KQOJqKw8zWMQI5J/47qsLOl5NCj7wBSeajOrcP1CmQHyHIlPIV9s21ZlKc27areMjs3Mbk1OkkC4RVjJ2Q==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.4.0/iKunReminder-setup-v3.4.0.exe.part2",
+      "size": 57817853,
+      "sha512": "pgXvF/8cIOV9ALL6/X/i7E75cQgsR4rWqkXy1LVU7yX9shBtPHcfyCVL8taV7FiI8NihA8T5KkfjB0ccufjQoA==",
       "index": 2
     }
   ]
