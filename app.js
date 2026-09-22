@@ -329,6 +329,7 @@
     eyeK: $('#eyeK'),
     eyeKOut: $('#eyeKOut'),
     eyeErr: $('#eyeErr'),
+    chkEyeQuitRestore: $('#chkEyeQuitRestore'),
     pageTodo: $('#pageTodo'),
     chkAutoLaunch: $('#chkAutoLaunch'),
     chkAutoLaunchTodo: $('#chkAutoLaunchTodo'),
@@ -1351,7 +1352,15 @@
         native.setAutoLaunch(want).then(function (real) {
           /* 以主进程实际写入的结果为准回填，避免「显示勾上了其实没写进去」 */
           e.target.checked = !!real;
-          setCaption(real ? '已开启开机自动启动（开机后只留托盘，不弹主界面）' : '已关闭开机自动启动');
+          if (real) {
+            setCaption('已开启开机自动启动（开机后只留托盘，不弹主界面）');
+          } else if (want) {
+            /* 勾了却没生效：多半是被系统或电脑管家拦了，得说清楚去哪儿看 */
+            setCaption('没能开启：开机启动项写不进去，可能被系统或电脑管家（联想/华为）拦住了'
+              + ' —— 可以到「任务管理器 → 启动应用」里看看这项是不是被禁用了');
+          } else {
+            setCaption('已关闭开机自动启动');
+          }
         }).catch(function () { e.target.checked = !want; });
       });
     }
@@ -1379,7 +1388,7 @@
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.2.10 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.3.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -2071,6 +2080,17 @@
         }, 220);
       });
     }
+    if (el.chkEyeQuitRestore) {
+      el.chkEyeQuitRestore.addEventListener('change', function (e) {
+        const want = !!e.target.checked;
+        if (!native || !native.eyeCareSetRestoreOnQuit) { e.target.checked = !want; return; }
+        native.eyeCareSetRestoreOnQuit(want).then(function (st) {
+          paintEyeCare(st, false);
+          setCaption(want ? '退出程序时会还原色温'
+            : '已改为「退出后保持护眼色温」：关掉程序屏幕也会一直是暖的');
+        }).catch(function () { e.target.checked = !want; });
+      });
+    }
     if (native && native.onEyeCareChanged) {
       native.onEyeCareChanged(function (st) {
         /* 拖动期间别让主进程的回报把滑杆拽回去 */
@@ -2591,6 +2611,8 @@
       el.eyeK.disabled = !!st.busy;
     }
     if (el.eyeKOut) el.eyeKOut.textContent = k + 'K';
+    /* 「退出程序时把色温还原」：缺省（老配置没这个字段）按勾上处理，和以前行为一致 */
+    if (el.chkEyeQuitRestore) el.chkEyeQuitRestore.checked = (st.restoreOnQuit !== false);
     if (st.error) eyeCareMsg(st.error, true);
     else if (st.busy) eyeCareMsg('正在设置…', false);
     else if (on && justToggled) {

@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.2.10</span>
+    <span class="tb-ver" id="tbVer">v3.3.0</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -278,6 +278,13 @@
         有些显卡驱动不接受太暖的值，拖过头时<b>会自动退到它能接受的最暖温度</b>，
         滑杆也会跟着吸回去。关掉护眼模式会还原成你原来的色温，不会留下痕迹。</p>
       <p class="set-desc eye-err" id="eyeErr" hidden></p>
+    </div>
+    <div class="set-row">
+      <label class="chk big"><input type="checkbox" id="chkEyeQuitRestore" checked><span>退出程序时把色温还原</span></label>
+      <p class="set-desc">勾着（默认）：关掉程序就把色温恢复成你原来的样子，不留痕迹。
+        <b>取消勾选</b>：退出后屏幕继续保持护眼色温 —— 想让它一直暖着就取消它。
+        注意取消之后，退出程序就没法再把色温调回来了；
+        要还原得重新打开程序，把上面的「启用护眼模式」取消勾选。</p>
     </div>
 
   </section>

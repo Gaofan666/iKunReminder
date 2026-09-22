@@ -1,20 +1,20 @@
 {
-  "version": "3.2.10",
-  "releaseDate": "2026-09-20T14:12:23.700Z",
-  "notes": "## iKunReminder v3.2.10\n\n1. 🖥 **修好了多屏用户的大问题：拖到另一块屏后界面变小、拖回来还变成全屏拖不动。**\n   以前是按 `当前屏缩放 ÷ 基准屏缩放` 让界面保持「物理像素尺寸恒定」，但 Windows 的缩放百分比本来就是「这块屏上多大的 DIP 看着舒服」的意思 —— 像素密度高的屏用户会把缩放调大，坚持物理像素恒定反而让界面显得更小（2K 屏上 10.8 英寸宽的界面，同样代码到 4K 屏只剩 7.2 英寸宽）。\n   现在改成**跟随系统缩放**：窗口在每块屏上都是同样大的 1180×849（逻辑像素），拖到哪块屏看起来都一样大，不用再手动调\n2. 🖥 同时修掉了「拖回来变成全屏、边缘抓不住、拖不动也缩放不了」：这是踩到了 Electron 在 Windows 上的一个已知回归（无边框+可调整大小的窗口，可视范围比它自己报告的尺寸向外多一圈、而且这一圈随 DPI 变化），跨屏时我们自己重算窗口尺寸正好把这圈算进去，窗口就溢出到屏幕外面去了。现在跨屏不再自己动窗口尺寸，交给系统\n3. 🎯 **修好了老板键「顺手把 VPN / ChatGPT 也打开了」**：以前判断「哪个窗口是这次打开的文档」时，会把「刚从最小化恢复出来的窗口」也算进去 —— 而 VPN 重连、聊天软件弹窗都是这种窗口，于是被当成目标最大化到全屏。现在会先解析出**这个文档到底由哪个程序打开**（读系统的文件关联），只认那个程序的窗口；兜底也只放宽到「新出现的窗口」，绝不再碰被还原的陌生窗口\n4. 🔧 **修好了老板键「按了没反应」**：拉起 PowerShell 偶尔会直接失败（被杀毒软件拦），旧代码没兜住，会导致按键状态永久卡死、热键从此失灵、程序还藏在托盘里。现在：调用失败不影响状态、还原状态用 finally 兜底、**6 秒没生效就自动把界面放回来并说明原因**、另外每 30 秒检查一次全局热键被没被别的软件抢走，抢走了自动补注册\n5. 📄 每次摸鱼会记一行 `moyu-last.txt`（想认哪个程序、最后认了哪个窗口），以后遇到问题可以直接看\n\n**下载**：`iKunReminder-setup-v3.2.10.exe`（约 110 MB，Windows x64，双击安装）\n",
-  "size": 115606271,
-  "sha512": "uD2gsTswJCvcGP9Ve9O4xLokSKcQVQ0dQwAnftfZZbcmGziUcdN5KkWgsLJPRi2zpa8YH2rFe76j8ebBAId4TQ==",
+  "version": "3.3.0",
+  "releaseDate": "2026-09-22T02:33:46.355Z",
+  "notes": "## iKunReminder v3.3.0\n\n1. 🌙 **修好了「退出程序后屏幕还是暖的」** —— 以前是在退出过程中另起一个独立进程去还原色温，实测这条路根本不成立：Electron 退出时会把子进程一起带走（Windows 的 job object），那个还原进程压根没跑完，屏幕就一直留在暖色上。现在改成**退出之前先把色温还原掉、还原完再退**（最多等 2.5 秒兜底）。实测：退出后色温确实回到原值，两台显示器都还原\n2. ⚙ **新增选项：退出程序时把色温还原**（设置 → 护眼模式）。默认**勾上** = 关掉程序就恢复成你原来的色温；**取消勾选** = 退出后屏幕继续保持护眼色温 —— 想让它一直暖着的人可以用这个\n3. 🚀 **修好了「开机自启勾不上」** —— 这是个**所有机器都会有**的 bug，不是那两台电脑的特殊问题：Electron 在 Windows 上判断自启状态时，要求传入**和写入时完全一样的命令行**去做字符串比对，而我们读的时候没传参数，于是读回来永远是「未开启」，页面就把勾去掉了（但 Run 键其实已经写进去了，所以开机真的会自启 —— 这也是为什么你会觉得「自启是正常的」）。现在读回来带上同样的参数，并且用更稳的「按可执行文件路径匹配」兜底\n4. 🔓 顺带把「被禁用过的自启项」也处理了：如果之前在**任务管理器 → 启动**里、或者被**联想电脑管家 / 华为电脑管家**禁过，只在注册表写一条是不够的（Windows 会跳过被禁用的项），现在会自动把那条「已禁用」记录删掉，勾上就真的能自启\n\n**下载**：`iKunReminder-setup-v3.3.0.exe`（约 110 MB，Windows x64，双击安装）\n",
+  "size": 115608930,
+  "sha512": "5aavSJgaKJNh2/vKSbMwT4YUZlW74yEuoBctkFCuECL7xH6wCMenGGPaOPdIX6GJnICIF1n1aS1+4INHXF45Tw==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.10/iKunReminder-setup-v3.2.10.exe.part1",
-      "size": 57803136,
-      "sha512": "HFQXngErYeeHRj2D982ur2tA+hf90c/hP6EU5rNAyFDUXreTN4QFV+BO0jA96UEGfFJZCSNVEftgIJjCFQOVdw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.0/iKunReminder-setup-v3.3.0.exe.part1",
+      "size": 57804465,
+      "sha512": "urLWE28bj/nEiMieKP3yty0qh+uZZq1ABePYLPGzHoNXfKVOvdP2nuxJTyEFd1YXPsJq/avoQx9uPjQMIIGoNA==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.2.10/iKunReminder-setup-v3.2.10.exe.part2",
-      "size": 57803135,
-      "sha512": "vMHd5SAFfetGwXQH3G06wju2YLNdkkrIJ6KFycXKhrItGW5I7O+VuSKC3CSibzfrdgG+/eRh4tihx32vDeWm6w==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.3.0/iKunReminder-setup-v3.3.0.exe.part2",
+      "size": 57804465,
+      "sha512": "f2I0xdskf0TApgroYJzXsiPib9B7M9ao1fU9lZayvpln+uhH9MqJMkhV5BudgytOTkXY7bgutkICiZSQrXZxzQ==",
       "index": 2
     }
   ]

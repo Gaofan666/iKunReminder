@@ -80,6 +80,12 @@ const DIAG = (function () {
     /* --diag-fit：反复改窗口尺寸，验证缩放比只跟当前尺寸有关、不会随历史漂移
        （「拖动窗口后设置页卡片不断缩小」那个 bug） */
     if (a === '--diag-fit') out.fit = true;
+    /* --diag-autolaunch：把开机自启的各种调用方式和注册表实况都打出来 */
+    if (a === '--diag-autolaunch') out.autolaunch = true;
+    /* --diag-eyequit：开护眼 → 正常退出（app.quit）→ 外面看色温有没有还原 */
+    if (a === '--diag-eyequit') out.eyequit = true;
+    /* --diag-eyequit-keep：同上，但把「退出时还原」关掉 —— 验证退出后【保持】暖色 */
+    if (a === '--diag-eyequit-keep') { out.eyequit = true; out.eyeKeep = true; }
   });
   return out;
 })();
@@ -416,9 +422,12 @@ function iconPath() {
 }
 
 /* Windows 靠 AppUserModelID 把窗口和快捷方式认成同一个程序；
-   不设的话任务栏有时会显示成 Electron 默认图标、也不会正确合并。 */
+   不设的话任务栏有时会显示成 Electron 默认图标、也不会正确合并。
+   ⚠️ 这个 ID 同时就是「开机自启」在 HKCU\Run 里的值名（Electron 内部用它），
+   所以自检要动注册表时得知道它。 */
+const APP_AUMID = 'com.kunkun.reminder';
 if (process.platform === 'win32') {
-  try { app.setAppUserModelId('com.kunkun.reminder'); } catch (e) { }
+  try { app.setAppUserModelId(APP_AUMID); } catch (e) { }
 }
 
 /* ------------------------------------------------------------ 创建窗口 */
@@ -592,6 +601,93 @@ function createWindow() {
             moyuToggle();
             await new Promise(function (r) { setTimeout(r, 700); });
             diagLog('moyu-step3-shown', { visible: win.isVisible() });
+          }
+          /* 退出还原自检：开护眼 → 记下色温 → 走正常退出（app.quit）。
+             外面在进程结束后再读一次伽马表：回到原值才算通过。 */
+          if (DIAG.eyequit) {
+            const rampDump = function () {
+              return new Promise(function (res) {
+                psRun([EYE_WINAPI, 'Write-Output ([KkEye]::Dump())'].join('\n'),
+                  function (e, o) { res(String(o || '').replace(/\s+/g, ' ').trim().slice(0, 200)); });
+              });
+            };
+            diagLog('eyequit-1-before', { ramp: await rampDump(), snap: eyeCareSnapshot() });
+            diagLog('eyequit-2-on', await eyeCareSet(true, 4500));
+            await new Promise(function (r) { setTimeout(r, 900); });
+            diagLog('eyequit-3-ramp-warm', { ramp: await rampDump() });
+            if (DIAG.eyeKeep) {
+              /* 模拟用户在设置页取消了「退出程序时把色温还原」 */
+              eyeCareRestorePref = false;
+              diagLog('eyequit-keep-mode', { restorePref: eyeCareRestorePref });
+            }
+          }
+          /* 开机自启自检：把各种调用方式和注册表实况都打出来。
+             怀疑点：getLoginItemSettings() 不带参数时，Windows 侧会拿「空的 path」
+             和注册表里的命令行做字符串比对，于是 open_at_login 恒为 false ——
+             Run 键其实写进去了、开机也会自启，但页面读回来是 false 就把勾去掉了。 */
+          if (DIAG.autolaunch) {
+            const childProcess = require('child_process');
+            const regQ = function (key, name) {
+              try {
+                const r = childProcess.execFileSync('reg.exe',
+                  name ? ['query', key, '/v', name] : ['query', key], { encoding: 'utf8' });
+                return r.trim().split(/\r?\n/).filter(function (s) { return s.trim(); });
+              } catch (e) { return ['(读不到: ' + String((e && e.message) || e).slice(0, 80) + ')']; }
+            };
+            const RUN = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+            const SA = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run';
+            /* 自检绝不能改用户机器的状态：先把原先那串命令行原样记下来 */
+            const runLines = regQ(RUN, APP_AUMID);
+            const rawBefore = (function () {
+              const m = /REG_SZ\s+([\s\S]*)$/.exec(runLines.join('\n'));
+              return m ? m[1].trim() : '';
+            })();
+
+            diagLog('autolaunch-env', {
+              execPath: process.execPath,
+              appName: app.getName(),
+              aumid: APP_AUMID,
+              isPackaged: app.isPackaged,
+              args: autoLaunchArgs(),
+              runValueBefore: rawBefore || '(无)'
+            });
+            diagLog('autolaunch-calls', {
+              不带参数: app.getLoginItemSettings(),
+              用同一套参数: autoLaunchRead(),
+              当前判定: autoLaunchEnabled()
+            });
+            /* 真做一遍开启 → 读回 → 关闭 → 读回 */
+            const before = autoLaunchEnabled();
+            const afterSet = setAutoLaunch(true);
+            diagLog('autolaunch-set', { 设置前: before, 设置后: afterSet });
+            diagLog('autolaunch-reread', {
+              用同一套参数: autoLaunchRead(),
+              现在的状态: autoLaunchEnabled()
+            });
+            const afterOff = setAutoLaunch(false);
+            diagLog('autolaunch-off', { 关闭后: afterOff });
+            diagLog('autolaunch-verdict', {
+              开启后能读回: afterSet === true,
+              关闭后能读回: afterOff === false,
+              结论: (afterSet === true && afterOff === false) ? 'OK' : 'FAIL'
+            });
+
+            /* 恢复原状：直接把原先那串命令行原样写回注册表。
+               不能用 setAutoLaunch(before) —— 开发模式下跑的是 electron.exe，
+               路径和注册表里那条（已安装版的 exe）对不上，before 会是 false，
+               「恢复」反而会把用户真正的自启项删掉。 */
+            if (rawBefore) {
+              try {
+                childProcess.execFileSync('reg.exe',
+                  ['add', RUN, '/v', APP_AUMID, '/t', 'REG_SZ', '/d', rawBefore, '/f'],
+                  { encoding: 'utf8' });
+              } catch (e) { diagLog('autolaunch-restore-fail', { message: String((e && e.message) || e).slice(0, 200) }); }
+            } else {
+              try {
+                childProcess.execFileSync('reg.exe', ['delete', RUN, '/v', APP_AUMID, '/f'], { encoding: 'utf8' });
+              } catch (e) { }
+            }
+            diagLog('autolaunch-restored', { 恢复成: rawBefore || '(无)', 现在注册表: regQ(RUN, APP_AUMID) });
           }
           /* 缩放自检：设置页塞一段长说明让卡片真的很高（不塞的话它本来就能塞进窗口，
              测不出「不断缩小」），然后反复改窗口尺寸。
@@ -838,7 +934,9 @@ function createWindow() {
           console.log('[DIAG-ERROR] ' + (e && e.message ? e.message : e));
         }
         quitting = true;
-        try { app.exit(0); } catch (e) { }
+        /* --diag-eyequit 要验证「正常退出会不会还原色温」，所以走真正的 app.quit()，
+           让 will-quit 跑一遍；其它自检仍然是 app.exit(0) 直接走人。 */
+        if (DIAG.eyequit) { try { app.quit(); } catch (e) { } } else { try { app.exit(0); } catch (e) { } }
       }, 1500 + (DIAG.wait || 0));
     });
   }
@@ -1411,26 +1509,53 @@ ipcMain.handle('pet-on-get', () => petOn);
 
 /* ------------------------------------------------------ 开机自启动（HKCU Run 键）
    用 Electron 内置的 setLoginItemSettings：Windows 上写的是
-   HKCU\Software\Microsoft\Windows\CurrentVersion\Run，不需要管理员权限，
-   用户也能在「任务管理器 → 启动」里自己禁掉。
-   不加 --hidden 的话开机就会弹出主界面，那是用户明确不要的行为。 */
+   HKCU\Software\Microsoft\Windows\CurrentVersion\Run，值名是 AppUserModelID，
+   不需要管理员权限，用户也能在「任务管理器 → 启动」里自己禁掉。
+   不加 --hidden 的话开机就会弹出主界面，那是用户明确不要的行为。
+
+   ⚠️ 读回来必须用【和写入时一模一样的 path + args】。
+   Electron 在 Windows 上判断 openAtLogin 的做法是：拿传进来的 path+args 拼出
+   命令行，再和注册表里的值做【字符串完全比对】。不带参数调用时 path 是空的，
+   拼出来的东西永远比不中 —— 实测 openAtLogin 恒为 false。表现就是
+   「Run 键明明写进去了、开机真的会自启，但页面上的勾一放开就弹回去」，
+   用户怎么点都开不了（联想/华为那两台机器反馈的就是这个现象）。
+   所以这里两道保险：
+     ① 读的时候带上同一套 path+args；
+     ② 再用 launchItems 兜底 —— 它按【可执行文件路径】匹配，不受参数写法影响
+        （老版本写过 --startup 这种），而且每一项都带 enabled 字段，
+        能正确反映「被任务管理器或电脑管家禁用」的状态。
+   只看 scope==='user' 的项：安装包是按用户装的（perMachine:false），
+   HKLM 里那种全机器自启项我们管不了，也不该因此显示成「已开启」。 */
+function autoLaunchArgs() {
+  /* 绿色版是 exe 直接跑；开发时用 electron.exe 跑目录，参数要跟着变 */
+  return app.isPackaged ? ['--hidden'] : [path.resolve(__dirname), '--hidden'];
+}
+
+function autoLaunchRead() {
+  return app.getLoginItemSettings({ path: process.execPath, args: autoLaunchArgs() });
+}
+
 function autoLaunchEnabled() {
   try {
     if (process.platform !== 'win32') return false;
-    return !!app.getLoginItemSettings().openAtLogin;
+    const st = autoLaunchRead();
+    if (st.openAtLogin) return true;
+    const mine = (st.launchItems || []).filter(function (it) { return it.scope === 'user'; });
+    return mine.some(function (it) { return !!it.enabled; });
   } catch (e) { return false; }
 }
 
 function setAutoLaunch(on) {
   try {
     if (process.platform !== 'win32') return false;
-    const args = ['--hidden'];
-    /* 绿色版是 exe 直接跑；开发时用 electron.exe 跑目录，参数要跟着变 */
-    const exe = process.execPath;
     app.setLoginItemSettings({
       openAtLogin: !!on,
-      path: exe,
-      args: app.isPackaged ? args : [path.resolve(__dirname)].concat(args)
+      /* enabled:true 会让 Electron 顺手【删掉】StartupApproved 里那条「已禁用」记录 ——
+         用户在任务管理器 / 电脑管家里禁过之后，只有删掉它开机才会真的自启
+         （只写 Run 键是不够的，被禁用的项 Windows 会跳过） */
+      enabled: true,
+      path: process.execPath,
+      args: autoLaunchArgs()
     });
     return autoLaunchEnabled();
   } catch (e) { return false; }
@@ -3535,6 +3660,12 @@ let eyeCareBusy = false;
 let eyeCareError = '';
 let eyeCareApplied = 0;
 let eyeCareKelvin = EYE_KELVIN_DEFAULT;
+/* 退出程序时要不要把色温还原（用户可选，默认【还原】）。
+   不还原的话，程序退了屏幕还留在暖色上 —— 这是有意的选项（有人就想要一直暖着），
+   所以必须让用户自己决定，而不是我们替他选。 */
+let eyeCareRestorePref = true;
+let eyeCareQuitDone = false;      // 退出还原只做一次（before-quit / will-quit / process.exit 都会试）
+let eyeCareQuitPending = false;   // 正在「做完还原再退」，这期间再来的退出请求直接放行
 
 function eyeCarePrefFile() { return path.join(app.getPath('userData'), 'eye-care.json'); }
 /* 原始伽马表的备份单独一个文件：程序重启后只有靠它才还原得回真正的原始色温 */
@@ -3552,12 +3683,14 @@ function loadEyeCarePref() {
     const o = JSON.parse(fs.readFileSync(eyeCarePrefFile(), 'utf8').replace(/^\uFEFF/, ''));
     eyeCareOn = !!o.on;
     if (o.kelvin) eyeCareKelvin = clampKelvin(o.kelvin);
+    /* 缺省（老配置文件没有这个字段）= 还原，跟以前的行为一致 */
+    eyeCareRestorePref = (typeof o.restoreOnQuit === 'boolean') ? o.restoreOnQuit : true;
   } catch (e) { eyeCareOn = false; }
 }
 function saveEyeCarePref() {
   try {
     fs.writeFileSync(eyeCarePrefFile(),
-      JSON.stringify({ on: eyeCareOn, kelvin: eyeCareKelvin }, null, 2), 'utf8');
+      JSON.stringify({ on: eyeCareOn, kelvin: eyeCareKelvin, restoreOnQuit: eyeCareRestorePref }, null, 2), 'utf8');
   } catch (e) { }
 }
 
@@ -3565,7 +3698,8 @@ function eyeCareSnapshot() {
   return {
     on: eyeCareOn, busy: eyeCareBusy, error: eyeCareError, applied: eyeCareApplied,
     kelvin: eyeCareKelvin, min: EYE_KELVIN_MIN, max: EYE_KELVIN_MAX,
-    defaultKelvin: EYE_KELVIN_DEFAULT
+    defaultKelvin: EYE_KELVIN_DEFAULT,
+    restoreOnQuit: eyeCareRestorePref
   };
 }
 
@@ -3715,27 +3849,44 @@ function initEyeCare() {
 /* 退出时的还原：不用 psRun（execFile 会挂 stdout/stderr 管道，拖住退出），
    直接 spawn 一个 detached 的 PowerShell —— Electron 退了它照样把色温还原完 */
 function eyeCareRestoreOnQuit() {
+  if (eyeCareQuitDone) return;
+  eyeCareQuitDone = true;
   try {
     const ramp = eyeCareRampFile().replace(/'/g, "''");
+    /* 让子进程把结果写下来：这条路上没法接 stdout（会拖住退出），
+       出问题时只有靠这个文件知道它到底跑没跑、结果如何 */
+    const logF = path.join(app.getPath('userData'), 'eye-care-quit.txt').replace(/'/g, "''");
     const script = [
       "$ErrorActionPreference = 'SilentlyContinue'",
       "$ProgressPreference = 'SilentlyContinue'",
       EYE_WINAPI,
-      "if (Test-Path '" + ramp + "') { [KkEye]::Restore([System.IO.File]::ReadAllText('" + ramp + "')) }",
-      'else { [KkEye]::ApplyLinear() }'
+      '$n = -1',
+      "if (Test-Path '" + ramp + "') { $n = [KkEye]::Restore([System.IO.File]::ReadAllText('" + ramp + "')) }",
+      'else { $n = [KkEye]::ApplyLinear() }',
+      "try { [System.IO.File]::WriteAllText('" + logF + "', 'applied=' + $n) } catch {}"
     ].join('\n');
     const b64 = Buffer.from(script, 'utf16le').toString('base64');
     const c = spawn('powershell.exe',
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', b64],
       { windowsHide: true, detached: true, stdio: 'ignore' });
     c.unref();
-  } catch (e) { /* 退出路径上出什么事都别拦着用户关程序 */ }
+    diagLog('eyequit-spawn', { pid: c.pid, rampFile: ramp });
+  } catch (e) {
+    diagLog('eyequit-spawn-fail', { message: String((e && e.message) || e) });
+  }
 }
 
 ipcMain.handle('eye-care-get', () => eyeCareSnapshot());
 ipcMain.handle('eye-care-set', (e, on) => eyeCareSet(on));
 /* 拖色温滑杆：一律按「打开」处理 —— 拖了就是想看效果 */
 ipcMain.handle('eye-care-set-kelvin', (e, k) => eyeCareSet(true, k));
+/* 「退出程序时是否还原色温」——纯偏好，不影响当前色温 */
+ipcMain.handle('eye-care-set-restore-on-quit', (e, on) => {
+  eyeCareRestorePref = !!on;
+  saveEyeCarePref();
+  send('eye-care-changed', eyeCareSnapshot());
+  return eyeCareSnapshot();
+});
 
 /* ------------------------------------------------------------ 生命周期 */
 const gotLock = app.requestSingleInstanceLock();
@@ -3806,22 +3957,51 @@ if (!gotLock) {
       } catch (e) { /* 查询失败就当它还在，下一轮再说 */ }
     }, 30000);
   });
-  app.on('before-quit', () => { quitting = true; });
-  /* 退出时把全局快捷键摘掉，否则会残留在系统里（下次别的软件可能注册不上）；
-     顺带把色温还原 —— 程序都不在了还留个暖屏，用户就没法关掉它了。
-     开关状态照旧留着，下次启动会自动再调暖。 */
+  /* 退出前窗口会被关掉，先记下来；色温的还原也放在这里做（见下） */
+  app.on('before-quit', (e) => {
+    quitting = true;
+    /* 退出前把色温还原掉 —— 必须【在做完之前不退】。
+       原先是在 will-quit 里 spawn 一个 detached 的 PowerShell 去还原，实测没用：
+       Electron（Chromium）在 Windows 上用 job object 管子进程，主进程一退，
+       连带这个子进程一起被带走 —— 它自己写的日志文件都没生成，屏幕就留在暖色上了。
+       所以改成：拦住这次退出 → 等还原真的做完（最多 2.5 秒兜底）→ 再真的退出。
+       用户感知就是「点退出后界面多停半秒」，比留个没法关的暖屏好得多。 */
+    if (eyeCareQuitPending) return;              // 第二次进来直接放行
+    if (!eyeCareOn || !eyeCareRestorePref) return;
+    e.preventDefault();
+    eyeCareQuitPending = true;
+    eyeCareQuitDone = true;                      // will-quit / process.exit 就不用再试了
+    const finish = function () { try { app.quit(); } catch (err) { } };
+    const t = setTimeout(finish, 2500);          // 兜底：别让用户关不掉程序
+    try {
+      eyeCareApply('restore-keep').then(function (r) {
+        clearTimeout(t);
+        diagLog('eyequit-before-quit', { applied: r.applied, total: r.total });
+        finish();
+      }, function () { clearTimeout(t); finish(); });
+    } catch (err) {
+      clearTimeout(t);
+      finish();
+    }
+  });
+  /* 退出时把全局快捷键摘掉，否则会残留在系统里（下次别的软件可能注册不上） */
   app.on('will-quit', () => {
+    diagLog('eyequit-willquit', { eyeCareOn: eyeCareOn, restorePref: eyeCareRestorePref });
     try { globalShortcut.unregisterAll(); } catch (e) { }
     /* 连击那个键盘钩子进程必须收掉：它是长驻的，留着会变成「程序都关了还在
        数你的按键」的幽灵进程，而且钩子还挂在系统里 */
     moyuTapStop();
-    if (eyeCareOn) eyeCareRestoreOnQuit();
+    /* 正常退出时上面 before-quit 已经还原过了；这里只是兜住绕过 before-quit 的路径 */
+    if (eyeCareOn && eyeCareRestorePref) eyeCareRestoreOnQuit();
   });
   app.on('window-all-closed', () => { /* 有托盘常驻，不退出 */ });
   /* app.exit()（自检里就是这么退的）不会触发 will-quit，
-     所以在 process 的 exit 上再兜一次，免得留下幽灵钩子进程 */
+     所以在 process 的 exit 上再兜一次：既收掉幽灵钩子进程，也把色温还原。
+     这里必须同步做完（exit 阶段不能等异步），好在 spawn 本身是同步启动的，
+     子进程是 detached 的，Electron 退了它照样跑完。 */
   process.on('exit', function () {
     if (moyuTapChild) { try { moyuTapChild.kill(); } catch (e) { } }
+    if (eyeCareOn && eyeCareRestorePref) eyeCareRestoreOnQuit();
   });
   /* 点任务栏 / 桌面图标重新激活：自启隐藏状态下要能正常叫出来 */
   app.on('activate', () => {

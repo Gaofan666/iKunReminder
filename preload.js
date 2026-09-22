@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   eyeCareSet: (on) => ipcRenderer.invoke('eye-care-set', !!on),
   /* 拖色温滑杆：主进程那边一律按「打开」处理（拖了就是想看效果） */
   eyeCareSetKelvin: (k) => ipcRenderer.invoke('eye-care-set-kelvin', Number(k)),
+  /* 「退出程序时是否把色温还原」——纯偏好，不动当前色温 */
+  eyeCareSetRestoreOnQuit: (on) => ipcRenderer.invoke('eye-care-set-restore-on-quit', !!on),
   onEyeCareChanged: (cb) => ipcRenderer.on('eye-care-changed', (e, s) => cb(s)),
 
   /* 软件更新：只检查、只提示。下载和安装都必须由用户点，
