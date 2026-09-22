@@ -1746,13 +1746,16 @@
       el.btnOpenDataDir.hidden = true;
     }
 
-    /* 皮肤文件夹：按钮点开它；顺手把真实路径填进说明和下拉框提示，
-       省得用户猜「skins/ 到底在哪」 */
+    /* 皮肤文件夹：按钮点开它（文件夹自己就弹出来了，不用再给一句提示）；
+       顺手把真实路径填进说明和下拉框提示，省得用户猜「skins/ 到底在哪」 */
     if (el.btnOpenSkinsDir && native && native.openSkinsDir) {
       el.btnOpenSkinsDir.addEventListener('click', function () {
         native.openSkinsDir().then(function (dir) {
-          if (dir) setCaption('已打开皮肤文件夹：<b>' + escapeHtml(dir) + '</b>');
-        }).catch(function () { });
+          /* 正常打开文件夹本身就是反馈；只有打不开才需要说一句 */
+          if (!dir) setCaption('皮肤文件夹打不开，可以在安装目录里手动找 skins 文件夹');
+        }).catch(function () {
+          setCaption('皮肤文件夹打不开，可以在安装目录里手动找 skins 文件夹');
+        });
       });
     } else if (el.btnOpenSkinsDir) {
       el.btnOpenSkinsDir.hidden = true;
@@ -1763,13 +1766,13 @@
         if (el.skinsDirPath) el.skinsDirPath.textContent = dir;
         if (el.skinSel) {
           el.skinSel.title = '自定义皮肤放进这个文件夹（每个皮肤一个子文件夹）：\n' + dir +
-            '\n软件更新不会删掉它；' + '文件夹里的 README-skins.txt 有做法说明';
+            '\n软件更新不会删掉它；' + '文件夹里的 README.md 有做法说明';
         }
       }).catch(function () { });
     }
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.5.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.5.1 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
