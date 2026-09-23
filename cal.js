@@ -514,7 +514,11 @@
   if (bridge.onFit) {
     bridge.onFit(function (box) {
       if (!box || !box.width || !box.height) return;
-      const s = Math.min(box.width / DESIGN_W, box.height / DESIGN_H, 1);
+      /* ⚠️ 容差 4px：主进程报的是窗口外框，和设计尺寸常常差几个像素（Windows 取整）。
+         不留容差的话 941×680 会被算成 1.001 没缩、940×679 却算成 0.998 缩一丁点 ——
+         卡片一缩小、四周就空出一条缝，拖到屏幕角上看着就是「贴不到边」（朋友报过）。 */
+      const sw = (box.width + 4) / DESIGN_W, sh = (box.height + 4) / DESIGN_H;
+      const s = Math.min(sw, sh, 1);
       document.documentElement.style.setProperty('--fit', String(Math.max(0.5, s)));
     });
   }

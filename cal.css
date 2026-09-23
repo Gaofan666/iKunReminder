@@ -96,7 +96,10 @@ body.locked .head button:not(#btnLock):hover{
   color:var(--ink-dim);background:var(--btn-bg);border-color:var(--line);
 }
 
-.wrap{position:fixed;inset:0;display:grid;place-items:center}
+/* 卡片靠窗口左上角摆（不居中）：窗口尺寸和设计尺寸难免差几个像素（Windows 会取整），
+   一居中左右就各留一条缝，拖到屏幕角上时看着就是「贴不到边」（朋友报过）。
+   靠左上摆，多出来的余量全留在右下（那里是透明的，看不见）。 */
+.wrap{position:fixed;inset:0;display:grid;place-items:start}
 
 /* 卡片：设计尺寸 940 × 600，窗口比它小时整体缩放（--fit 由 cal.js 写）。
    ⚠️ 故意【不写 box-shadow】：窗口是透明无边框的，卡片外面那圈阴影会被窗口矩形裁掉，
