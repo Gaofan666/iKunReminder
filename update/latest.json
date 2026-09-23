@@ -1,20 +1,20 @@
 {
-  "version": "3.9.1",
-  "releaseDate": "2026-09-23T13:16:54.528Z",
-  "notes": "## iKunReminder v3.9.1\n\n1. 🎵 **提醒时会跟着放一段音乐**（新） —— 主界面「音效」旁边多了一个「**提醒音乐**」开关，**默认开着**。流程就是：提醒弹窗弹出来 → 先**语音播报** → 播报结束后等 **3 秒** → 开始放音乐 → **放完就停**（不循环）。你要是点「完成 / 稍后再说」关掉弹窗，音乐**立刻停**。不想听就把它取消勾选，语音播报不受影响\n2. 📐 **修了「桌面日历右边和下边显示不全」** —— 原因是日历窗口正好停在**两块显示器的交界**上：窗口一半在主屏、一半在副屏时，Windows 只按其中一块屏来渲染，跨界那半就被裁掉一截。现在只要发现窗口不是完整装在某一块屏里，就会**自动把它整块收进一块屏**（拖动结束、缩放、开机恢复位置时都会检查一次）。实测：故意压在两屏交界上，会被收回成整块在一屏内 ✅\n3. 🧰 顺手修了自检脚本里一处会让主进程启动失败的重复变量声明（只影响自检，不影响正常使用）\n\n**下载**：`iKunReminder-setup-v3.9.1.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 117352396,
-  "sha512": "0EMefuOBnkq0kJx6qjE8oVi12m0rnNucL1d3MhrQ71R3lRjDESnpyIxK57m49xP4cnnIkP074JOsyWZ2qaMXdA==",
+  "version": "3.9.2",
+  "releaseDate": "2026-09-23T13:29:25.313Z",
+  "notes": "## iKunReminder v3.9.2\n\n1. 📐 **修了桌面日历「贴不到屏幕左边/上边、右边和下边被裁掉」** —— 这次找到了真正的原因：日历卡片身上有个整体缩放（窗口比设计尺寸小时按比例缩），而它的**缩放原点写的是\"中心\"**。原点在中心意味着：缩放时卡片会被往窗口中间收 —— 于是左边上边留出一条缝、右边下边反而顶出窗口被切掉。\n   现在把缩放原点改成**左上角**，实测：不管缩放是 80% / 100% / 120%，卡片的左上角**恒等于窗口左上角**（差 0 像素），四个边界都能严丝合缝贴住，卡片也不会再被切\n2. 🔒 顺手加固：窗口刚打开、以及每次缩放时，都会**重新设置一次网页缩放**。以前如果启动早期那一次没生效，会出现「窗口尺寸按缩放变了、但网页没缩放」，结果 940×680 的卡片在窗口里装不下、右下被裁\n3. 🧰 之前的两个修复也一起在这版里（如果你还没更新到 v3.9.1）：**提醒音乐**（「音效」旁的开关，默认开；语音播报结束后 3 秒播放，放完即停）和**日历不再跨在两块屏交界上**（跨屏那半会被 Windows 裁掉，现在会自动收进一整块屏）\n\n**下载**：`iKunReminder-setup-v3.9.2.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 117352547,
+  "sha512": "H3yOu2mF6xut+lzT/LWYlYmmJPgG9Xe8YTE1P749keglZowC4suJeFi05Ou4dYoV0JX5V+9hByBf5kHrxK5gkw==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.1/iKunReminder-setup-v3.9.1.exe.part1",
-      "size": 58676198,
-      "sha512": "cMPKBT+kQHvwIm4uvwQ7DsvEqfHRAhYF8jIjxBIswLew6F8TWlcavLY8shJWWxYesAeBq9yBpAEZzShJNOYW+A==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.2/iKunReminder-setup-v3.9.2.exe.part1",
+      "size": 58676274,
+      "sha512": "NRBitziIIO2BpE645JHDxTxz7LcypUoMLCAQrCC9FHie1yBOh/PJqphWz3mtU4TjMvs908D7smOSCOXDRlm0sA==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.1/iKunReminder-setup-v3.9.1.exe.part2",
-      "size": 58676198,
-      "sha512": "2Y/6ck8hFcqij0YuSsnRuOcN9zwTHhAsTWgKmVpigLp7+DqsX1fmhDr+9YBA2y6MqZQSla5ptVCTzlwSVKkSWQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.2/iKunReminder-setup-v3.9.2.exe.part2",
+      "size": 58676273,
+      "sha512": "qH0IW8oVw4kmv5eqUSqNLQoaQirpJ/ZuIrDiw5gZoJjxapsyHyGCrTGDRjEOSs4rr/mOjJ6c/khWscuqTVjQ4w==",
       "index": 2
     }
   ]
