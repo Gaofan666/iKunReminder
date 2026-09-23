@@ -91,6 +91,8 @@ const DIAG = (function () {
     /* --diag-cal：桌面日历端到端自检（造一批三档优先级的待办 → 开日历 →
        查网格/颜色/切月/当天清单 → 再用主界面真实弹窗存一条，验证 prio 落盘） */
     if (a === '--diag-cal') out.cal = true;
+    /* --diag-calzoom：桌面日历「放大缩小」+「固定」自检 */
+    if (a === '--diag-calzoom') out.calzoom = true;
     /* --diag-diary：日记页端到端自检（写今天 / 点旧日记改 / 删除 / 导出） */
     if (a === '--diag-diary') out.diary = true;
     /* --diag-skins：用户皮肤目录 / 说明文档 / 「被安装程序清掉后能不能自愈」 */
@@ -1419,6 +1421,239 @@ function createWindow() {
               await wait3(2500);
             }
           }
+          /* ============ 桌面日历：放大缩小 + 固定（--diag-calzoom） ============
+             都走真按钮：点「＋/−」看窗口和网页缩放真的变了没有；
+             点「🔒」之后用真实指针事件去拖、去点格子，验证拖不动、也点不开。 */
+          if (DIAG.calzoom) {
+            const waitZ = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const calJs = function (code) { return calWin.webContents.executeJavaScript(code, true); };
+            /* 读页面上跟缩放/固定有关的状态 */
+            const readState = function () {
+              return calJs('(function(){var card=document.getElementById("cal");' +
+                'var cs=card?getComputedStyle(card):null;' +
+                'return {百分比:document.getElementById("zoomVal")?document.getElementById("zoomVal").textContent:null,' +
+                ' 锁定图标:document.getElementById("btnLock")?document.getElementById("btnLock").textContent:null,' +
+                ' body锁定:document.body.classList.contains("locked"),' +
+                ' 加号禁用:document.getElementById("btnZoomIn")?document.getElementById("btnZoomIn").disabled:null,' +
+                ' 减号禁用:document.getElementById("btnZoomOut")?document.getElementById("btnZoomOut").disabled:null,' +
+                ' 卡片CSS宽:cs?cs.width:null,卡片CSS高:cs?cs.height:null,' +
+                /* ⚠️ --fit 这种带横杠的键名必须加引号，不然整个脚本 SyntaxError */
+                ' fit变量:getComputedStyle(document.documentElement).getPropertyValue("--fit").trim(),' +
+                ' 面板露出来了吗:(function(){var p=document.getElementById("panel");return p?!p.hidden:null;})()};})()');
+            };
+
+            setCalOn(true, true);
+            /* ⚠️ 必须等日历窗真的加载完再注入脚本：窗口刚建出来时 executeJavaScript
+               会直接抛「Script failed to execute」（自检里踩过这个坑）。 */
+            const waitCalReady = async function (limit) {
+              const t0 = Date.now();
+              while (Date.now() - t0 < limit) {
+                if (calWin && !calWin.isDestroyed() && !calWin.webContents.isLoading()) return true;
+                await waitZ(200);
+              }
+              return false;
+            };
+            const ready = await waitCalReady(15000);
+            if (!ready || !calWin || calWin.isDestroyed()) {
+              diagLog('calzoom-error', { 说明: '日历窗没起来或一直没加载完', ready: ready });
+            } else {
+              try {
+              const boundsOf = function () { const b = calWin.getBounds(); return b.width + 'x' + b.height; };
+              /* 真正生效的缩放（网页缩放系数）由主进程侧读，页面里读不到 */
+              const zoomOf = function () {
+                try { return Math.round(calWin.webContents.getZoomFactor() * 1000) / 1000; } catch (e) { return null; }
+              };
+              const b0 = boundsOf();
+              const s0 = await readState();
+
+              /* ① 点两次「＋」（100% → 110% → 120%） */
+              await calJs('document.getElementById("btnZoomIn").click(); true;');
+              await waitZ(700);
+              await calJs('document.getElementById("btnZoomIn").click(); true;');
+              await waitZ(900);
+              const s1 = await readState();
+              diagLog('calzoom-1-放大', {
+                窗口: b0 + ' → ' + boundsOf(),
+                实际缩放: zoomOf(),
+                放大前: s0, 放大后: s1,
+                窗口跟着变大了吗: b0 !== boundsOf()
+              });
+
+              /* ② 一直点到顶：应该停在 150%，加号变灰 */
+              for (let i = 0; i < 6; i++) { await calJs('document.getElementById("btnZoomIn").click(); true;'); await waitZ(260); }
+              await waitZ(700);
+              const sTop = await readState();
+              diagLog('calzoom-2-放到最大', { 窗口: boundsOf(), 实际缩放: zoomOf(), 状态: sTop });
+
+              /* ③ 一直点到最小：应该停在 80%，减号变灰 */
+              for (let i = 0; i < 10; i++) { await calJs('document.getElementById("btnZoomOut").click(); true;'); await waitZ(260); }
+              await waitZ(700);
+              const sMin = await readState();
+              diagLog('calzoom-3-缩到最小', { 窗口: boundsOf(), 实际缩放: zoomOf(), 状态: sMin });
+
+              /* ④ 回到 100%（两下 ＋），顺便把位置记下来 */
+              await calJs('document.getElementById("btnZoomIn").click(); true;');
+              await waitZ(400);
+              await calJs('document.getElementById("btnZoomIn").click(); true;');
+              await waitZ(800);
+              const s100 = await readState();
+              const b100 = calWin.getBounds();
+
+              /* ⑤ 不锁定时：拖一下应该真的能动（先证明拖动本身是好的） */
+              const dragJs = function (pid, dx, dy) {
+                return calJs('(function(){var c=document.getElementById("cal");' +
+                  'var r=c.getBoundingClientRect();var x=r.left+40,y=r.top+40;' +
+                  'function ev(t,px,py){return new PointerEvent(t,{bubbles:true,cancelable:true,button:0,pointerId:' + pid + ',' +
+                  'screenX:px,screenY:py,clientX:x,clientY:y});}' +
+                  'c.dispatchEvent(ev("pointerdown",x,y));' +
+                  'c.dispatchEvent(ev("pointermove",x+' + dx + ',y+' + dy + '));' +
+                  'c.dispatchEvent(ev("pointerup",x+' + dx + ',y+' + dy + '));return true;})()');
+              };
+              await dragJs(11, 90, 70);
+              await waitZ(700);
+              const bMoved = calWin.getBounds();
+              const panelBeforeLock = await calJs(
+                '(function(){var p=document.getElementById("panel");return p?!p.hidden:null;})()');
+
+              /* ⑥ 锁定：点 🔒 → 再拖一次（不该动）→ 再点格子（不该开清单） */
+              await calJs('document.getElementById("btnLock").click(); true;');
+              await waitZ(800);
+              const sLock = await readState();
+              const bLockPos = { x: calWin.getBounds().x, y: calWin.getBounds().y };
+              await dragJs(12, 90, 70);
+              await waitZ(700);
+              const bAfterLockDrag = { x: calWin.getBounds().x, y: calWin.getBounds().y };
+              const clickCell = await calJs('(function(){var c=document.querySelector("#grid .cell");' +
+                'if(!c)return {error:"格子里没东西"};' +
+                'var r=c.getBoundingClientRect();var x=r.left+8,y=r.top+8;' +
+                'function ev(t){return new PointerEvent(t,{bubbles:true,cancelable:true,button:0,pointerId:13,screenX:x,screenY:y,clientX:x,clientY:y});}' +
+                'c.dispatchEvent(ev("pointerdown"));c.dispatchEvent(ev("pointerup"));' +
+                'return {点的是:c.dataset.key||null};})()');
+              await waitZ(600);
+              const panelAfterLock = await calJs(
+                '(function(){var p=document.getElementById("panel");' +
+                'return {面板露出来了吗:p?!p.hidden:null, 选中的那天:(document.querySelector("#grid .cell.sel")||{}).dataset' +
+                ' ? document.querySelector("#grid .cell.sel").dataset.key : null};})()');
+              diagLog('calzoom-4-固定', {
+                解锁时能拖动吗: (bMoved.x !== b100.x || bMoved.y !== b100.y),
+                锁之前面板是关着的吗: panelBeforeLock === false,
+                锁定状态: sLock,
+                锁定后拖动: { 拖之前: bLockPos.x + ',' + bLockPos.y, 拖之后: bAfterLockDrag.x + ',' + bAfterLockDrag.y },
+                锁定后没被拖动吗: (bAfterLockDrag.x === bLockPos.x && bAfterLockDrag.y === bLockPos.y),
+                锁定后点格子: clickCell,
+                锁定后点开清单了吗: panelAfterLock.面板露出来了吗 === true
+              });
+
+              /* ⑥b 固定之后，头部那一排按钮（含 ✕）应该全都按不动，只有 🔒 能按 */
+              const headBefore = await calJs(
+                '(function(){var t=document.getElementById("title");' +
+                'var d=document.documentElement.getAttribute("data-theme");' +
+                'return {月份:t?t.textContent.trim():null,主题:d};})()');
+              /* 挨个去点：翻月 / 今天 / 缩放 / 主题 / ＋ 新增待办 / ⚙ 设置 / ✕ 隐藏 */
+              const poke = await calJs('(function(){' +
+                'var ids=["btnPrev","btnNext","btnToday","btnZoomIn","btnZoomOut","btnTheme","btnAdd","btnSet","btnHide"];' +
+                'var hit=[];ids.forEach(function(id){var b=document.getElementById(id);' +
+                'if(!b){hit.push(id+":缺");return;}' +
+                'b.click();hit.push(id+":"+(b.disabled?"本来就禁用":"点了"));});' +
+                'return hit;})()');
+              await waitZ(800);
+              const headAfter = await calJs(
+                '(function(){var t=document.getElementById("title");' +
+                'var d=document.documentElement.getAttribute("data-theme");' +
+                'var lb=document.getElementById("btnLock");' +
+                'return {月份:t?t.textContent.trim():null,主题:d,' +
+                ' 缩放:document.getElementById("zoomVal").textContent,' +
+                ' 头按钮灰度:getComputedStyle(document.getElementById("btnSet")).opacity,' +
+                ' 锁按钮还是亮的吗:(lb?getComputedStyle(lb).opacity:null)};})()');
+              /* 备忘录还能加：点左栏 ＋ → 输入行应该出现 */
+              const memoAdd = await calJs('(function(){var b=document.getElementById("btnAddMemo");' +
+                'if(!b)return {error:"没有备忘录＋"};b.click();' +
+                'var row=document.getElementById("memoNewRow");' +
+                'return {输入行露出来了吗:row?!row.hidden:null};})()');
+              await waitZ(400);
+              diagLog('calzoom-4b-锁住时头部按钮', {
+                点的过程: poke,
+                锁之前: headBefore, 锁之后: headAfter,
+                月份没变: headBefore.月份 === headAfter.月份,
+                主题没变: headBefore.主题 === headAfter.主题,
+                缩放没变: headAfter.缩放 === '100%',
+                头按钮变灰了吗: parseFloat(headAfter.头按钮灰度) < 0.6,
+                锁按钮还亮着: parseFloat(headAfter.锁按钮还是亮的吗) > 0.6,
+                备忘录还能加吗: memoAdd.输入行露出来了吗 === true
+              });
+              /* 截一张「锁住之后」的图：头部按钮全灰、🔒 高亮、左栏备忘录还能写 */
+              try {
+                await waitZ(300);
+                fs.writeFileSync(path.join(__dirname, '.diag', 'cal-locked.png'),
+                  (await calWin.webContents.capturePage()).toPNG());
+              } catch (eShotL) { diagLog('calzoom-shot-lock-error', String(eShotL && eShotL.message || eShotL)); }
+              /* 收尾：再点一下左栏 ＋ 把刚展开的输入行收掉（它是开关式的） */
+              await calJs('(function(){var b=document.getElementById("btnAddMemo");if(b)b.click();return true;})()');
+              await waitZ(300);
+
+              /* ⑦ 解锁：拖动又能动、点格子又能开清单 */
+              await calJs('document.getElementById("btnLock").click(); true;');
+              await waitZ(800);
+              const sUnlock = await readState();
+              const bBefore2 = calWin.getBounds();
+              await dragJs(14, -70, -50);
+              await waitZ(700);
+              const bAfter2 = calWin.getBounds();
+              const clickCell2 = await calJs('(function(){var c=document.querySelector("#grid .cell");' +
+                'var r=c.getBoundingClientRect();var x=r.left+8,y=r.top+8;' +
+                'function ev(t){return new PointerEvent(t,{bubbles:true,cancelable:true,button:0,pointerId:15,screenX:x,screenY:y,clientX:x,clientY:y});}' +
+                'c.dispatchEvent(ev("pointerdown"));c.dispatchEvent(ev("pointerup"));' +
+                'return {点的是:c.dataset.key||null};})()');
+              await waitZ(600);
+              const panelAfterUnlock = await calJs(
+                '(function(){var p=document.getElementById("panel");' +
+                'return {面板露出来了吗:p?!p.hidden:null};})()');
+              diagLog('calzoom-5-解锁', {
+                解锁状态: sUnlock,
+                又能拖动了吗: (bAfter2.x !== bBefore2.x || bAfter2.y !== bBefore2.y),
+                点格子: clickCell2,
+                点开清单了吗: panelAfterUnlock.面板露出来了吗 === true
+              });
+
+              /* 收尾：一路点回 100%（按显示值判断，别数点击次数）、不锁定 */
+              for (let i = 0; i < 12; i++) {
+                const st = await readState();
+                if (st.百分比 === '100%') break;
+                await calJs('document.getElementById("btnZoom' +
+                  (parseInt(st.百分比, 10) > 100 ? 'Out' : 'In') + '").click(); true;');
+                await waitZ(320);
+              }
+              /* 顺手截两张图：放大到 120% 一张、100% 一张（给用户看缩放效果）。
+                 先把右侧「当天清单」关掉，不然月历被它盖住。 */
+              try {
+                await calJs('(function(){var b=document.getElementById("panelClose");if(b)b.click();return true;})()');
+                await waitZ(500);
+                await calJs('document.getElementById("btnZoomIn").click(); true;');
+                await waitZ(450);
+                await calJs('document.getElementById("btnZoomIn").click(); true;');
+                await waitZ(900);
+                fs.writeFileSync(path.join(__dirname, '.diag', 'cal-zoom-120.png'),
+                  (await calWin.webContents.capturePage()).toPNG());
+                await calJs('document.getElementById("btnZoomOut").click(); true;');
+                await waitZ(450);
+                await calJs('document.getElementById("btnZoomOut").click(); true;');
+                await waitZ(900);
+                fs.writeFileSync(path.join(__dirname, '.diag', 'cal-zoom-100.png'),
+                  (await calWin.webContents.capturePage()).toPNG());
+              } catch (eShot) { diagLog('calzoom-shot-error', String(eShot && eShot.message || eShot)); }
+              const sEnd = await readState();
+              const bEnd = calWin.getBounds();
+              diagLog('calzoom-6-收尾', {
+                状态: sEnd, 窗口: boundsOf(), 实际缩放: zoomOf(),
+                /* ⚠️ 别要求像素级相等：Windows 会把窗口尺寸吸到奇数像素，
+                   同一尺寸走 setBounds 和创建时可能差 2~3px（这里是 941 vs 943） */
+                回到一百了吗: sEnd.百分比 === '100%' && Math.abs(bEnd.width - b100.width) <= 4
+              });
+              } catch (eZ) {
+                diagLog('calzoom-error', { message: String(eZ && eZ.message || eZ) });
+              }
+            }
+          }
           if (DIAG.cal) {
             const wait2 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };            /* 先探一下主界面是否还活着（页面报错时后面的脚本会成片失败，
                先落一条日志，省得对着「Script failed to execute」猜） */
@@ -2712,7 +2947,7 @@ let calWin = null;
 let calBooted = false;          // 日历页是否已经画好（画好之前不显示，避免闪空窗）
 let calTodos = [];              // 主界面推过来的待办快照
 let calMemos = [];              // 主界面推过来的备忘录快照
-let calStyle = { theme: 'light', opacity: 97 };   // 主题 + 卡片不透明度（主界面设置页持有）
+let calStyle = { theme: 'light', opacity: 97, scale: 1, locked: false };   // 主题 + 不透明度 + 缩放 + 固定（主界面设置页持有）
 let calHome = null;             // 拖动后的位置（重排都按它算）
 let calDragState = null;
 
@@ -2880,7 +3115,15 @@ function layoutCalWin() {
 function sendCalFit() {
   if (!calWin || calWin.isDestroyed()) return;
   const b = calWin.getBounds();
-  calWin.webContents.send('cal-fit', { width: b.width, height: b.height });
+  /* ⚠️ 报给页面的必须是【CSS 空间】的尺寸：网页整体缩放了 s 倍之后，
+     940×680 的布局正好铺满 940s×680s 的窗口，除以缩放系数 --fit 才等于 1，
+     否则缩小到 0.8 倍时会被再缩一次（0.64），卡片平白小一圈。 */
+  let z = 1;
+  try { z = calWin.webContents.getZoomFactor() || 1; } catch (e) { }
+  calWin.webContents.send('cal-fit', {
+    width: Math.round(b.width / z),
+    height: Math.round(b.height / z)
+  });
 }
 
 /* 待办数据统一从这里进：主界面推的、自检造的，都走同一条路 */
@@ -2903,13 +3146,60 @@ function applyCalTodos(list) {
   return calTodos;
 }
 
-/* 主题 / 不透明度：主界面设置页推过来，这里只做缓存 + 转发（页面一加载就补发一次） */
+/* 主题 / 不透明度 / 缩放 / 固定：主界面设置页推过来，这里只做缓存 + 转发
+   （日历页面一加载就补发一次）。缩放要动窗口，所以在这里一起算。 */
+const CAL_SCALE_STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
+function calScaleIndex(s) {
+  let i = 0, best = Infinity;
+  CAL_SCALE_STEPS.forEach(function (v, k) {
+    const d = Math.abs(v - s);
+    if (d < best) { best = d; i = k; }
+  });
+  return i;
+}
+/* 按缩放把窗口调成「设计尺寸 × 缩放」，并把网页整体缩放同样的倍数：
+   这样 CSS 布局仍然是 940×680，内容整体变大变小，窗口正好装得下。
+   屏幕装不下就往回收（比如 1.5 倍在 768 高的笔记本上放不下），
+   所以推回页面的 scale 是【实际生效】的那个值。 */
+function applyCalZoom() {
+  if (!calWin || calWin.isDestroyed()) return;
+  const want = Math.min(1.5, Math.max(0.8, Number(calStyle.scale) || 1));
+  const b = calWin.getBounds();
+  const wa = screen.getDisplayMatching(b).workArea;
+  let s = want;
+  /* 屏幕装不下就往回收。⚠️ 这里【不能】再套 Math.min(1, …)：
+     那等于把上限锁死成 1 倍，放大永远被压回 100%（自检里踩过）。 */
+  const fitS = Math.min((wa.width - 8) / CAL_BOX.width, (wa.height - 8) / CAL_BOX.height);
+  if (s > fitS) s = Math.max(0.5, fitS);
+  const w = Math.round(CAL_BOX.width * s), h = Math.round(CAL_BOX.height * s);
+  /* 位置以左上角为锚（用户把日历摆哪儿就以哪儿为准），超出屏幕就往回收 */
+  let nx = b.x, ny = b.y;
+  if (nx + w > wa.x + wa.width) nx = wa.x + wa.width - w;
+  if (ny + h > wa.y + wa.height) ny = wa.y + wa.height - h;
+  if (nx < wa.x) nx = wa.x;
+  if (ny < wa.y) ny = wa.y;
+  try { calWin.webContents.setZoomFactor(s); } catch (e) { }
+  calWin.setBounds({ x: nx, y: ny, width: w, height: h });
+  calStyle.scale = s;                       // 实际生效的（可能比点的那档小）
+  calStyle.scaleWant = want;                // 用户点的那一档：页面用它判断 ＋/− 到没到头
+  calWin.webContents.send('cal-style', calStyle);
+  sendCalFit();
+}
+
 function applyCalStyle(st) {
   if (st && typeof st === 'object') {
+    const prevScale = calStyle.scale;
     calStyle = {
       theme: st.theme === 'dark' ? 'dark' : 'light',
-      opacity: Math.min(100, Math.max(30, Math.round(Number(st.opacity) || 97)))
+      opacity: Math.min(100, Math.max(30, Math.round(Number(st.opacity) || 97))),
+      scale: Math.min(1.5, Math.max(0.8, Number(st.scale) || 1)),
+      scaleWant: Math.min(1.5, Math.max(0.8, Number(st.scale) || 1)),
+      locked: !!st.locked
     };
+    if (!calWin || calWin.isDestroyed()) return calStyle;
+    if (calStyle.scale !== prevScale) { applyCalZoom(); return calStyle; }
+    calWin.webContents.send('cal-style', calStyle);
+    return calStyle;
   }
   if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-style', calStyle);
   return calStyle;
@@ -3010,6 +3300,7 @@ ipcMain.on('cal-ready', () => {
 /* 日历窗拖动：和宠物同一套限位（不带主窗口那圈余量） */
 ipcMain.on('cal-win-drag-start', (e, pt) => {
   if (!calWin || calWin.isDestroyed() || !pt) return;
+  if (calStyle.locked) return;            // 固定状态：谁都别想挪它（页面那边也已经拦了，这里再兜一道）
   calDragState = { x: pt.x, y: pt.y, bounds: calWin.getBounds() };
 });
 
@@ -3076,6 +3367,22 @@ ipcMain.on('cal-toggle-theme-req', () => {
   win.webContents.send('cal-toggle-theme');
 });
 
+/* 放大 / 缩小：转给主界面（缩放值存在它的设置里），顺手把窗口尺寸也调好 */
+ipcMain.on('cal-zoom-req', (e, dir) => {
+  const cur = calScaleIndex(Math.min(1.5, Math.max(0.8, Number(calStyle.scale) || 1)));
+  const next = CAL_SCALE_STEPS[Math.max(0, Math.min(CAL_SCALE_STEPS.length - 1, cur + (dir > 0 ? 1 : -1)))];
+  calStyle.scale = next;
+  applyCalZoom();                                   // 先让窗口立刻有反应
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('cal-zoom', next);           // 再让主界面把它存进设置
+});
+
+/* 固定 / 取消固定：和主题一样走主界面存设置，再由它推回来 */
+ipcMain.on('cal-toggle-lock-req', () => {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('cal-toggle-lock');
+});
+
 /* 右上角「＋」：把主界面叫出来并直接打开「新增待办」弹窗 */
 ipcMain.on('cal-add-todo', () => {
   if (!win || win.isDestroyed()) return;
@@ -3104,7 +3411,12 @@ function calMenuTemplate() {
 function sendCalNav(dir) {
   if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-nav', dir);
 }
-ipcMain.handle('cal-win-menu', () => Menu.buildFromTemplate(calMenuTemplate()));
+/* 右键菜单：固定状态下干脆不弹 —— 菜单里是「上一月 / 今天 / 下一月 / 打开主界面 /
+   隐藏日历」这些，个个都在动日历，锁住就该老实待着。（解锁照旧能弹。） */
+ipcMain.handle('cal-win-menu', () => {
+  if (calStyle.locked) return null;
+  return Menu.buildFromTemplate(calMenuTemplate());
+});
 
 /* ------------------------------------------------------------ 宠物说话
    气泡内容和「下一次提醒」在主界面那边算（它才有那些数据），所以这里转发一次：

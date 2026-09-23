@@ -181,6 +181,8 @@
     calOn: false,              // 桌面日历是否显示（独立小窗，可与主界面同时存在）
     calTheme: 'light',         // 桌面日历主题：light / dark
     calOpacity: 97,            // 桌面日历卡片不透明度（35~100，只影响底色）
+    calScale: 1,               // 桌面日历缩放（0.8~1.5，日历头部 −/＋ 调）
+    calLocked: false,          // 桌面日历是否固定（固定后不能拖动、不能点开某天）
     skin: '__default',         // 宠物形象：__default = 代码手绘，其余为 skins/ 里的皮肤
     diaryFont: 16,             // 日记正文/输入框的字号（页面上 A−/A+ 可调 12~24）
   };
@@ -690,6 +692,10 @@
         if (isFinite(+s.diaryFont) && +s.diaryFont > 0) {
           settings.diaryFont = Math.min(24, Math.max(12, Math.round(+s.diaryFont)));
         }
+        if (isFinite(+s.calScale) && +s.calScale > 0) {
+          settings.calScale = Math.min(1.5, Math.max(0.8, +s.calScale));
+        }
+        settings.calLocked = !!s.calLocked;
       }
     } catch (e) { /* 忽略损坏数据 */ }
     if (!settings.items.length) settings.items = defaultItems();
@@ -1245,7 +1251,12 @@
   /* 桌面日历的主题 / 不透明度：设置页改一下就推一次（主进程再转发给日历窗） */
   function pushCalStyle() {
     if (!native || !native.calStyle) return;
-    native.calStyle({ theme: settings.calTheme, opacity: settings.calOpacity });
+    native.calStyle({
+      theme: settings.calTheme,
+      opacity: settings.calOpacity,
+      scale: settings.calScale,
+      locked: settings.calLocked
+    });
   }
 
   /* 设置页里那两条控件按当前值画一遍（初始化 + 日历里切了主题时同步） */
@@ -2277,7 +2288,7 @@
     if (el.dfPlus) el.dfPlus.addEventListener('click', function () { stepDiaryFont(1); });
 
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.6.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.textContent = '别感冒提醒器 v3.7.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -3037,6 +3048,27 @@
         paintCalStyle();
         pushCalStyle();
         setCaption(settings.calTheme === 'dark' ? '桌面日历已切成深色' : '桌面日历已切成浅色');
+      });
+    }
+    /* 日历头部 −/＋：主进程已经先把窗口调好了，这里只负责记住缩放值 */
+    if (native && native.onCalZoom) {
+      native.onCalZoom(function (scale) {
+        const s = Math.min(1.5, Math.max(0.8, +scale || 1));
+        if (s === settings.calScale) return;
+        settings.calScale = s;
+        saveSettings();
+        pushCalStyle();
+      });
+    }
+    /* 日历头部 🔓/🔒：固定之后不能拖动、也点不开某天 */
+    if (native && native.onCalToggleLock) {
+      native.onCalToggleLock(function () {
+        settings.calLocked = !settings.calLocked;
+        saveSettings();
+        pushCalStyle();
+        setCaption(settings.calLocked
+          ? '桌面日历已固定：拖不动，也点不开某天了'
+          : '桌面日历已解锁：可以拖动、也能点开某天');
       });
     }
 

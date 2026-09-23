@@ -82,6 +82,19 @@ html,body{
   cursor:grab;
 }
 body.dragging{cursor:grabbing}
+/* 固定状态：卡片和格子都不再是「可以抓/可以点」的样子；
+   头部那一排按钮（翻月 / 今天 / 缩放 / 主题 / ＋ / ⚙ / ✕）统统变灰按不动，
+   ⚠️ 只有 🔒 自己还能按 —— 不然锁上就再也解不开了。
+   左侧备忘录不在头部里，所以「＋ 加一条」照常能用。 */
+body.locked{cursor:default}
+body.locked .cell{cursor:default}
+body.locked .cell:hover{background:transparent}
+body.locked .head button:not(#btnLock){
+  opacity:.34;cursor:default;filter:grayscale(.7);
+}
+body.locked .head button:not(#btnLock):hover{
+  color:var(--ink-dim);background:var(--btn-bg);border-color:var(--line);
+}
 
 .wrap{position:fixed;inset:0;display:grid;place-items:center}
 
@@ -163,6 +176,23 @@ body.dragging{cursor:grabbing}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 
 .head{display:flex;align-items:center;gap:7px;height:34px;flex:none}
+/* 缩放步进器「− 100% ＋」：比图标按钮稍宽一点，字号小、不抢戏 */
+.zoombox{
+  display:inline-flex;align-items:center;flex:none;height:28px;
+  border:1px solid var(--line);border-radius:9px;background:var(--btn-bg);overflow:hidden;
+}
+.zoombox button{
+  border:0;background:transparent;cursor:pointer;font-family:inherit;
+  color:var(--ink-dim);font-size:15px;line-height:1;width:24px;height:26px;padding:0;transition:.15s;
+}
+.zoombox button:hover:not(:disabled){color:var(--ink);background:var(--btn-hover)}
+.zoombox button:disabled{opacity:.32;cursor:default}
+.zoombox #zoomVal{
+  min-width:42px;text-align:center;font-size:12.5px;color:var(--ink-dim);
+  border-left:1px solid var(--line);border-right:1px solid var(--line);line-height:26px;
+}
+/* 固定按钮：锁住时高亮一下，一眼能看出日历现在动不了 */
+#btnLock.on{color:#fff;background:var(--lake);border-color:var(--lake)}
 .grow{flex:1}
 .title{
   min-width:148px;font-size:17.5px;font-weight:700;letter-spacing:.6px;text-align:center;

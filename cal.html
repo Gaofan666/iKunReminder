@@ -37,6 +37,14 @@
         <button class="nav" id="btnNext" title="下一月">›</button>
         <button class="pill" id="btnToday" title="回到今天">今天</button>
         <span class="grow"></span>
+        <!-- 缩放：整个日历（含字号、格子、右侧清单）一起放大缩小 -->
+        <div class="zoombox" id="zoomBox" title="放大 / 缩小整个日历">
+          <button id="btnZoomOut" title="缩小">−</button>
+          <span id="zoomVal">100%</span>
+          <button id="btnZoomIn" title="放大">＋</button>
+        </div>
+        <!-- 固定：锁住之后不能拖动日历，也不能点开某一天 -->
+        <button class="icon" id="btnLock" title="固定日历（锁住后不能拖动、也不能点开某天）">🔓</button>
         <button class="icon" id="btnTheme" title="切换深色 / 浅色主题">🌙</button>
         <button class="icon" id="btnAdd" title="新增待办（打开主界面的新增窗口）">＋</button>
         <button class="icon" id="btnSet" title="打开设置">⚙</button>

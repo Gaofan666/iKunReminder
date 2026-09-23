@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld('kunkunCalWindow', {
   openSettings: () => ipcRenderer.send('cal-open-settings'),
   hide: () => ipcRenderer.invoke('cal-hide'),
 
+  /* 放大 / 缩小整个日历（dir：+1 放大、-1 缩小）——真正的窗口尺寸和缩放由主进程算 */
+  zoom: (dir) => ipcRenderer.send('cal-zoom-req', dir > 0 ? 1 : -1),
+
+  /* 固定 / 取消固定（锁住后不能拖动、也不能点开某天） */
+  toggleLock: () => ipcRenderer.send('cal-toggle-lock-req'),
+
   /* 勾完成：待办和备忘都转给主界面改数据，改完连数据带状态一起推回来 */
   toggleTodo: (id) => ipcRenderer.send('cal-toggle-todo-req', String(id)),
   toggleMemo: (id) => ipcRenderer.send('cal-toggle-memo-req', String(id)),

@@ -19,7 +19,8 @@
     legendRight: $('#legendRight'), memoList: $('#memoList'), memoCount: $('#memoCount'),
     panel: $('#panel'), panelTitle: $('#panelTitle'), panelList: $('#panelList'),
     btnPrev: $('#btnPrev'), btnNext: $('#btnNext'), btnToday: $('#btnToday'),
-    btnTheme: $('#btnTheme'),
+    btnTheme: $('#btnTheme'), btnLock: $('#btnLock'),
+    zoomVal: $('#zoomVal'), btnZoomIn: $('#btnZoomIn'), btnZoomOut: $('#btnZoomOut'),
     btnAdd: $('#btnAdd'), btnSet: $('#btnSet'), btnHide: $('#btnHide'),
     btnAddMemo: $('#btnAddMemo'), memoNewRow: $('#memoNewRow'),
     memoNew: $('#memoNew'), memoNewOk: $('#memoNewOk'),
@@ -39,6 +40,7 @@
   let selected = null;                     // 当前打开清单的那天（yyyy-mm-dd）
   let pendingDelete = null;                // 正在二次确认删除的那条待办 id
   let todayKey = '';
+  let calLocked = false;                   // 固定状态：锁住后不拖窗、不点开某天
 
   /* ------------------------------------------------------------ 日期小工具 */
   function pad2(n) { return n < 10 ? '0' + n : String(n); }
@@ -293,12 +295,16 @@
      两样都由主界面设置页持有（localStorage），主进程转发过来。
      不透明度作用在【整张卡片】上（CSS 的 opacity）：网格、色条、文字一起淡，
      只给底色加 alpha 的话，带待办的那几格会仍然是实心的，看着很割裂。 */
-  let styleState = { theme: 'light', opacity: 97 };
+  let styleState = { theme: 'light', opacity: 97, scale: 1, locked: false };
   function applyStyle(st) {
     if (st && typeof st === 'object') {
       styleState = {
         theme: st.theme === 'dark' ? 'dark' : 'light',
-        opacity: Math.min(100, Math.max(30, Number(st.opacity) || 97))
+        opacity: Math.min(100, Math.max(30, Number(st.opacity) || 97)),
+        scale: Math.min(1.5, Math.max(0.8, Number(st.scale) || 1)),
+        /* 用户点的那一档：屏幕装不下时 scale 会被压小，但按钮该按「到没到头」变灰 */
+        scaleWant: Math.min(1.5, Math.max(0.8, Number(st.scaleWant || st.scale) || 1)),
+        locked: !!st.locked
       };
     }
     const dark = styleState.theme === 'dark';
@@ -308,6 +314,22 @@
       el.btnTheme.textContent = dark ? '☀' : '🌙';
       el.btnTheme.title = dark ? '切换到浅色主题' : '切换到深色主题';
     }
+    /* 缩放：百分比按【实际生效】的缩放显示（屏幕装不下时主进程会往回收），
+       按钮到没到头按【点的那一档】判断 */
+    if (el.zoomVal) el.zoomVal.textContent = Math.round(styleState.scale * 100) + '%';
+    if (el.btnZoomOut) el.btnZoomOut.disabled = styleState.scaleWant <= 0.801;
+    if (el.btnZoomIn) el.btnZoomIn.disabled = styleState.scaleWant >= 1.499;
+    /* 固定：锁住之后不拖窗、不点开某天 */
+    calLocked = styleState.locked;
+    document.body.classList.toggle('locked', calLocked);
+    if (el.btnLock) {
+      el.btnLock.textContent = calLocked ? '🔒' : '🔓';
+      el.btnLock.classList.toggle('on', calLocked);
+      el.btnLock.title = calLocked
+        ? '已固定：不能拖动、也点不开某天（点一下解锁）'
+        : '固定日历（锁住后不能拖动、也不能点开某天）';
+    }
+    if (calLocked && selected) { selected = null; renderGrid(); renderPanel(); }
   }
 
   /* ------------------------------------------------------------ 新增备忘
@@ -339,6 +361,13 @@
   el.cal.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
     if (e.target.closest && e.target.closest('button, input, .panel')) return;
+    /* 固定状态：不拖窗、也不点开某天（免得手一滑就把日历挪走 / 弹出一堆格子）。
+       备忘录那条勾选是明确操作，留着还能用。 */
+    if (calLocked) {
+      const t = e.target.closest ? e.target.closest('.memo') : null;
+      if (t && t.dataset.id && bridge.toggleMemo) bridge.toggleMemo(t.dataset.id);
+      return;
+    }
     dragging = true; isDrag = false; moved = 0;
     downPt = { x: e.screenX, y: e.screenY };
     downTarget = e.target.closest ? e.target.closest('.cell, .memo') : null;
@@ -416,9 +445,26 @@
   el.btnNext.addEventListener('click', function () { shiftMonth(1); });
   el.btnToday.addEventListener('click', gotoToday);
   el.btnTheme.addEventListener('click', function () { if (bridge.toggleTheme) bridge.toggleTheme(); });
+  if (el.btnZoomIn) el.btnZoomIn.addEventListener('click', function () { if (bridge.zoom) bridge.zoom(1); });
+  if (el.btnZoomOut) el.btnZoomOut.addEventListener('click', function () { if (bridge.zoom) bridge.zoom(-1); });
+  if (el.btnLock) el.btnLock.addEventListener('click', function () { if (bridge.toggleLock) bridge.toggleLock(); });
   el.btnAdd.addEventListener('click', function () { if (bridge.addTodo) bridge.addTodo(); });
   el.btnSet.addEventListener('click', function () { if (bridge.openSettings) bridge.openSettings(); });
   el.btnHide.addEventListener('click', function () { if (bridge.hide) bridge.hide(); });
+
+  /* 固定之后，头部那一排按钮（翻月 / 今天 / 缩放 / 主题 / ＋ / ⚙ / ✕）全都不响应。
+     用捕获阶段统一拦下来最省事，省得每个监听里都塞一遍判断。
+     ⚠️ 只放行 🔒 自己：不然锁上就解不开了。
+     左侧备忘录不在头部里，所以「＋ 加一条」照常能用。 */
+  const head = document.querySelector('.head');
+  if (head) {
+    head.addEventListener('click', function (e) {
+      if (!calLocked) return;
+      if (e.target.closest && e.target.closest('#btnLock')) return;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+  }
   el.panelClose.addEventListener('click', closePanel);
   el.panel.addEventListener('click', function (e) {
     if (e.target === el.panel || e.target === el.panelList) closePanel();
