@@ -1,20 +1,20 @@
 {
-  "version": "3.7.0",
-  "releaseDate": "2026-09-23T08:48:09.337Z",
-  "notes": "## iKunReminder v3.7.0\n\n这次改的是**桌面日历**（主界面设置里勾上「📅 桌面日历」才会出现的那张小卡片）。\n\n1. 🔍 **日历能放大缩小了** —— 日历右上角多了一组 `− 100% ＋`，一共 7 档：\n   **80% · 90% · 100% · 110% · 120% · 135% · 150%**。点一下整张日历**连字号、格子、色条、左侧备忘录、右侧当天清单一起来**，窗口自己跟着变大变小，不用手动拖。\n   到两头按钮会变灰停住；**屏幕装不下会自动收一点**（比如 768 高的笔记本上 150% 放不下，就会停在能放下的最大档，中间显示的就是真实百分比）\n2. 📌 **新增「固定」开关** —— 日历右上角多了个 🔓 / 🔒。锁上之后：\n   - ❌ 拖不动了（不会再手一滑把日历挪走）\n   - ❌ 点不开某一天（不会突然弹出一堆当天清单）\n   - ❌ **头部那一排按钮全部失效**：翻月、今天、缩放、切主题、新增待办、打开设置、右上角那个 ✕ 隐藏——统统按不动，右键菜单也不再弹\n   - ✅ **只有左侧备忘录照常能用**（＋ 加一条、点一下勾完成）\n   - ✅ **🔒 自己仍然能点**（不然锁上就再也解不开了；实在要关掉日历，托盘右键里那个「📅 显示桌面日历」还是能取消勾选）\n   锁定状态下按钮会**变灰**、只有 🔒 是高亮的青色，一眼能看出来现在是锁着的。**状态会记住**，下次打开还是锁着的\n3. 🧪 自检跟着补了一条：锁定后把 9 个头部按钮**挨个真点一遍**，核对「月份没变、主题没变、缩放没变、备忘录还能加」\n\n**下载**：`iKunReminder-setup-v3.7.0.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 115660617,
-  "sha512": "AI5i3Q6qvtOYNdu5n4vV+DtaHy1BFiSBByzz4YxUmxHeIcXiEHfLZIm+rVGghMZ3RJg4pXHNTJAoZoESvmIsjA==",
+  "version": "3.8.0",
+  "releaseDate": "2026-09-23T09:20:50.762Z",
+  "notes": "## iKunReminder v3.8.0\n\n1. 📖 **在桌面宠物身上右键，多了一项「📖 写今天日记」** —— 位置就在「📝 打开待办」下面。\n   点一下：主窗口开到前台 → 直接跳到日记页 → **光标已经落在今天的输入框里**，抬手就能写。\n   - 今天还没写：光标直接进那个输入框\n   - 今天已经写过：自动把今天的编辑框打开、光标放到末尾，接着写（改完点「保存」，或按 Esc 取消）\n   这样\"想随手记两句\"不用再先开窗口、再点标签页、再点编辑了\n\n> 托盘右键里那项还是「📖 日记」（只跳到日记页、不落光标）——一个管\"去看看\"，一个管\"现在写\"，各司其职。\n\n**下载**：`iKunReminder-setup-v3.8.0.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 115660882,
+  "sha512": "Ug0/udonCDN7w6TQ8eKx/GzRcsnVU+1jqIUvvxZcGuOlCDtsFYN9AcDOMZg7z0RR44OiW/jDcteqTnyIXUEouA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.7.0/iKunReminder-setup-v3.7.0.exe.part1",
-      "size": 57830309,
-      "sha512": "eK3S5MbQ7Pbfmn/15yorEoVAsySkWJA5gyAnZKNyT9RqAVPsEDhKroFkZXCRT3XqL7xEV5H/6LMm/dX+Ahk5nQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.8.0/iKunReminder-setup-v3.8.0.exe.part1",
+      "size": 57830441,
+      "sha512": "3PTdwdomvxJDmCYIbKNZ0T7zKzsKqF3yjnZqFLDcU2da3BOG8HH4gZJSgyJnd/z9k7sNnW5B4J1rV+x3yeTj6Q==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.7.0/iKunReminder-setup-v3.7.0.exe.part2",
-      "size": 57830308,
-      "sha512": "fH2y8JMmMIH09UNrNlXzoJUf4awFIntBd5S8PxjVzRylcWSbZAzIE23+/RT86CwgTKxyY+isB3akXGv7nNmuAg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.8.0/iKunReminder-setup-v3.8.0.exe.part2",
+      "size": 57830441,
+      "sha512": "ABuO1yjhVpaJt6ABK25u++Bstnx2cuELV+bot68KXIVtZzfzSX4MBSMB+1UcMypDWo0sSZA+jCmpKX6vNvlM9g==",
       "index": 2
     }
   ]
