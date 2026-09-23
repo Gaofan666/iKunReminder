@@ -1,20 +1,20 @@
 {
-  "version": "3.8.0",
-  "releaseDate": "2026-09-23T09:20:50.762Z",
-  "notes": "## iKunReminder v3.8.0\n\n1. 📖 **在桌面宠物身上右键，多了一项「📖 写今天日记」** —— 位置就在「📝 打开待办」下面。\n   点一下：主窗口开到前台 → 直接跳到日记页 → **光标已经落在今天的输入框里**，抬手就能写。\n   - 今天还没写：光标直接进那个输入框\n   - 今天已经写过：自动把今天的编辑框打开、光标放到末尾，接着写（改完点「保存」，或按 Esc 取消）\n   这样\"想随手记两句\"不用再先开窗口、再点标签页、再点编辑了\n\n> 托盘右键里那项还是「📖 日记」（只跳到日记页、不落光标）——一个管\"去看看\"，一个管\"现在写\"，各司其职。\n\n**下载**：`iKunReminder-setup-v3.8.0.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 115660882,
-  "sha512": "Ug0/udonCDN7w6TQ8eKx/GzRcsnVU+1jqIUvvxZcGuOlCDtsFYN9AcDOMZg7z0RR44OiW/jDcteqTnyIXUEouA==",
+  "version": "3.9.0",
+  "releaseDate": "2026-09-23T12:04:20.317Z",
+  "notes": "## iKunReminder v3.9.0\n\n1. 🔔 **同时到点好几条待办时，合并成一条弹窗** —— 以前设了 3 条同一时刻的待办，就得连点 3 次；现在会弹一条「有 3 条待办到点了」，把标题列出来，给两个选择：**「全部完成」**（一次勾掉）或**「逐条看」**（还是一条条过，但不丢不重）\n2. 💬 **弹窗上会提示后面还排着几条** —— 弹窗正开着、别的提醒又到点时，底部会显示「**还有 2 条待办也到点了 —— 处理完这条会接着弹**」，不会再让你以为处理完当前这条就没事了（数字是实时刷新的）\n   - 顺带说明一下原本的机制：全程**只有一个提醒位**，所以永远不会出现两个弹窗叠在一起；休水/休息提醒的倒计时在弹窗期间会**暂停**，处理完继续，所以也不会\"欠账\"连环弹\n3. 📐 **修了「桌面日历贴不到屏幕左边和上边」** —— 原来卡片是在窗口里**居中**摆的，而窗口和卡片的尺寸总会差几个像素（Windows 取整），一居中四周就空出一条缝。现在卡片**贴窗口左上角**，余量全留在右下角（透明、看不见），并且尺寸差几像素时不再缩小\n4. 🖱 **修了双显示器下拖动日历会被“拽走”** —— 松手那一刻原本按「窗口中心」在哪块屏回吸，而拖动过程按的是「鼠标位置」，两者不一致就会跳到另一块屏。现在统一按鼠标位置算\n5. 📖 **桌面宠物右键菜单调整** —— 原来是「写今天日记」，现在改成「**📖 打开日记**」，点了只打开日记页面，不替你决定写什么\n6. 🔤 **提醒弹窗的字不再闪了** —— 标题原来是一套彩色“故障闪烁”效果（三层彩色错位 + 发光），加上任务栏标题每 0.65 秒跳一次，看着累。现在改成**纯色大字、完全静止**（颜色更沉、字重字距也顺眼了），任务栏标题只在提醒期间静静显示「🔔 时间到啦！」。提醒的“存在感”交给提示音 + 宠物动画 + 系统通知\n7. 🎈 **“唱跳rap篮球”那些字不再从屏幕底部往上飘了** —— 原来 10 个字全钉在屏幕底部同一条线上整体上飘，看着很假；现在每个字在**自己的位置上原地弹出来**（带一点回弹），轻轻上飘后淡出。而且**文字全部排在弹窗背后、生成位置也避开弹窗**，再也不会挡住提醒内容\n\n**下载**：`iKunReminder-setup-v3.9.0.exe`（约 112 MB，Windows x64，双击安装）\n\n\n",
+  "size": 115674472,
+  "sha512": "KtrygC0DQNiEOfAO2d4UN2u2qwsIy1cbx9ce+085o4bgUXFRNalODYr3iBidAmV14eNCnWtiTj+S4/RBjyFa/A==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.8.0/iKunReminder-setup-v3.8.0.exe.part1",
-      "size": 57830441,
-      "sha512": "3PTdwdomvxJDmCYIbKNZ0T7zKzsKqF3yjnZqFLDcU2da3BOG8HH4gZJSgyJnd/z9k7sNnW5B4J1rV+x3yeTj6Q==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.0/iKunReminder-setup-v3.9.0.exe.part1",
+      "size": 57837236,
+      "sha512": "HysnGOQ1qvM9kWjxWtOGWiAXtMqE79QJ4OrPEWBFJ7UsbSLohvFVTejRilNhrb4cFKSNTPNmXwNG0yD4Cw28+A==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.8.0/iKunReminder-setup-v3.8.0.exe.part2",
-      "size": 57830441,
-      "sha512": "ABuO1yjhVpaJt6ABK25u++Bstnx2cuELV+bot68KXIVtZzfzSX4MBSMB+1UcMypDWo0sSZA+jCmpKX6vNvlM9g==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.0/iKunReminder-setup-v3.9.0.exe.part2",
+      "size": 57837236,
+      "sha512": "XCLFnPUi+Pcw1tPEjyFjiArHAN2r5iLnrRgtrLprigipa4RGEUnl/bKp+mQ/wZ67XjqKmuTRI4iwLodhCFOvKw==",
       "index": 2
     }
   ]
