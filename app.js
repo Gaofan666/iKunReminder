@@ -1061,7 +1061,10 @@
       const s = document.createElement('span');
       s.textContent = WORDS[Math.floor(Math.random() * WORDS.length)];
       s.style.left = (8 + Math.random() * 84) + '%';
-      s.style.animationDelay = (Math.random() * 0.9).toFixed(2) + 's';
+      /* ⚠️ 高度必须每个词随机：全钉在底部再往上飘会显得很假（用户报过）。
+         范围取「卡片周围那片背景」——卡片大致在中间，所以词落在 38%~86% 这一带。 */
+      s.style.top = (38 + Math.random() * 48).toFixed(1) + '%';
+      s.style.animationDelay = (Math.random() * 0.45).toFixed(2) + 's';
       s.style.fontSize = (17 + Math.random() * 16).toFixed(0) + 'px';
       el.floatWords.appendChild(s);
     }
