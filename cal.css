@@ -114,8 +114,11 @@ body.locked .head button:not(#btnLock):hover{
   background:linear-gradient(168deg,rgb(var(--card-rgb-top)),rgb(var(--card-rgb-bot)));
   border:1px solid var(--line);
   opacity:var(--opa);
+  /* ⚠️ 缩放原点必须是左上角：用 center 的话，--fit<1 时卡片会被"往窗口中心收"，
+     左/上留出一条缝、右/下反而超出窗口被 overflow:hidden 切掉 ——
+     用户报的「贴不到左边和上边 + 右边和下边被裁切」就是它。 */
   transform:scale(var(--fit,1));
-  transform-origin:center center;
+  transform-origin:top left;
   overflow:hidden;
 }
 

@@ -3557,6 +3557,10 @@ function applyCalZoom() {
   if (ny < wa.y) ny = wa.y;
   try { calWin.webContents.setZoomFactor(s); } catch (e) { }
   calWin.setBounds({ x: nx, y: ny, width: w, height: h });
+  /* 再设一次缩放：窗口刚创建/刚加载完时第一次 setZoomFactor 可能没生效，
+     那会导致「窗口按缩放变大、但网页没缩放」—— 卡片于是装不下被裁掉一截。
+     补一次是幂等的，代价只有一行。 */
+  try { calWin.webContents.setZoomFactor(s); } catch (e) { }
   snapCalIntoOneDisplay('缩放');            // 缩放后也可能压在两块屏交界上，收一下
   calStyle.scale = s;                       // 实际生效的（可能比点的那档小）
   calStyle.scaleWant = want;                // 用户点的那一档：页面用它判断 ＋/− 到没到头
@@ -3666,6 +3670,10 @@ ipcMain.on('cal-ready', () => {
   /* 窗口一就绪就检查一次位置：旧存的坐标、或系统在两次运行之间改了显示器排布，
      都可能让它压在两块屏交界上（那边会被裁掉一截）。 */
   snapCalIntoOneDisplay('窗口就绪');
+  /* 再把网页缩放按当前档位重设一次：窗口创建早期那次可能没生效，
+     一旦「窗口尺寸按缩放变了、网页没缩放」，940×680 的卡片就装不下、右下被裁。 */
+  try { calWin.webContents.setZoomFactor(Math.min(1.5, Math.max(0.8, Number(calStyle.scale) || 1))); } catch (e) { }
+  sendCalFit();
   calWin.webContents.send('cal-todos', calTodos);
   calWin.webContents.send('cal-memos', calMemos);
   calWin.webContents.send('cal-style', calStyle);
