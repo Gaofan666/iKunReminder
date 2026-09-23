@@ -3695,23 +3695,29 @@ ipcMain.on('cal-win-drag-start', (e, pt) => {
 
 ipcMain.on('cal-win-drag-move', (e, pt) => {
   if (!calWin || calWin.isDestroyed() || !calDragState || !pt) return;
+  if (calStyle.locked) return;
   const b = calDragState.bounds;
-  const pos = clampToWorkArea(
-    Math.round(b.x + (pt.x - calDragState.x)),
-    Math.round(b.y + (pt.y - calDragState.y)),
-    b.width, b.height, pt
-  );
+  const nx = Math.round(b.x + (pt.x - calDragState.x));
+  const ny = Math.round(b.y + (pt.y - calDragState.y));
+  /* ⚠️ 算哪块屏的可用区，用【窗口自己的中心】，不要用鼠标位置：
+     鼠标往右拖到主屏边缘时很自然会越过边界，用鼠标判定就会瞬间切到副屏，
+     窗口被吸走 —— 表现就是「右边怎么都贴不上主屏右缘」（用户报过，还验证过
+     「关掉拓展屏就正常」）。用窗口中心判定：窗口还在主屏上就按主屏算，能贴死右缘；
+     继续拖到窗口中心越过边界，才切到另一块屏。 */
+  const pos = clampToWorkArea(nx, ny, b.width, b.height,
+    { x: nx + b.width / 2, y: ny + b.height / 2 });
   calWin.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
 });
 
 ipcMain.on('cal-win-drag-end', () => {
   if (!calWin || calWin.isDestroyed()) { calDragState = null; return; }
   const b = calWin.getBounds();
-  /* ⚠️ 用「鼠标所在位置」来决定算哪块屏幕的可用区：拖动过程中（drag-move）用的就是鼠标位置，
-     这里如果换成窗口中心，双显示器下拖到跨屏边界时会按另一块屏回吸，窗口被莫名拽走。 */
-  let pt = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-  try { pt = screen.getCursorScreenPoint(); } catch (e) { }
-  const pos = clampToWorkArea(b.x, b.y, b.width, b.height, pt);
+  /* ⚠️ 这里【不】重新回吸：拖动过程中（drag-move）已经按窗口中心夹过位置了，
+     松手再来一次只会引入新的抖动 —— 之前用「鼠标位置」在这里回吸，
+     结果鼠标越过屏边界松手时窗口被吸到另一块屏上（用户报过两次）。
+     现在只按窗口自己所在那块屏兜一道底，正常情况就是个空操作。 */
+  const pos = clampToWorkArea(b.x, b.y, b.width, b.height,
+    { x: b.x + b.width / 2, y: b.y + b.height / 2 });
   if (pos.x !== b.x || pos.y !== b.y) {
     calWin.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
   }
