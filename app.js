@@ -1026,13 +1026,15 @@
 
   /* ---------------------------------------------------------- 标题闪烁 */
   let flashTimer = null, flashOn = false;
+  /* 「闪光」按用户要求全关：
+     · 文字那套彩色错位闪烁已从 CSS 里去掉（见 .alert-title）
+     · 任务栏标题也不再一闪一闪，只在提醒期间静态显示「🔔 时间到啦！」
+     提醒的存在感交给提示音、宠物动画和系统通知。 */
   function flashTitle(on) {
     if (flashTimer) { clearInterval(flashTimer); flashTimer = null; }
-    if (!on) { flashOn = false; updateTitle(); return; }
-    flashTimer = setInterval(function () {
-      flashOn = !flashOn;
-      document.title = flashOn ? '🔔 时间到啦！' : '　　';
-    }, 650);
+    flashOn = false;
+    if (on) { document.title = '🔔 时间到啦！'; return; }
+    updateTitle();                       // 关掉提醒后恢复成「下一条提醒倒计时」
   }
 
   function updateTitle() {

@@ -714,19 +714,13 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 .alert-stage-wrap{width:250px;height:236px;margin:0 auto 2px}
 #alertStage{width:100%;height:100%;display:block}
 
-.glitch{
-  position:relative;font-size:31px;font-weight:900;letter-spacing:5px;margin:2px 0 10px;color:#3B4740;
-  text-shadow:0 0 14px rgba(217,161,95,.35);
-  animation:glitchSkew .9s steps(2,end) infinite;
+/* 提醒弹窗的标题：纯色大字，不加发光、不做任何动画。
+   （以前是三层彩色错位闪烁的「故障」效果，用户说太花、闪得难受，已去掉。）
+   提醒的"存在感"交给提示音、宠物动画和系统通知，不靠文字闪。 */
+.alert-title{
+  position:relative;font-size:31px;font-weight:800;letter-spacing:2px;margin:2px 0 10px;
+  color:#3B4740;text-align:center;
 }
-.glitch::before,.glitch::after{
-  content:attr(data-text);position:absolute;inset:0;
-}
-.glitch::before{color:var(--lake);transform:translate(-2px,0);mix-blend-mode:screen;animation:glitchA .7s infinite steps(3,end)}
-.glitch::after{color:var(--clay);transform:translate(2px,0);mix-blend-mode:screen;animation:glitchB .9s infinite steps(3,end)}
-@keyframes glitchA{ 0%{clip-path:inset(0 0 62% 0)} 33%{clip-path:inset(48% 0 12% 0)} 66%{clip-path:inset(18% 0 55% 0)} 100%{clip-path:inset(0 0 62% 0)} }
-@keyframes glitchB{ 0%{clip-path:inset(58% 0 0 0)} 40%{clip-path:inset(10% 0 60% 0)} 70%{clip-path:inset(40% 0 32% 0)} 100%{clip-path:inset(58% 0 0 0)} }
-@keyframes glitchSkew{ 0%,100%{transform:skewX(0)} 50%{transform:skewX(-1.4deg)} }
 
 .alert-desc{margin:0 0 20px;color:#5E6B60;font-size:13.5px;line-height:1.8}
 .alert-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
@@ -760,7 +754,7 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 
 /* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce){
-  .grid-floor,.aurora,.logo,.glitch,.glitch::before,.glitch::after{animation:none}
+  .grid-floor,.aurora,.logo,.alert-title{animation:none}
 }
 
 /* =========================================================
