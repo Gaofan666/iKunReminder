@@ -1054,22 +1054,6 @@ function createWindow() {
               回到标准: { 交互: fsBackClick, 之后: fsBack }
             });
 
-            /* ⑪ 宠物右键「📖 写今天日记」那条链路：
-               主进程发 write-diary → 页面自己跳到日记页 + 光标落到今天的输入框 */
-            await win.webContents.executeJavaScript(
-              'document.getElementById("tabHome").click(); true;', true);
-            await waitD(400);
-            win.webContents.send('write-diary');
-            await waitD(900);
-            diagLog('diary-11-宠物右键写日记', await win.webContents.executeJavaScript(
-              '(function(){var a=document.activeElement;' +
-              'var it=a&&a.closest?a.closest(".diary-item"):null;' +
-              'return {日记页显示了吗:!document.getElementById("pageDiary").hidden,' +
-              ' 标签高亮:document.getElementById("tabDiary").classList.contains("on"),' +
-              ' 光标在输入框里吗:!!(a&&a.classList&&a.classList.contains("diary-edit")),' +
-              ' 编辑的是今天的卡片吗:it?it.classList.contains("today"):null,' +
-              ' 有保存按钮吗:!!(it&&it.querySelector(\'button[data-role="save"]\'))};})()', true));
-
             /* 顺手截一张日记页（字号步进器就在右上角） */
             try {
               await waitD(300);
@@ -1631,7 +1615,207 @@ function createWindow() {
                 点开清单了吗: panelAfterUnlock.面板露出来了吗 === true
               });
 
-              /* 收尾：一路点回 100%（按显示值判断，别数点击次数）、不锁定 */
+              /* ⑦b 缩放之后，鼠标事件的 screenX 还准不准？（拖动跟不跟得上光标）
+                 用真实输入管线注入事件（sendInputEvent），让页面把收到的
+                 screenX / clientX 报回来，再和窗口实际位移对照。 */
+              await calJs('document.getElementById("btnZoomIn").click(); true;');
+              await waitZ(400);
+              await calJs('document.getElementById("btnZoomIn").click(); true;');
+              await waitZ(900);
+              const zNow = zoomOf();
+              await calJs('(function(){window.__pt=null;' +
+                'document.addEventListener("pointermove",function(e){' +
+                'window.__pt={screenX:e.screenX,screenY:e.screenY,clientX:e.clientX,clientY:e.clientY};},true);' +
+                'return true;})()');
+              const bBefore3 = calWin.getBounds();
+              calWin.webContents.sendInputEvent({ type: 'mouseDown', x: 200, y: 200, button: 'left', clickCount: 1 });
+              await waitZ(120);
+              calWin.webContents.sendInputEvent({ type: 'mouseMove', x: 400, y: 350, button: 'left' });
+              await waitZ(250);
+              calWin.webContents.sendInputEvent({ type: 'mouseUp', x: 400, y: 350, button: 'left', clickCount: 1 });
+              await waitZ(500);
+              const bAfter3 = calWin.getBounds();
+              const ptSeen = await calJs('window.__pt');
+              diagLog('calzoom-7b-缩放后拖动跟不跟得上', {
+                实际缩放: zNow,
+                注入的移动: '窗口内 200,200 → 400,350（即 +200,+150）',
+                页面收到的事件: ptSeen,
+                窗口位置: bBefore3.x + ',' + bBefore3.y + ' → ' + bAfter3.x + ',' + bAfter3.y,
+                窗口实际位移: (bAfter3.x - bBefore3.x) + ',' + (bAfter3.y - bBefore3.y)
+              });
+
+              /* ⚠️ 贴边测试前先把它挪回主屏：前面几段测试可能已经把窗口拖到副屏去了，
+                 那样「距工作区左上角」就是拿副屏的工作区在量，数字毫无意义（自检里真踩过）。
+                 所以这里用 let 重新取一次工作区。 */
+              let waNow = screen.getDisplayMatching(calWin.getBounds()).workArea;
+              let wTL = screen.dipToScreenRect(null, waNow);
+              const phys = function (r) { return screen.dipToScreenRect(null, r); };
+              const gaps = function () {
+                const p = phys(calWin.getBounds()), w = wTL;
+                return {
+                  左: (p.x - w.x), 上: (p.y - w.y),
+                  右: (w.x + w.width) - (p.x + p.width),
+                  下: (w.y + w.height) - (p.y + p.height)
+                };
+              };
+              const dragTo = async function (tx, ty) {
+                const b = calWin.getBounds();
+                const from = { x: b.x + Math.floor(b.width / 2), y: b.y + Math.floor(b.height / 2) };
+                ipcMain.emit('cal-win-drag-start', {}, from);
+                ipcMain.emit('cal-win-drag-move', {}, { x: tx, y: ty });
+                ipcMain.emit('cal-win-drag-end', {}, {});
+                await waitZ(500);
+              };
+              /* 先把窗口挪到主屏中间，再据它重新取一次工作区和物理换算 */
+              const pri = screen.getPrimaryDisplay().workArea;
+              await dragTo(pri.x + 200, pri.y + 200);
+              waNow = screen.getDisplayMatching(calWin.getBounds()).workArea;
+              wTL = screen.dipToScreenRect(null, waNow);
+
+              /* ⑦d 真鼠标拖动（SendInput 按住左键）：这是唯一能复现「拖不到屏幕边缘」的路子。
+                 先记录页面收到的 screenX/clientX，再对照窗口实际位移。 */
+              try {
+                await calJs('document.getElementById("btnZoomIn").click(); true;');   // 回到 120%
+                await waitZ(400);
+                await calJs('document.getElementById("btnZoomIn").click(); true;');
+                await waitZ(800);
+                /* 把日历先放到屏幕中间偏右下，留出向左上拖的空间 */
+                const waD = screen.getDisplayMatching(calWin.getBounds()).workArea;
+                const bD = calWin.getBounds();
+                ipcMain.emit('cal-win-drag-start', {}, { x: bD.x + 40, y: bD.y + 40 });
+                ipcMain.emit('cal-win-drag-move', {},
+                  { x: waD.x + 500, y: waD.y + 300 });
+                ipcMain.emit('cal-win-drag-end', {}, {});
+                await waitZ(500);
+                /* ⚠️ 真鼠标会被压在它上面的窗口挡掉（合成事件不会）。
+                   自检里主界面是显示着的，所以先把日历提到最前，不然 pointerdown 根本到不了它。 */
+                try { calWin.moveTop(); } catch (eTop) { }
+                await waitZ(400);
+                await calJs('(function(){window.__pts=[];' +
+                  'document.addEventListener("pointermove",function(e){' +
+                  'window.__pts.push({sx:e.screenX,sy:e.screenY,cx:e.clientX,cy:e.clientY});},true);' +
+                  'return true;})()');
+                const bPre = calWin.getBounds();
+                const gPre = phys(bPre);
+                /* 起点：窗口内部靠中间；终点：屏幕左上角外侧（想把窗口顶到角上） */
+                const fromX = gPre.x + 300, fromY = gPre.y + 240;
+                const toX = gPre.x - 400, toY = gPre.y - 400;
+                const cap = require('child_process').execFileSync('powershell.exe', [
+                  '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                  '-File', path.join(__dirname, '.diag', 'mouse-drag.ps1'),
+                  '-x1', String(fromX), '-y1', String(fromY),
+                  '-x2', String(Math.max(1, toX)), '-y2', String(Math.max(1, toY))
+                ], { encoding: 'utf8' });
+                await waitZ(700);
+                const bPost = calWin.getBounds();
+                const pts = await calJs('window.__pts');
+                const first = pts && pts.length ? pts[0] : null;
+                const last = pts && pts.length ? pts[pts.length - 1] : null;
+                diagLog('calzoom-7d-真鼠标拖动', {
+                  脚本: String(cap).trim(),
+                  缩放: zoomOf(),
+                  鼠标物理移动: (fromX + ',' + fromY) + ' → ' + Math.max(1, toX) + ',' + Math.max(1, toY) +
+                    '（即 ' + (Math.max(1, toX) - fromX) + ',' + (Math.max(1, toY) - fromY) + ' 物理像素）',
+                  窗口DIP: bPre.x + ',' + bPre.y + ' → ' + bPost.x + ',' + bPost.y,
+                  窗口DIP位移: (bPost.x - bPre.x) + ',' + (bPost.y - bPre.y),
+                  期望DIP位移: '≈ 鼠标物理位移 / 1.5',
+                  页面收到的事件数: pts ? pts.length : 0,
+                  第一个事件: first, 最后一个事件: last,
+                  页面screenX位移: (first && last) ? ((last.sx - first.sx) + ',' + (last.sy - first.sy)) : null,
+                  页面clientX位移: (first && last) ? ((last.cx - first.cx) + ',' + (last.cy - first.cy)) : null,
+                  最终距工作区左上角_物理: (function () {
+                    const p = phys(bPost);
+                    return (p.x - wTL.x) + ',' + (p.y - wTL.y);
+                  })()
+                });
+              } catch (eM) { diagLog('calzoom-7d-error', String(eM && eM.message || eM)); }
+
+                /* 先记下窗口和屏幕，再用「合成 pointerdown（screenX 取真光标位置）
+                   + 真实光标移动」的方式拖一把：真实鼠标坐标系 + 不受窗口层级影响。 */
+                const bStart = calWin.getBounds();
+                const cur0 = screen.getCursorScreenPoint();
+                const moveScript = path.join(__dirname, '.diag', 'mouse-move.ps1');
+                require('child_process').execFileSync('powershell.exe', [
+                  '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', moveScript,
+                  '-fx', String(bStart.x + 300), '-fy', String(bStart.y + 240),
+                  '-x', String(bStart.x + 300), '-y', String(bStart.y + 240), '-steps', '3', '-hold', '60'
+                ], { encoding: 'utf8' });
+                await waitZ(300);
+                const cur1 = screen.getCursorScreenPoint();
+                await calJs('(function(){var c=document.getElementById("cal");' +
+                  'c.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,cancelable:true,button:0,pointerId:77,' +
+                  'screenX:' + cur1.x + ',screenY:' + cur1.y + ',clientX:200,clientY:200}));return true;})()');
+                await waitZ(200);
+                /* 真光标一路移到屏幕左上角外侧 → 日历本该被顶到工作区左上角 (0,0) */
+                require('child_process').execFileSync('powershell.exe', [
+                  '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', moveScript,
+                  '-fx', String(cur1.x), '-fy', String(cur1.y),
+                  '-x', '2', '-y', '2', '-steps', '14', '-hold', '45'
+                ], { encoding: 'utf8' });
+                await waitZ(700);
+                await calJs('(function(){var c=document.getElementById("cal");' +
+                  'c.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,cancelable:true,button:0,pointerId:77,' +
+                  'screenX:2,screenY:2,clientX:2,clientY:2}));return true;})()');
+                await waitZ(500);
+                const bEnd2 = calWin.getBounds();
+                const pts2 = await calJs('window.__pts');
+                diagLog('calzoom-7e-真光标驱动的拖动', {
+                  缩放: zoomOf(),
+                  真光标: cur0.x + ',' + cur0.y + ' → ' + cur1.x + ',' + cur1.y + ' → 2,2（DIP）',
+                  窗口DIP: bStart.x + ',' + bStart.y + ' → ' + bEnd2.x + ',' + bEnd2.y,
+                  窗口有没有跟着走: (bEnd2.x !== bStart.x || bEnd2.y !== bStart.y),
+                  最终距工作区左上角: (function () {
+                    const p = phys(bEnd2);
+                    return (p.x - wTL.x) + ',' + (p.y - wTL.y) + '（物理像素）';
+                  })(),
+                  页面收到的移动事件数: pts2 ? pts2.length : 0,
+                  最后两个事件: pts2 ? pts2.slice(-2) : null
+                });
+
+                /* ⑧ 拖动贴边：先试「左上角」（用户报过贴不到上边界和左边界），
+                 再试「右下角」对照，都以物理像素量实际差距。 */
+              /* ⚠️ 别盲目点锁：上一步已经解锁了，再点一下反而又锁上，后面拖动全都无效（踩过） */
+              if (await calJs('document.body.classList.contains("locked")')) {
+                await calJs('document.getElementById("btnLock").click(); true;');
+                await waitZ(600);
+              }
+              await dragTo(waNow.x - 60, waNow.y - 60);          // 想贴左上，故意拖出界
+              const gTL = gaps();
+              await dragTo(waNow.x + waNow.width + 60, waNow.y + waNow.height + 60);  // 想贴右下
+              const gBR = gaps();
+              diagLog('calzoom-7-拖到四边', {
+                工作区: waNow.x + ',' + waNow.y + ' ' + waNow.width + 'x' + waNow.height,
+                贴左上后: gTL, 贴右下后: gBR,
+                左边界贴上了吗: Math.abs(gTL.左) <= 2,
+                上边界贴上了吗: Math.abs(gTL.上) <= 2,
+                右边界贴上了吗: Math.abs(gBR.右) <= 2,
+                下边界贴上了吗: Math.abs(gBR.下) <= 2,
+                /* ⚠️ 读这几个数前先看「工作区」是不是窗口所在那块屏：
+                   双显示器下窗口如果横跨两块屏，getDisplayMatching 可能挑中另一块，
+                   这时四个 gap 里会有一两个是负的大数（对着别的工作区量的），别被吓到。 */
+                说明: '窗口横跨两块屏时这些数字不可信，看「工作区」和窗口 DIP 对不对得上'
+              });
+              /* 把日历拖回左上角停住，留给外面用屏摄核对「可见卡片」贴没贴到屏幕角
+                 （窗口 bounds 到 0 不代表看得见的卡片也到 0，之前宠物就吃过这个亏） */
+              await dragTo(waNow.x - 60, waNow.y - 60);
+              await waitZ(600);
+              const pTL = phys(calWin.getBounds());
+              /* 直接屏摄屏幕左上角：看得见的卡片到底贴没贴到角上 */
+              let capMsg = '';
+              try {
+                capMsg = require('child_process').execFileSync('powershell.exe', [
+                  '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                  '-File', path.join(__dirname, '.diag', 'cap-region.ps1'),
+                  '-x', '0', '-y', '0', '-w', '300', '-h', '300',
+                  '-out', path.join(__dirname, '.diag', 'corner.png')
+                ], { encoding: 'utf8' });
+              } catch (eCap) { capMsg = 'ERR ' + String(eCap && eCap.message || eCap); }
+              diagLog('calzoom-7c-停在左上角并屏摄', {
+                窗口DIP: JSON.stringify(calWin.getBounds()),
+                可见左上角距工作区左上角_物理像素: (pTL.x - wTL.x) + ',' + (pTL.y - wTL.y),
+                缩放: zoomOf(),
+                屏摄: String(capMsg).trim()
+              });
               for (let i = 0; i < 12; i++) {
                 const st = await readState();
                 if (st.百分比 === '100%') break;
@@ -3334,8 +3518,11 @@ ipcMain.on('cal-win-drag-move', (e, pt) => {
 ipcMain.on('cal-win-drag-end', () => {
   if (!calWin || calWin.isDestroyed()) { calDragState = null; return; }
   const b = calWin.getBounds();
-  const pos = clampToWorkArea(b.x, b.y, b.width, b.height,
-    { x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  /* ⚠️ 用「鼠标所在位置」来决定算哪块屏幕的可用区：拖动过程中（drag-move）用的就是鼠标位置，
+     这里如果换成窗口中心，双显示器下拖到跨屏边界时会按另一块屏回吸，窗口被莫名拽走。 */
+  let pt = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  try { pt = screen.getCursorScreenPoint(); } catch (e) { }
+  const pos = clampToWorkArea(b.x, b.y, b.width, b.height, pt);
   if (pos.x !== b.x || pos.y !== b.y) {
     calWin.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
   }
@@ -3476,8 +3663,7 @@ function petMenuTemplate() {
     { label: '🕰 十二时辰对照表', click: () => { showWindow(); send('show-shichen'); } },
     { label: '＋ 添加提醒事项', click: () => { showWindow(); send('add-item'); } },
     { label: '📝 打开待办', click: () => { showWindow(); send('show-todo'); } },
-    /* 写日记：开了窗口直接跳到日记页、光标落到今天的输入框（今天写过就打开那天的编辑框） */
-    { label: '📖 写今天日记', click: () => { showWindow(); send('write-diary'); } }
+    { label: '📖 打开日记', click: () => { showWindow(); send('show-diary'); } }
   ];
   if (menuItems.length) {
     tpl.push({ type: 'separator' });

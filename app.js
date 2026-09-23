@@ -1414,20 +1414,6 @@
     Sound.click();
   }
 
-  /* 直接开写今天那篇：跳到日记页 → 光标落到今天的输入框。
-     今天没写过时那张卡片本来就是输入框；已经写过就展开它的编辑框（改完点保存）。 */
-  function writeDiaryToday() {
-    openTab('diary');
-    const key = diaryKeyOf();
-    if (diary[key]) diaryEditKey = key;      // 写过 → 进入编辑
-    renderDiary();
-    const item = el.diaryList ? el.diaryList.querySelector('.diary-item[data-key="' + key + '"]') : null;
-    if (item && item.scrollIntoView) { try { item.scrollIntoView({ block: 'nearest' }); } catch (e) { } }
-    const ta = item ? item.querySelector('.diary-edit') : null;
-    if (ta) { try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { } }
-    return !!ta;
-  }
-
   function renderDiary() {
     if (!el.diaryList) return;
     const todayKey = diaryKeyOf();
@@ -2301,8 +2287,12 @@
     if (el.dfMinus) el.dfMinus.addEventListener('click', function () { stepDiaryFont(-1); });
     if (el.dfPlus) el.dfPlus.addEventListener('click', function () { stepDiaryFont(1); });
 
+    /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
+       ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.textContent = '别感冒提醒器 v3.8.0 · 数据全部存在本机，只有「检查更新」会访问 GitHub。';
+      el.setAbout.innerHTML = '别感冒提醒器 v3.9.0 · © 2026 goafan（goafan@163.com）<br>' +
+        '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
+        '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
   }
 
@@ -3973,7 +3963,6 @@
     /* 托盘 / 桌面宠物右键菜单里的入口 */
     if (native && native.onShowTodo) native.onShowTodo(function () { showWindowSelf(); openTab('todo'); });
     if (native && native.onShowDiary) native.onShowDiary(function () { showWindowSelf(); openTab('diary'); });
-    if (native && native.onWriteDiary) native.onWriteDiary(function () { showWindowSelf(); writeDiaryToday(); });
     if (native && native.onShowSettings) native.onShowSettings(function () { showWindowSelf(); openTab('settings'); });
     /* 屏幕缩放变化（换屏 / 改系统缩放）：主进程已经把窗口尺寸改好了，
        这里只需要按新的 k 重排内容 */

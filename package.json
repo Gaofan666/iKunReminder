@@ -1,7 +1,7 @@
 {
   "name": "kunkun-reminder",
   "productName": "iKunReminder",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "description": "喝水/休息提醒 + 电子宠物：到点自动跳到前台播放动画",
   "main": "main.js",
   "scripts": {
@@ -11,8 +11,8 @@
     "build:portable": "electron-builder --win dir --publish never && node build/patch-icon.js && node build/write-app-update.js && electron-builder --win portable --prepackaged dist/win-unpacked --publish never",
     "clean:dist": "node build/clean-dist.js"
   },
-  "author": "",
-  "license": "MIT",
+  "author": "goafan <goafan@163.com>",
+  "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "devDependencies": {
     "electron": "^44.3.0",
@@ -82,6 +82,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "license": "build/install-license.txt",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "iKunReminder",
