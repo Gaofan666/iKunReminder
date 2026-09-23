@@ -1981,7 +1981,7 @@ function createWindow() {
               /* ⑨ 故意把日历摆到「两块屏的交界」上，验证会被收回一块屏里。
                  现实里用户就碰上过这个（窗口停在主屏右边界 1707，跨屏那半被 Windows 裁掉）。
                  ⚠️ 这里直接用上面那个 pri（主屏可用区），别再声明一次 —— 重名会让主进程启动就崩。 */
-              calWin.setBounds({ x: pri.x + pri.width - 40, y: pri.y + 40, width: 941, height: 680 });
+              calWin.setBounds({ x: pri.x + pri.width - 40, y: pri.y + 40, width: CAL_BOX.width + 1, height: CAL_BOX.height });
               await waitZ(400);
               const straddle = calWin.getBounds();
               const didSnap = snapCalIntoOneDisplay('自检-故意跨界');
@@ -3289,7 +3289,10 @@ ipcMain.on('skin-changed', (e, id) => { setPetSkin(id); });
    窗口尺寸固定 940×600 DIP（k≡1，和主界面同一套 DPI 模型）；
    ⚠️ resizable:false —— 限位时【不能】加「无边框+可调整大小」那圈余量，
    否则就会像以前的宠物窗一样贴不到桌面边。 */
-const CAL_BOX = { width: 940, height: 680 };
+/* 设计尺寸。高度从 680 收到 610：用户反馈原来那张卡片太高、太占屏幕。
+   压扁之后月历格子变矮，格子里最多画几条也从 3 降到 2（见 cal.js 的 MAX_BARS），
+   不然「一行日期 + 3 条待办」会把格子挤爆。 */
+const CAL_BOX = { width: 940, height: 610 };
 let calOn = false;              // 用户是否勾选了「桌面日历」
 let calWin = null;
 let calBooted = false;          // 日历页是否已经画好（画好之前不显示，避免闪空窗）

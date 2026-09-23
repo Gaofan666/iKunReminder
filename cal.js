@@ -27,12 +27,11 @@
     panelClose: $('#panelClose')
   };
 
-  const DESIGN_W = 940, DESIGN_H = 680;
+  const DESIGN_W = 940, DESIGN_H = 610;
   const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
   /* 格子里最多画几条（超过就 2 条 + 「+N 条」）。
-     定 3 是因为字号调大之后，一行日期 + 3 条待办刚好占满格子高度；
-     再多就得挤掉格子，反而看不清。 */
-  const MAX_BARS = 3;
+     卡片压扁到 610 高之后，一行日期 + 3 条会顶到格子边，所以跟着降到 2。 */
+  const MAX_BARS = 2;
 
   let todos = [];                          // [{id,text,done,dueAt,prio}]
   let memos = [];                          // [{id,text,done,at}]

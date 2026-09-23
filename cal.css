@@ -108,7 +108,7 @@ body.locked .head button:not(#btnLock):hover{
    整卡一起淡，网格/色条/文字都跟着变，不会出现某几格还是实心的割裂感。 */
 .cal{
   position:relative;
-  width:940px;height:680px;padding:12px;
+  width:940px;height:610px;padding:12px;
   display:flex;gap:14px;
   border-radius:18px;
   background:linear-gradient(168deg,rgb(var(--card-rgb-top)),rgb(var(--card-rgb-bot)));
