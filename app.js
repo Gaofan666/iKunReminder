@@ -175,6 +175,7 @@
   const settings = {
     items: defaultItems(),     // 提醒事项列表（用户可增删改）
     sound: true,
+    music: true,               // 提醒时播一段音乐（语音播报结束后 3 秒开始，放完就停）
     speech: true,
     petSize: 'max',            // 桌面宠物大小：max 迷你 / mid 小小 / min 超小
     petOn: false,              // 桌面宠物是否显示（独立小窗，可与主界面同时存在）
@@ -373,15 +374,57 @@
 
   /* --------------------------------------------------------------- 语音播报 */
   function speak(text) {
-    if (!settings.speech || !('speechSynthesis' in window)) return;
+    if (!settings.speech || !('speechSynthesis' in window)) {
+      /* 没开语音播报：直接把"播报结束"这一步回调出去，好让音乐按时开始 */
+      if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+      return;
+    }
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'zh-CN';
       u.rate = 1.05;
       u.pitch = 1.15;
+      u.onend = function () {
+        if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+      };
+      u.onerror = function () {
+        if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+      };
       window.speechSynthesis.speak(u);
-    } catch (e) { /* 忽略 */ }
+    } catch (e) {
+      if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+    }
+  }
+
+  /* ------------------------------------------------ 提醒音乐
+     流程：弹窗出现 → 语音播报 → 播报结束后等 3 秒 → 放一段音乐 → 放完自动停（不循环）。
+     关掉提醒（点完成/稍后）时会立刻停掉音乐、并取消还没开始的那次。 */
+  const MUSIC_DELAY = 3000;
+  let speechEndCb = null;
+  let musicTimer = null;
+
+  function stopAlertMusic() {
+    if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+    const a = el.alertMusic;
+    if (a) { try { a.pause(); a.currentTime = 0; } catch (e) { } }
+  }
+
+  /* 每次弹提醒都调一次：注册"播报结束后启动音乐"的回调 */
+  function armAlertMusic() {
+    stopAlertMusic();
+    speechEndCb = null;
+    if (!settings.music) return;
+    speechEndCb = function () {
+      if (musicTimer) clearTimeout(musicTimer);
+      musicTimer = setTimeout(function () {
+        musicTimer = null;
+        if (!settings.music || !rt.alertId) return;      // 期间关掉了/提醒没了就别放
+        const a = el.alertMusic;
+        if (!a) return;
+        try { a.currentTime = 0; a.play(); } catch (e) { }
+      }, MUSIC_DELAY);
+    };
   }
 
   /* =========================================================================
@@ -404,6 +447,7 @@
     alertDone: $('#alertDone'),
     alertSnooze: $('#alertSnooze'),
     overlayCard: $('#overlayCard'),
+    alertMusic: $('#alertMusic'),
     alertMore: $('#alertMore'),
     alertOneByOne: $('#alertOneByOne'),
     alertClose: $('#alertClose'),
@@ -424,6 +468,7 @@
     skinRow: $('#skinRow'),
     skinSel: $('#skinSel'),
     chkSound: $('#chkSound'),
+    chkMusic: $('#chkMusic'),
     chkSpeech: $('#chkSpeech'),
     chkNotify: $('#chkNotify'),
     scOverlay: $('#shichenOverlay'),
@@ -686,6 +731,7 @@
           settings.items = items;
         }
         if (typeof s.sound === 'boolean') settings.sound = s.sound;
+        if (typeof s.music === 'boolean') settings.music = s.music;
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
         if (typeof s.petOn === 'boolean') settings.petOn = s.petOn;
@@ -792,6 +838,7 @@
     setCaption('<b>' + (it.emoji || '') + ' ' + it.name + ' 时间到了！</b>');
 
     Sound.alert();
+    armAlertMusic();                 // 先挂好「播报结束后放音乐」，再播报
     speak(info.voice || it.voice || ('该' + it.name + '了'));
     notify(title, info.desc || it.desc || '');
     flashTitle(true);
@@ -826,6 +873,7 @@
     setCaption('<b>⏰ 待办到点：' + escapeHtml(todo.text) + '</b>');
 
     Sound.alert();
+    armAlertMusic();
     speak(late ? '有一条待办已经过期了' : '待办时间到了');
     notify(title, todo.text);
     flashTitle(true);
@@ -866,6 +914,7 @@
     setCaption('<b>⏰ ' + list.length + ' 条待办到点了</b>');
 
     Sound.alert();
+    armAlertMusic();
     speak('有 ' + list.length + ' 条待办到点了');
     notify(title, list.map(function (t) { return t.text; }).join('、'));
     flashTitle(true);
@@ -907,6 +956,8 @@
     alertTodoId = null;
     alertTodo = null;
     alertMulti = null;
+    speechEndCb = null;              // 关掉提醒就不再排队放音乐
+    stopAlertMusic();
     el.overlay.hidden = true;
     el.floatWords.innerHTML = '';
     if (el.alertMore) el.alertMore.hidden = true;
@@ -3936,6 +3987,17 @@
       if (settings.sound) Sound.click();
     });
 
+    /* 提醒音乐：语音播报结束后 3 秒开始放，放完就停（不循环）。
+       放的是打包进来的 assets/music.mp3，页面里那个 <audio id="alertMusic">。 */
+    if (el.chkMusic) {
+      el.chkMusic.addEventListener('change', function (e) {
+        settings.music = e.target.checked;
+        saveSettings();
+        if (!settings.music) stopAlertMusic();
+        setCaption(settings.music ? '提醒时会跟着放一段音乐' : '提醒时不再放音乐（语音播报照旧）');
+      });
+    }
+
     el.chkSpeech.addEventListener('change', function (e) {
       settings.speech = e.target.checked;
       saveSettings();
@@ -4143,6 +4205,7 @@
     loadDiary();
     loadUiPrefs();
     el.chkSound.checked = settings.sound;
+    if (el.chkMusic) el.chkMusic.checked = settings.music;
     el.chkSpeech.checked = settings.speech;
     settings.items.forEach(function (it) { ensureTimer(it); });
     if ('Notification' in window && Notification.permission === 'granted') el.chkNotify.checked = true;

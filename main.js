@@ -91,6 +91,8 @@ const DIAG = (function () {
     /* --diag-cal：桌面日历端到端自检（造一批三档优先级的待办 → 开日历 →
        查网格/颜色/切月/当天清单 → 再用主界面真实弹窗存一条，验证 prio 落盘） */
     if (a === '--diag-cal') out.cal = true;
+    /* --diag-music：提醒音乐（音频元素 + 能不能播 + 默认勾选） */
+    if (a === '--diag-music') out.music = true;
     /* --diag-alert：弹窗冲突自检（多条待办同时到点 → 合并弹一条 → 逐条看/全部完成） */
     if (a === '--diag-alert') out.alert = true;
     /* --diag-calzoom：桌面日历「放大缩小」+「固定」自检 */
@@ -1431,6 +1433,28 @@ function createWindow() {
              场景就是用户问的：一条弹窗还挂着，别的又到点了。
              这里用真实数据喂进 localStorage：3 条同时到点 → 应该【合并成一条】弹；
              点「逐条看」→ 一条条弹且带「还有 N 条」提示；再验「全部完成」一把勾掉。 */
+          /* ============ 提醒音乐（--diag-music） ============ */
+          if (DIAG.music) {
+            const el = await win.webContents.executeJavaScript(
+              '(function(){var a=document.getElementById("alertMusic");if(!a)return {error:"页面里没有 audio 元素"};' +
+              'var c=document.getElementById("chkMusic");' +
+              'return {音频地址:a.getAttribute("src"),循环:a.loop,预加载:a.preload,音量:a.volume,' +
+              ' 就绪状态:a.readyState,时长秒:Math.round((a.duration||0)*10)/10,' +
+              ' 默认勾选:c?c.checked:null, 勾选框文字:(c&&c.parentElement)?c.parentElement.textContent.trim():null};})()', true);
+            diagLog('music-1-音频元素', el);
+            /* 关键：Electron 没配 autoplayPolicy 时默认允许无用户手势播放。
+               这里真播一下，看 paused 有没有变 false —— 不允许的话提醒时根本放不出声。 */
+            const played = await win.webContents.executeJavaScript(
+              '(async function(){var a=document.getElementById("alertMusic");' +
+              'try{ a.currentTime=0; await a.play(); }catch(e){ return {能播放:false,错误:String((e&&e.name)||e)}; }' +
+              'await new Promise(function(r){setTimeout(r,700);});' +
+              'var t=a.currentTime, paused=a.paused; a.pause(); a.currentTime=0;' +
+              'return {能播放:!paused, 播了秒数:Math.round(t*10)/10};})()', true);
+            diagLog('music-2-能不能播放', played);
+            diagLog('music-3-设置默认值', await win.webContents.executeJavaScript(
+              '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+              'return {存着的music:raw.music, 勾选框:(document.getElementById("chkMusic")||{}).checked};})()', true));
+          }
           if (DIAG.alert) {
             const waitA = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
             const appJs = function (code) { return win.webContents.executeJavaScript(code, true); };

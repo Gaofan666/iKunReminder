@@ -98,6 +98,7 @@
     </div>
     <div class="toolbar toggles">
       <label class="chk"><input type="checkbox" id="chkSound" checked><span>音效</span></label>
+      <label class="chk"><input type="checkbox" id="chkMusic" checked><span>提醒音乐</span></label>
       <label class="chk"><input type="checkbox" id="chkSpeech" checked><span>语音播报</span></label>
       <label class="chk"><input type="checkbox" id="chkNotify"><span>系统通知</span></label>
     </div>
@@ -547,6 +548,8 @@
     <p class="alert-more" id="alertMore" hidden></p>
   </div>
   <div class="float-words" id="floatWords"></div>
+  <!-- 提醒音乐：语音播报结束后 3 秒开始放，放完就停（不循环） -->
+  <audio id="alertMusic" src="assets/music.mp3" preload="auto"></audio>
 </div>
 
 <script src="app.js"></script>

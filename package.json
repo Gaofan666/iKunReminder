@@ -38,6 +38,7 @@
       "index.html",
       "style.css",
       "app.js",
+      "assets/music.mp3",
       "pet.html",
       "pet.js",
       "pet-preload.js",
