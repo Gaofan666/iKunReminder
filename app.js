@@ -403,6 +403,7 @@
     alertDesc: $('#alertDesc'),
     alertDone: $('#alertDone'),
     alertSnooze: $('#alertSnooze'),
+    overlayCard: $('#overlayCard'),
     alertMore: $('#alertMore'),
     alertOneByOne: $('#alertOneByOne'),
     alertClose: $('#alertClose'),
@@ -1057,13 +1058,42 @@
   const WORDS = ['唱', '跳', 'rap', '篮球', '🏀', '💧', '中分', '背带裤', '你干嘛~', '哎哟', '休息', '我打球去了'];
   function spawnWords() {
     el.floatWords.innerHTML = '';
+    const H = window.innerHeight, W = window.innerWidth;
+    /* 卡片的位置：文字要避开它（虽然 CSS 里文字已经在卡片背后、遮不住，
+       但生成在卡片底下就白飘了，看不见）。上下两条带 + 左右两条侧栏。 */
+    let card = null;
+    try { card = el.overlayCard ? el.overlayCard.getBoundingClientRect() : null; } catch (e) { }
+    const PAD = 22;
+    const bands = [];                       // [from, to]（px）
+    if (card) {
+      if (card.top - PAD > 44) bands.push([8, card.top - PAD]);
+      if (H - (card.bottom + PAD) > 44) bands.push([card.bottom + PAD, H - 12]);
+    }
+    if (!bands.length) bands.push([8, H - 12]);      // 卡片几乎占满时兜底
+    const totalH = bands.reduce(function (a, b) { return a + (b[1] - b[0]); }, 0);
+
     for (let i = 0; i < 10; i++) {
       const s = document.createElement('span');
       s.textContent = WORDS[Math.floor(Math.random() * WORDS.length)];
-      s.style.left = (8 + Math.random() * 84) + '%';
-      /* ⚠️ 高度必须每个词随机：全钉在底部再往上飘会显得很假（用户报过）。
-         范围取「卡片周围那片背景」——卡片大致在中间，所以词落在 38%~86% 这一带。 */
-      s.style.top = (38 + Math.random() * 48).toFixed(1) + '%';
+      let leftPx = null, topPx = null;
+      /* 35% 走侧栏（卡片左右那两条空档，高度随意），其余走上下两条带 */
+      if (card && W - card.width > 260 && Math.random() < 0.35) {
+        const side = Math.random() < 0.5 ? [6, card.left - 18] : [card.right + 18, W - 6];
+        leftPx = side[0] + Math.random() * (side[1] - side[0]);
+        topPx = 12 + Math.random() * (H - 44);
+      } else {
+        let pick = Math.random() * totalH;
+        let band = bands[0];
+        for (let k = 0; k < bands.length; k++) {
+          const h = bands[k][1] - bands[k][0];
+          if (pick <= h) { band = bands[k]; break; }
+          pick -= h;
+        }
+        leftPx = W * 0.06 + Math.random() * (W * 0.88);
+        topPx = band[0] + Math.random() * (band[1] - band[0]);
+      }
+      s.style.left = Math.round(leftPx) + 'px';
+      s.style.top = Math.round(topPx) + 'px';
       s.style.animationDelay = (Math.random() * 0.45).toFixed(2) + 's';
       s.style.fontSize = (17 + Math.random() * 16).toFixed(0) + 'px';
       el.floatWords.appendChild(s);
