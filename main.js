@@ -1977,6 +1977,26 @@ function createWindow() {
                    同一尺寸走 setBounds 和创建时可能差 2~3px（这里是 941 vs 943） */
                 回到一百了吗: sEnd.百分比 === '100%' && Math.abs(bEnd.width - b100.width) <= 4
               });
+
+              /* ⑨ 故意把日历摆到「两块屏的交界」上，验证会被收回一块屏里。
+                 现实里用户就碰上过这个（窗口停在主屏右边界 1707，跨屏那半被 Windows 裁掉）。
+                 ⚠️ 这里直接用上面那个 pri（主屏可用区），别再声明一次 —— 重名会让主进程启动就崩。 */
+              calWin.setBounds({ x: pri.x + pri.width - 40, y: pri.y + 40, width: 941, height: 680 });
+              await waitZ(400);
+              const straddle = calWin.getBounds();
+              const didSnap = snapCalIntoOneDisplay('自检-故意跨界');
+              await waitZ(400);
+              const after = calWin.getBounds();
+              const waAfter = screen.getDisplayMatching(after).workArea;
+              diagLog('calzoom-9-横跨两块屏会被收回', {
+                故意摆到: straddle.x + ',' + straddle.y + '（主屏右边界是 ' + (pri.x + pri.width) + '）',
+                有没有动手: didSnap,
+                收回后: after.x + ',' + after.y,
+                所在屏可用区: waAfter.x + ',' + waAfter.y + ' ' + waAfter.width + 'x' + waAfter.height,
+                整块都在一块屏里了吗: after.x >= waAfter.x && after.y >= waAfter.y &&
+                  after.x + after.width <= waAfter.x + waAfter.width &&
+                  after.y + after.height <= waAfter.y + waAfter.height
+              });
               } catch (eZ) {
                 diagLog('calzoom-error', { message: String(eZ && eZ.message || eZ) });
               }
@@ -3343,9 +3363,36 @@ function saveCalPos(x, y) {
 /* 存的位置还在不在某块屏的可用区里（拔显示器 / 改分辨率后别让它跑到看不见的地方） */
 function calPosStillOnScreen(p) {
   if (!p) return false;
+  /* ⚠️ 不光要求左上角在屏内，还要求【整块窗都能装进那块屏】：
+     日历横跨两块屏时（两块屏缩放比例常常不同、DIP 之间还有空隙），
+     Windows 只按其中一块的缩放渲染，另一边就被裁掉一截 —— 用户报过
+     「右边和下边显示不全」，查出来窗口正好停在主屏右边界 1707 上。 */
   const wa = displayOf(p.x, p.y).workArea;
+  const w = (typeof p.w === 'number') ? p.w : CAL_BOX.width;
+  const h = (typeof p.h === 'number') ? p.h : CAL_BOX.height;
   return p.x >= wa.x && p.y >= wa.y &&
-    p.x <= wa.x + wa.width - 60 && p.y <= wa.y + wa.height - 60;
+    p.x + w <= wa.x + wa.width && p.y + h <= wa.y + wa.height;
+}
+
+/* 把日历整个收进「和它重叠最多的那块屏」的可用区（只挪位置，不改尺寸 ——
+   尺寸是缩放说了算，这里动它会和 setZoomFactor 打架）。
+   拖动结束、恢复旧位置、缩放之后都过一遍，横跨两块屏的情况就不会留下来。
+   注意：这【不影响】贴边 —— 收进来之后仍然可以停在 (wa.x, wa.y)，也就是左上角严丝合缝。 */
+function snapCalIntoOneDisplay(tag) {
+  if (!calWin || calWin.isDestroyed()) return false;
+  const b = calWin.getBounds();
+  const wa = screen.getDisplayMatching(b).workArea;
+  if (b.width > wa.width || b.height > wa.height) return false;   // 比整块屏还大就不管了
+  const x = Math.min(Math.max(b.x, wa.x), wa.x + (wa.width - b.width));
+  const y = Math.min(Math.max(b.y, wa.y), wa.y + (wa.height - b.height));
+  if (x === b.x && y === b.y) return false;
+  calWin.setBounds({ x: x, y: y, width: b.width, height: b.height });
+  diagLog('cal-snap-into-display', {
+    哪一步: tag || '',
+    原来: b.x + ',' + b.y, 收到: x + ',' + y,
+    这块屏可用区: wa.x + ',' + wa.y + ' ' + wa.width + 'x' + wa.height
+  });
+  return true;
 }
 
 /* 日历窗该出现在哪：跟着主界面所在的屏走（和宠物同一套判断） */
@@ -3372,9 +3419,11 @@ function createCalWindow() {
   const t = calTargetArea();
   const box = calWindowBox(t.wa);
 
-  /* 初始位置：优先用上次拖到的地方，否则默认右上角（宠物默认在右下，错开） */
+  /* 初始位置：优先用上次拖到的地方，否则默认右上角（宠物默认在右下，错开）。
+     ⚠️ 存下来的位置要连尺寸一起验收：只有「整块装得进某块屏」才用，
+     否则宁可按默认位置摆 —— 横跨两块屏的话 Windows 只会按其中一块渲染，另一边被裁掉。 */
   const saved = loadCalPos();
-  const homePos = calPosStillOnScreen(saved)
+  const homePos = calPosStillOnScreen(saved ? { x: saved.x, y: saved.y, w: box.width, h: box.height } : null)
     ? { x: saved.x, y: saved.y }
     : { x: t.wa.x + t.wa.width - box.width - 28, y: t.wa.y + 28 };
 
@@ -3508,6 +3557,7 @@ function applyCalZoom() {
   if (ny < wa.y) ny = wa.y;
   try { calWin.webContents.setZoomFactor(s); } catch (e) { }
   calWin.setBounds({ x: nx, y: ny, width: w, height: h });
+  snapCalIntoOneDisplay('缩放');            // 缩放后也可能压在两块屏交界上，收一下
   calStyle.scale = s;                       // 实际生效的（可能比点的那档小）
   calStyle.scaleWant = want;                // 用户点的那一档：页面用它判断 ＋/− 到没到头
   calWin.webContents.send('cal-style', calStyle);
@@ -3613,6 +3663,9 @@ ipcMain.on('cal-style', (e, st) => { applyCalStyle(st); });
 ipcMain.on('cal-ready', () => {
   calBooted = true;
   if (!calWin || calWin.isDestroyed()) return;
+  /* 窗口一就绪就检查一次位置：旧存的坐标、或系统在两次运行之间改了显示器排布，
+     都可能让它压在两块屏交界上（那边会被裁掉一截）。 */
+  snapCalIntoOneDisplay('窗口就绪');
   calWin.webContents.send('cal-todos', calTodos);
   calWin.webContents.send('cal-memos', calMemos);
   calWin.webContents.send('cal-style', calStyle);
@@ -3654,6 +3707,8 @@ ipcMain.on('cal-win-drag-end', () => {
   if (pos.x !== b.x || pos.y !== b.y) {
     calWin.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
   }
+  /* 拖完再收一次：万一落在两块屏的交界/空隙上，整块挪进一块屏，免得被裁 */
+  snapCalIntoOneDisplay('拖动结束');
   const nb = calWin.getBounds();
   calHome = { x: nb.x, y: nb.y, width: nb.width, height: nb.height };
   saveCalPos(nb.x, nb.y);
