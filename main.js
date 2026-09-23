@@ -1054,6 +1054,22 @@ function createWindow() {
               回到标准: { 交互: fsBackClick, 之后: fsBack }
             });
 
+            /* ⑪ 宠物右键「📖 写今天日记」那条链路：
+               主进程发 write-diary → 页面自己跳到日记页 + 光标落到今天的输入框 */
+            await win.webContents.executeJavaScript(
+              'document.getElementById("tabHome").click(); true;', true);
+            await waitD(400);
+            win.webContents.send('write-diary');
+            await waitD(900);
+            diagLog('diary-11-宠物右键写日记', await win.webContents.executeJavaScript(
+              '(function(){var a=document.activeElement;' +
+              'var it=a&&a.closest?a.closest(".diary-item"):null;' +
+              'return {日记页显示了吗:!document.getElementById("pageDiary").hidden,' +
+              ' 标签高亮:document.getElementById("tabDiary").classList.contains("on"),' +
+              ' 光标在输入框里吗:!!(a&&a.classList&&a.classList.contains("diary-edit")),' +
+              ' 编辑的是今天的卡片吗:it?it.classList.contains("today"):null,' +
+              ' 有保存按钮吗:!!(it&&it.querySelector(\'button[data-role="save"]\'))};})()', true));
+
             /* 顺手截一张日记页（字号步进器就在右上角） */
             try {
               await waitD(300);
@@ -3459,7 +3475,9 @@ function petMenuTemplate() {
     { type: 'separator' },
     { label: '🕰 十二时辰对照表', click: () => { showWindow(); send('show-shichen'); } },
     { label: '＋ 添加提醒事项', click: () => { showWindow(); send('add-item'); } },
-    { label: '📝 打开待办', click: () => { showWindow(); send('show-todo'); } }
+    { label: '📝 打开待办', click: () => { showWindow(); send('show-todo'); } },
+    /* 写日记：开了窗口直接跳到日记页、光标落到今天的输入框（今天写过就打开那天的编辑框） */
+    { label: '📖 写今天日记', click: () => { showWindow(); send('write-diary'); } }
   ];
   if (menuItems.length) {
     tpl.push({ type: 'separator' });

@@ -98,6 +98,8 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onAddItem: (cb) => ipcRenderer.on('add-item', () => cb()),
   onShowTodo: (cb) => ipcRenderer.on('show-todo', () => cb()),
   onShowDiary: (cb) => ipcRenderer.on('show-diary', () => cb()),
+  /* 宠物右键「📖 写今天日记」：跳到日记页并把光标放进今天的输入框 */
+  onWriteDiary: (cb) => ipcRenderer.on('write-diary', () => cb()),
   onShowSettings: (cb) => ipcRenderer.on('show-settings', () => cb()),
   onPower: (cb) => ipcRenderer.on('power', (e, kind) => cb(kind)),
   onWinVisible: (cb) => ipcRenderer.on('win-visible', (e, vis) => cb(vis)),
