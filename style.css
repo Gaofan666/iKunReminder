@@ -730,6 +730,12 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 
 .alert-desc{margin:0 0 20px;color:#5E6B60;font-size:13.5px;line-height:1.8}
 .alert-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+/* 「还有 N 条也到点了」：提示后面还排着几条，别让用户以为处理完这条就没了 */
+.alert-more{
+  margin:14px 0 0;text-align:center;font-size:12.5px;line-height:1.7;color:#8a7a5c;
+  background:rgba(217,161,95,.13);border:1px solid rgba(217,161,95,.38);
+  border-radius:10px;padding:6px 12px;
+}
 
 .close{
   position:absolute;top:12px;right:14px;width:32px;height:32px;border-radius:50%;

@@ -346,6 +346,9 @@
   };
   /* 提醒弹层当前弹的是哪一类：'item'（喝水/休息那种循环提醒）或 'todo' */
   let alertKind = 'item';
+  let alertMulti = null;          // 合并弹窗里的待办 id 列表（alertKind === 'todos' 时有效）
+  let todoSeqQueue = [];          // 「逐条看」排下的队：按这个顺序一条条弹
+  const MULTI_ID = '__multi';     // 合并弹窗占着提醒位时 rt.alertId 的值（不是真待办 id）
   let alertTodoId = null;
   let alertTodo = null;
 
@@ -400,6 +403,8 @@
     alertDesc: $('#alertDesc'),
     alertDone: $('#alertDone'),
     alertSnooze: $('#alertSnooze'),
+    alertMore: $('#alertMore'),
+    alertOneByOne: $('#alertOneByOne'),
     alertClose: $('#alertClose'),
     floatWords: $('#floatWords'),
     btnToggle: $('#btnToggle'),
@@ -801,6 +806,7 @@
     alertKind = 'todo';
     alertTodoId = todo.id;
     alertTodo = todo;
+    alertMulti = null;
 
     const title = late ? '这条待办已经过期啦' : '到点啦！';
     el.alertTitle.textContent = title;
@@ -808,6 +814,7 @@
     el.alertDesc.textContent = todo.text + '\n提醒时间：' + fmtTodoTime(todo.dueAt);
     el.alertDone.textContent = '完成 ✓';
     el.alertSnooze.textContent = '10 分钟后再说';
+    if (el.alertOneByOne) el.alertOneByOne.hidden = true;
     el.overlay.style.setProperty('--accent', '#D9A15F');
     el.overlay.hidden = false;
 
@@ -824,6 +831,73 @@
     /* 用户可以在设置里关掉「抢前台」 —— 关掉就只弹窗 + 系统通知，不打断工作 */
     if (native && ui.todoGrabFront) native.alert(todo.id);
     try { el.alertDone.focus(); } catch (e) { }
+    updateAlertMore();
+  }
+
+  /* 一条弹窗里合并显示好几条到点的待办：避免同一时刻设了 3 条就得连点 3 次。
+     「全部完成」一把勾掉；「逐条看」则退出合并、交给下面按顺序一条条弹。 */
+  function fireTodoMulti(list) {
+    if (rt.alertId) return;
+    if (!list || !list.length) return;
+    rt.alertId = MULTI_ID;
+    alertKind = 'todos';
+    alertMulti = list.map(function (t) { return t.id; });
+    alertTodoId = null;
+    alertTodo = null;
+
+    const title = '有 ' + list.length + ' 条待办到点了';
+    el.alertTitle.textContent = title;
+    el.alertTitle.dataset.text = title;
+    const shown = list.slice(0, 4).map(function (t) { return '· ' + t.text; }).join('\n');
+    el.alertDesc.textContent = shown +
+      (list.length > 4 ? '\n…… 另外还有 ' + (list.length - 4) + ' 条' : '');
+    el.alertDone.textContent = '全部完成 (' + list.length + ')';
+    el.alertSnooze.textContent = '全部 10 分钟后再说';
+    if (el.alertOneByOne) el.alertOneByOne.hidden = false;
+    el.overlay.style.setProperty('--accent', '#D9A15F');
+    el.overlay.hidden = false;
+    if (el.alertMore) el.alertMore.hidden = true;      // 合并弹窗本身就是"全部"，不用再提示还有几条
+
+    alertStage.setMood('dance');
+    alertStage.resize();
+    spawnWords();
+    stage.setMood('dance');
+    setCaption('<b>⏰ ' + list.length + ' 条待办到点了</b>');
+
+    Sound.alert();
+    speak('有 ' + list.length + ' 条待办到点了');
+    notify(title, list.map(function (t) { return t.text; }).join('、'));
+    flashTitle(true);
+    if (native && ui.todoGrabFront) native.alert(null);
+    try { el.alertDone.focus(); } catch (e) { }
+  }
+
+  /* 弹窗正显示时，告诉用户后面还排着几条待办（每 250ms 的 tick 会刷新它） */
+  function updateAlertMore() {
+    if (!el.alertMore) return;
+    if (!rt.alertId || alertKind === 'todos') { el.alertMore.hidden = true; return; }
+    const n = pendingTodoAlerts().filter(function (t) { return t.id !== rt.alertId; }).length;
+    if (n > 0) {
+      el.alertMore.textContent = '还有 ' + n + ' 条待办也到点了 —— 处理完这条会接着弹';
+      el.alertMore.hidden = false;
+    } else {
+      el.alertMore.hidden = true;
+    }
+  }
+
+  /* 现在到点、且还没超过宽限期（12 小时）的待办；超期的顺手清掉提醒位 */
+  function pendingTodoAlerts() {
+    const now = Date.now();
+    let changed = false;
+    const out = [];
+    sortedTodos().forEach(function (t) {
+      if (t.done || !t.remindAt || t.remindAt > now) return;
+      const lateTooLong = t.dueAt && (t.dueAt < now - 60000) && (now - t.dueAt) > TODO_LATE_GRACE;
+      if (lateTooLong) { t.remindAt = 0; changed = true; return; }
+      out.push(t);
+    });
+    if (changed) { saveTodoStore(); renderTodos(); }
+    return out;
   }
 
   function closeAlert() {
@@ -831,8 +905,11 @@
     alertKind = 'item';
     alertTodoId = null;
     alertTodo = null;
+    alertMulti = null;
     el.overlay.hidden = true;
     el.floatWords.innerHTML = '';
+    if (el.alertMore) el.alertMore.hidden = true;
+    if (el.alertOneByOne) el.alertOneByOne.hidden = true;
     flashTitle(false);
     if (native) native.dismiss();
     setMood('cheer', 2200);
@@ -841,10 +918,20 @@
   function completeAlert() {
     const id = rt.alertId;
     if (!id) return;
+    /* 合并弹窗的「全部完成」：列表里那几条一起勾掉（重复待办照样各自排下一期） */
+    if (alertKind === 'todos') {
+      const ids = alertMulti ? alertMulti.slice() : [];
+      ids.forEach(function (x) { markTodoDone(x); });
+      todoSeqQueue = [];
+      closeAlert();
+      setCaption('已把 ' + ids.length + ' 条待办标为完成');
+      return;
+    }
     /* 待办：勾掉完成，不动「每日次数」统计（那是喝水/休息的目标计数）。
        重复待办走 markTodoDone（会直接排下一期），不要在别处再改一遍数据。 */
     if (alertKind === 'todo') {
       markTodoDone(id);
+      todoSeqQueue = todoSeqQueue.filter(function (x) { return x !== id; });
       closeAlert();
       return;
     }
@@ -860,6 +947,21 @@
   function snoozeAlert() {
     const id = rt.alertId;
     if (!id) return;
+    /* 合并弹窗的「全部 10 分钟后再说」：这一批一起延后 */
+    if (alertKind === 'todos') {
+      const ids = alertMulti ? alertMulti.slice() : [];
+      const until = Date.now() + 10 * 60 * 1000;
+      ids.forEach(function (x) {
+        const td = todoById(x);
+        if (td) td.remindAt = until;
+      });
+      saveTodoStore();
+      renderTodos();
+      todoSeqQueue = [];
+      closeAlert();
+      setCaption(ids.length + ' 条待办已延后 10 分钟');
+      return;
+    }
     /* 待办：把下次提醒时间往后推 10 分钟 */
     if (alertKind === 'todo') {
       const td = todoById(id);
@@ -869,6 +971,7 @@
         renderTodos();
         setCaption('待办 <b>' + escapeHtml(td.text) + '</b> 已延后 10 分钟');
       }
+      todoSeqQueue = todoSeqQueue.filter(function (x) { return x !== id; });
       closeAlert();
       return;
     }
@@ -2152,20 +2255,25 @@
   function checkTodoDue() {
     if (rt.alertId) return;                      // 已有提醒在进行
     const now = Date.now();
-    const due = sortedTodos().filter(function (t) {
-      return !t.done && t.remindAt && t.remindAt <= now;
-    });
-    if (!due.length) return;
-    const t = due[0];
-    const late = !!(t.dueAt && t.dueAt < now - 60000);
-    /* 补提醒：只要还没超过宽限期就弹；超了就把提醒位清掉，只在列表里标过期 */
-    if (late && (now - t.dueAt) > TODO_LATE_GRACE) {
-      t.remindAt = 0;
-      saveTodoStore();
-      renderTodos();
+    /* ① 「逐条看」排下的队先走：一条条弹，不合并 */
+    while (todoSeqQueue.length) {
+      const id = todoSeqQueue[0];
+      const t = todos.filter(function (x) { return x.id === id; })[0];
+      if (!t || t.done || !t.remindAt || t.remindAt > now) { todoSeqQueue.shift(); continue; }
+      const late = !!(t.dueAt && t.dueAt < now - 60000);
+      if (late && (now - t.dueAt) > TODO_LATE_GRACE) {
+        t.remindAt = 0; todoSeqQueue.shift(); saveTodoStore(); renderTodos(); continue;
+      }
+      fireTodo(t, late);
       return;
     }
-    fireTodo(t, late);
+    /* ② 收集所有到点的（超过 12 小时宽限期的自动清掉，只留在列表里标过期） */
+    const live = pendingTodoAlerts();
+    if (!live.length) return;
+    /* ③ 两条以上就合并成一条弹窗，省得连点好几次 */
+    if (live.length >= 2) { fireTodoMulti(live); return; }
+    const t = live[0];
+    fireTodo(t, !!(t.dueAt && t.dueAt < now - 60000));
   }
 
   /* 启动时补提醒：程序没开的时候错过的那些（用户可在设置里关掉） */
@@ -3497,6 +3605,9 @@
       checkTodoDue();
       /* 待办到点时如果正开着列表，顺手刷新一下「还有多久 / 已过期」 */
       if (todoViewOpen()) renderTodos();
+    } else {
+      /* 弹窗正开着：顺手刷新「还有 N 条也到点了」—— 期间又有新的到点，数字要跟着变 */
+      updateAlertMore();
     }
     /* 窗口看不见的时候不碰 DOM：倒计时照常算、到点照样弹提醒，
        但没必要每 250ms 去改一堆元素的文本和宽度。 */
@@ -3881,6 +3992,15 @@
 
     el.alertDone.addEventListener('click', completeAlert);
     el.alertSnooze.addEventListener('click', snoozeAlert);
+    /* 「逐条看」：退出合并弹窗、不勾完成，把这一批排进队列，tick 会一条条弹 */
+    if (el.alertOneByOne) {
+      el.alertOneByOne.addEventListener('click', function () {
+        const ids = alertMulti ? alertMulti.slice() : [];
+        todoSeqQueue = ids;
+        closeAlert();
+        setCaption('还有 ' + ids.length + ' 条待办，逐条看吧');
+      });
+    }
     el.alertClose.addEventListener('click', snoozeAlert);
     el.overlay.addEventListener('click', function (e) { if (e.target === el.overlay) snoozeAlert(); });
 

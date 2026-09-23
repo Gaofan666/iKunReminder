@@ -541,7 +541,10 @@
     <div class="alert-btns">
       <button class="btn primary big" id="alertDone">我完成了</button>
       <button class="btn big" id="alertSnooze">5 分钟后再说</button>
+      <button class="btn big" id="alertOneByOne" hidden>逐条看</button>
     </div>
+    <!-- 同时到点好几条时，这里提示后面还排着几条 -->
+    <p class="alert-more" id="alertMore" hidden></p>
   </div>
   <div class="float-words" id="floatWords"></div>
 </div>

@@ -91,6 +91,8 @@ const DIAG = (function () {
     /* --diag-cal：桌面日历端到端自检（造一批三档优先级的待办 → 开日历 →
        查网格/颜色/切月/当天清单 → 再用主界面真实弹窗存一条，验证 prio 落盘） */
     if (a === '--diag-cal') out.cal = true;
+    /* --diag-alert：弹窗冲突自检（多条待办同时到点 → 合并弹一条 → 逐条看/全部完成） */
+    if (a === '--diag-alert') out.alert = true;
     /* --diag-calzoom：桌面日历「放大缩小」+「固定」自检 */
     if (a === '--diag-calzoom') out.calzoom = true;
     /* --diag-diary：日记页端到端自检（写今天 / 点旧日记改 / 删除 / 导出） */
@@ -133,6 +135,7 @@ function effScale(d) {
    ⚠️ 打包后 __dirname 在 app.asar 里，写不进去 —— 依次退回「exe 同级目录」
    和 userData，保证打包版也能留下自检日志。 */
 let diagDiarySeeded = false;      // 日记自检：种完「以前的日记」要重载一次页面，用它挡住重复种
+let diagAlertStage = 0;           // 弹窗自检：要重载两次数据，用它记住「重载后从哪继续」
 /* 自检产物的落脚点：和 diagLog 一样，打包后 __dirname 在 app.asar 里写不进去，
    依次退回「exe 同级目录」和 userData，保证打包版的自检也能把文件落下来。 */
 function diagFilePath(name) {
@@ -1424,6 +1427,107 @@ function createWindow() {
           /* ============ 桌面日历：放大缩小 + 固定（--diag-calzoom） ============
              都走真按钮：点「＋/−」看窗口和网页缩放真的变了没有；
              点「🔒」之后用真实指针事件去拖、去点格子，验证拖不动、也点不开。 */
+          /* ============ 弹窗冲突：多条待办同时到点（--diag-alert） ============
+             场景就是用户问的：一条弹窗还挂着，别的又到点了。
+             这里用真实数据喂进 localStorage：3 条同时到点 → 应该【合并成一条】弹；
+             点「逐条看」→ 一条条弹且带「还有 N 条」提示；再验「全部完成」一把勾掉。 */
+          if (DIAG.alert) {
+            const waitA = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const appJs = function (code) { return win.webContents.executeJavaScript(code, true); };
+            const alertState = function () {
+              return appJs('(function(){var o=document.getElementById("overlay");' +
+                'var m=document.getElementById("alertMore");var b=document.getElementById("alertOneByOne");' +
+                'return {弹窗开着吗:o?!o.hidden:null,' +
+                ' 标题:document.getElementById("alertTitle").textContent,' +
+                ' 正文:document.getElementById("alertDesc").textContent,' +
+                ' 主按钮:document.getElementById("alertDone").textContent,' +
+                ' 次按钮:document.getElementById("alertSnooze").textContent,' +
+                ' 有逐条看按钮吗:b?!b.hidden:null,' +
+                ' 还有几条提示:m&&!m.hidden?m.textContent:null};})()');
+            };
+            const seed = function (spec) {
+              return appJs('(function(){var todos=' + JSON.stringify(spec) + ';' +
+                'var ids=todos.map(function(t){return t.id;});' +
+                'var cur={};try{cur=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'var list=(cur.todos||[]).filter(function(t){return ids.indexOf(t.id)<0;});' +
+                'todos.forEach(function(t){list.push(t);});' +
+                'cur.todos=list;cur.memos=cur.memos||[];' +
+                'localStorage.setItem("kunkun.todos.v1",JSON.stringify(cur));' +
+                'return list.length;})()');
+            };
+            const clean = function () {
+              return appJs('(function(){var cur={};try{cur=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'cur.todos=(cur.todos||[]).filter(function(t){return String(t.id).indexOf("diagalert")<0;});' +
+                'localStorage.setItem("kunkun.todos.v1",JSON.stringify(cur));return true;})()');
+            };
+            const mk = function (id, text, secAgo) {
+              return { id: id, text: text, done: false, at: Date.now(),
+                dueAt: Date.now() - secAgo * 1000, remindAt: Date.now() - secAgo * 1000, prio: 'mid' };
+            };
+            const reloadFor = async function () {
+              /* ⚠️ reload 会再触发一次 did-finish-load → 整个自检会重跑。
+                 所以用阶段位把「重载后从哪继续」记下来（下面 diagAlertStage 分支处理）。 */
+              diagAlertStage++;
+              win.webContents.reload();
+              await new Promise(function (r) { setTimeout(r, 4500); });
+            };
+
+            if (diagAlertStage === 0) {
+              diagAlertStage = 1;
+              await clean();
+              await seed([mk('diagalert1', '【自检】待办 1', 12),
+                          mk('diagalert2', '【自检】待办 2', 12),
+                          mk('diagalert3', '【自检】待办 3', 12)]);
+              await reloadFor();                       // 重载后 diagAlertStage = 1 → 下一轮继续
+            } else if (diagAlertStage === 1) {
+              diagAlertStage = 2;
+              await waitA(1200);
+              /* ① 三条同时到点 → 应该合并成一条，并带「逐条看」 */
+              const merged = await alertState();
+              await appJs('document.getElementById("alertOneByOne").click(); true;');
+              await waitA(1500);
+              /* ② 逐条看 → 一条条弹，且带「还有 N 条」提示 */
+              const seqA = await alertState();
+              await appJs('document.getElementById("alertDone").click(); true;');
+              await waitA(1500);
+              const seqB = await alertState();
+              diagLog('alert-1-三条同时到点(合并)', merged);
+              diagLog('alert-2-逐条看', { 逐条看后第一条: seqA, 处理完再弹一条: seqB });
+              /* ③ 「全部完成」：这一批一起勾掉（还在等的那条也一起） */
+              const beforeDone = await appJs(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'return (raw.todos||[]).filter(function(t){return String(t.id).indexOf("diagalert")===0;})' +
+                '.map(function(t){return t.id+":"+(t.done?"已完成":"没完成");});})()');
+              await appJs('(function(){var b=document.getElementById("alertSnooze");' +
+                'if(b&&!document.getElementById("overlay").hidden)b.click();return true;})()');
+              await waitA(600);
+              /* 剩下的挂起条目：直接走「合并弹窗 + 全部完成」这条路 */
+              const left = await appJs(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'var list=(raw.todos||[]).filter(function(t){return String(t.id).indexOf("diagalert")===0&&!t.done;});' +
+                'list.forEach(function(t){t.remindAt=Date.now()-1000;});' +
+                'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));' +
+                'return list.length;})()');
+              await waitA(2200);
+              const merged2 = await alertState();
+              await appJs('(function(){var b=document.getElementById("alertDone");' +
+                'if(b&&!document.getElementById("overlay").hidden)b.click();return true;})()');
+              await waitA(1400);
+              const afterDone = await appJs(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                'return (raw.todos||[]).filter(function(t){return String(t.id).indexOf("diagalert")===0;})' +
+                '.map(function(t){return t.id+":"+(t.done?"已完成":"没完成");});})()');
+              await clean();
+              diagLog('alert-3-全部完成', {
+                逐条看之前的状态: beforeDone,
+                重新到点的条数: left,
+                第二次合并弹窗: merged2,
+                全部完成之后: afterDone,
+                弹窗还开着吗: (await alertState()).弹窗开着吗
+              });
+              diagLog('alert-4-清理', { 说明: '自检数据已清掉' });
+            }
+          }
           if (DIAG.calzoom) {
             const waitZ = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
             const calJs = function (code) { return calWin.webContents.executeJavaScript(code, true); };
