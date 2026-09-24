@@ -1,20 +1,20 @@
 {
-  "version": "3.9.5",
-  "releaseDate": "2026-09-24T03:02:38.331Z",
-  "notes": "## iKunReminder v3.9.5\n\n1. 🎵 **提醒音乐可以换成自己的了** —— 设置里「提醒音乐」下面多了 **「选择音乐文件…」**：挑一首自己电脑里的歌，以后到点就放它。旁边有 **「用回自带音乐」** 一键还原。\n   支持 **mp3 / wav / ogg / m4a / flac** 等常见格式，建议不超过 **10 MB**（文件越大加载越慢）。选的文件被删掉或者格式放不出来时，会自动退回自带音乐，不会到点了没声音。\n2. 🪟 **宠物气泡被别的窗口挡住的问题** —— 桌面上开着别的软件时点宠物，气泡偶尔会钻到人家后面去。现在气泡和提醒窗一样在最上层，点了就在最上面。\n\n**下载**：`iKunReminder-setup-v3.9.5.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 117355921,
-  "sha512": "UBTtYaHFy3qNscCetgpuUqAgLsJjfO1ZpdvK/KhG7XH3pxdq68oltTInD+FQOCBU9m73dMt3m3YumI/8lIRFug==",
+  "version": "3.9.6",
+  "releaseDate": "2026-09-24T03:20:15.206Z",
+  "notes": "## iKunReminder v3.9.6\n\n1. 🐱 **多了一个自带形象：「喵星科学家」**（朋友画的那只白大褂猫）。动画比原来放慢了一大截 —— 待机每张停 1 秒，跳起来/欢呼每张停 0.67 秒，不再一闪一闪的。\n   主界面「🎨 宠物形象」里选它就行，选了之后桌面上的小宠物也一起换。\n2. 🔄 **「宠物形象」旁边多了个「刷新」按钮** —— 新做了形象放进 `skins` 文件夹之后，点一下就能选到，**不用再重启软件**。改了形象里的图（重画了 `sheet.png`）点一下也能立刻生效。\n   顺手把皮肤文件夹里那份说明文档更新了（老版本写的是「重启软件」，现在写的是点刷新）。\n\n**下载**：`iKunReminder-setup-v3.9.6.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 119530623,
+  "sha512": "h+CuMg6/k1x4LO58nRSCY4X5BvWmEdf7MN5MxXxATNkkaCEdxRyE2ww7lbtvK6hl314mf3NKBnM5kXgkEcWCRQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.5/iKunReminder-setup-v3.9.5.exe.part1",
-      "size": 58677961,
-      "sha512": "sFB2dbEsupERobi1hWdwfrUvmuQLaWIdc+iVHrq2HQyGC4/0DGXXzcIm6WpxHYXryT32JDSPvPra6rdsmG/1MQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.6/iKunReminder-setup-v3.9.6.exe.part1",
+      "size": 59765312,
+      "sha512": "w0ZYCACfD4DOHCuA3Uqtt6z07+L/lS//MsauLasfvvnNOpbDcFwPpGxKmZcC8tJ6z2an04pMk+bhX+ln2kVJQw==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.5/iKunReminder-setup-v3.9.5.exe.part2",
-      "size": 58677960,
-      "sha512": "Y+uHiPuxOnCQAR+oNyvbKgGih5EJPTazOWuQMCDRgNzXC25JW3yVeFyr6yG28y2UznBOHiCxE8wLZ0/cTqgecg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.6/iKunReminder-setup-v3.9.6.exe.part2",
+      "size": 59765311,
+      "sha512": "s5B0DgKEW36VG9+kDMEbvErbBn+pFIx+4NZfvkn8JIaqrbXv3o37dsQzoTqRzKM/tOfOsNkaaZyf79EteoNbBw==",
       "index": 2
     }
   ]
