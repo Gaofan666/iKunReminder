@@ -5,8 +5,8 @@
   "fps": 10,
   "sheet": "sheet.png",
   "animations": {
-    "idle":  { "row": 0, "count": 6, "fps": 2 },
-    "dance": { "row": 1, "count": 6, "fps": 2 },
-    "cheer": { "row": 2, "count": 6, "fps": 3 }
+    "idle":  { "row": 0, "count": 6, "fps": 1 },
+    "dance": { "row": 1, "count": 6, "fps": 1.5 },
+    "cheer": { "row": 2, "count": 6, "fps": 1.5 }
   }
 }
