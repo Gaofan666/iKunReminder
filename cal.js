@@ -117,6 +117,12 @@
       });
   }
 
+  /* 某天有截止时间的备忘（未完成的），按截止时间排 —— 日历格子和当天清单都要用 */
+  function memoDeadlinesOf(key) {
+    return memos.filter(function (m) { return m && !m.done && m.dueAt && keyOfTs(m.dueAt) === key; })
+      .sort(function (a, b) { return a.dueAt - b.dueAt; });
+  }
+
   /* ------------------------------------------------------------ 左栏：备忘录 */
   function renderMemos() {
     const list = memos.slice().sort(function (a, b) {
@@ -133,10 +139,17 @@
     el.memoList.innerHTML = list.map(function (m) {
       const d = m.at ? new Date(m.at) : null;
       const when = d ? (d.getMonth() + 1) + '月' + d.getDate() + '日' : '';
+      let dueHtml = '';
+      if (m.dueAt) {
+        const dd = new Date(m.dueAt);
+        const over = !m.done && m.dueAt < Date.now();
+        dueHtml = '<div class="when' + (over ? ' due-late' : ' due') + '">⏰ 截止 ' +
+          (dd.getMonth() + 1) + '月' + dd.getDate() + '日 ' + fmtTime(m.dueAt) + '</div>';
+      }
       return '<div class="memo' + (m.done ? ' done' : '') + '" data-id="' + esc(m.id) + '" ' +
         'title="' + esc(m.done ? '点一下取消完成' : '点一下标记完成') + '">' +
         '<i class="bullet"></i><div class="txt">' + esc(m.text) +
-        (when ? '<div class="when">记于 ' + when + '</div>' : '') + '</div></div>';
+        (when ? '<div class="when">记于 ' + when + '</div>' : '') + dueHtml + '</div></div>';
     }).join('');
   }
 
@@ -147,7 +160,12 @@
       const d = new Date(t.dueAt);
       return !t.done && d.getFullYear() === cur.y && d.getMonth() === cur.m;
     }).length;
-    el.legendRight.textContent = '本月 ' + thisMonth + ' 条未完成';
+    const memoMonth = memos.filter(function (m) {
+      const d = new Date(m.dueAt);
+      return !m.done && d.getFullYear() === cur.y && d.getMonth() === cur.m;
+    }).length;
+    el.legendRight.textContent = '本月 ' + thisMonth + ' 条未完成' +
+      (memoMonth ? ' · 备忘截止 ' + memoMonth + ' 条' : '');
   }
 
   function renderWeek() {
@@ -183,22 +201,38 @@
       }
       cell.appendChild(head);
 
+      /* 待办条 + 备忘截止条混排：待办（实心彩条）在前，备忘截止（虚线）填剩余空位，
+         总条数仍按 MAX_BARS 封顶，超出走「+N 条」（合并计数） */
       const evs = eventsOf(key);
-      let show = evs, more = 0;
-      if (evs.length > MAX_BARS) {
-        show = evs.slice(0, MAX_BARS - 1);
-        more = evs.length - show.length;
+      const mevs = memoDeadlinesOf(key);
+      const bars = evs.map(function (t) { return { kind: 'todo', t: t }; })
+        .concat(mevs.map(function (m) { return { kind: 'memo', m: m }; }));
+      let show = bars, more = 0;
+      if (bars.length > MAX_BARS) {
+        show = bars.slice(0, MAX_BARS - 1);
+        more = bars.length - show.length;
       }
-      show.forEach(function (t) {
+      show.forEach(function (b) {
         const bar = document.createElement('div');
-        bar.className = 'ev ' + prioClass(t.prio) + (t.done ? ' done' : '');
-        bar.title = fmtTime(t.dueAt) + ' · ' + prioText(t.prio) + '优先级 · ' + t.text +
-          (t.repeatText ? '（' + t.repeatText + '）' : '');
-        const span = document.createElement('span');
-        span.className = 't';
-        /* 重复待办前面挂个 🔁，一眼看出它每期都会来 */
-        span.textContent = (t.repeatText ? '🔁 ' : '') + t.text;
-        bar.appendChild(span);
+        if (b.kind === 'todo') {
+          const t = b.t;
+          bar.className = 'ev ' + prioClass(t.prio) + (t.done ? ' done' : '');
+          bar.title = fmtTime(t.dueAt) + ' · ' + prioText(t.prio) + '优先级 · ' + t.text +
+            (t.repeatText ? '（' + t.repeatText + '）' : '');
+          const span = document.createElement('span');
+          span.className = 't';
+          /* 重复待办前面挂个 🔁，一眼看出它每期都会来 */
+          span.textContent = (t.repeatText ? '🔁 ' : '') + t.text;
+          bar.appendChild(span);
+        } else {
+          const m = b.m;
+          bar.className = 'ev memo';
+          bar.title = '备忘截止 ' + fmtTime(m.dueAt) + ' · ' + m.text;
+          const span = document.createElement('span');
+          span.className = 't';
+          span.textContent = '📌 ' + m.text;
+          bar.appendChild(span);
+        }
         cell.appendChild(bar);
       });
       if (more > 0) {
@@ -225,14 +259,16 @@
     const parts = selected.split('-');
     const d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
     const evs = eventsOf(selected);
+    const mevs = memoDeadlinesOf(selected);
     const wk = '日一二三四五六'[d.getDay()];
     const lu = lunarOf(d);
     const undone = evs.filter(function (t) { return !t.done; }).length;
     el.panelTitle.textContent = (+parts[1]) + '月' + (+parts[2]) + '日 周' + wk +
       (lu ? ' · 农历' + lu.month + lu.text : '') +
-      ' · ' + evs.length + ' 条' + (evs.length ? '（未完成 ' + undone + '）' : '');
+      ' · ' + evs.length + ' 条' + (evs.length ? '（未完成 ' + undone + '）' : '') +
+      (mevs.length ? ' · 备忘截止 ' + mevs.length : '');
 
-    if (!evs.length) {
+    if (!evs.length && !mevs.length) {
       el.panelList.innerHTML = '<div class="panel-empty">这天还没有待办。<br>' +
         '点右上角「＋」新增一条，设成这天就行。</div>';
     } else {
@@ -260,6 +296,15 @@
           '<div class="acts">' +
           '<button class="act" data-act="edit" title="编辑（打开主界面的修改窗口）">✏️</button>' +
           '<button class="act" data-act="del" title="删除这条待办">🗑</button>' +
+          '</div></div>';
+      }).join('') +
+      /* 备忘截止：只读展示（编辑/删除在主界面和左栏备忘里），不设 data-id 以免被当成待办 */
+      mevs.map(function (m) {
+        return '<div class="pi memo">' +
+          '<div class="box"></div>' +
+          '<div class="body">' +
+          '<div class="txt">' + esc(m.text) + '</div>' +
+          '<div class="meta"><span>备忘截止</span><span>' + fmtTime(m.dueAt) + '</span></div>' +
           '</div></div>';
       }).join('');
     }

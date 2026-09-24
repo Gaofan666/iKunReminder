@@ -434,6 +434,41 @@
       <span class="it-label">内容</span>
       <textarea id="memoText" rows="4" maxlength="500" placeholder="想到什么就写什么，比如：周五交周报 / 买牛奶"></textarea>
     </div>
+    <div class="it-row">
+      <span class="it-label">截止</span>
+      <label class="switch"><input type="checkbox" id="memoDueOn"><span class="slider"></span></label>
+      <span class="psr-label" id="memoDueHint">无限期 · 不提醒</span>
+    </div>
+    <div class="it-row" id="memoDueRow" hidden>
+      <span class="it-label"></span>
+      <input type="date" id="memoDueDate">
+      <input type="time" id="memoDueTime">
+    </div>
+    <div class="it-row" id="memoRemindRow" hidden>
+      <span class="it-label">提醒</span>
+      <div class="memo-remind-cols">
+        <select class="skin-sel" id="memoRemindBefore" title="提前多久开始提醒">
+          <option value="3600000">截止前 1 小时开始</option>
+          <option value="10800000">截止前 3 小时开始</option>
+          <option value="21600000">截止前 6 小时开始</option>
+          <option value="43200000">截止前 12 小时开始</option>
+          <option value="86400000">截止前 1 天开始</option>
+          <option value="172800000">截止前 2 天开始</option>
+          <option value="259200000">截止前 3 天开始</option>
+          <option value="604800000">截止前 1 周开始</option>
+        </select>
+        <select class="skin-sel" id="memoRemindEvery" title="开始后每隔多久提醒一次">
+          <option value="0">提醒一次即可</option>
+          <option value="3600000">每 1 小时一次</option>
+          <option value="10800000">每 3 小时一次</option>
+          <option value="21600000">每 6 小时一次</option>
+          <option value="43200000">每 12 小时一次</option>
+          <option value="86400000">每 1 天一次</option>
+          <option value="172800000">每 2 天一次</option>
+          <option value="604800000">每 1 周一次</option>
+        </select>
+      </div>
+    </div>
     <div class="alert-btns">
       <button class="btn primary big" id="memoSave">保存</button>
       <button class="btn big" id="memoCancel">取消</button>

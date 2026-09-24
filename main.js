@@ -100,6 +100,8 @@ const DIAG = (function () {
     if (a === '--diag-music') out.music = true;
     /* --diag-alert：弹窗冲突自检（多条待办同时到点 → 合并弹一条 → 逐条看/全部完成） */
     if (a === '--diag-alert') out.alert = true;
+    /* --diag-memo：备忘「截止时间 + 截止前周期提醒」端到端自检（真实弹窗 + 真实调度） */
+    if (a === '--diag-memo') out.memo = true;
     /* --diag-calzoom：桌面日历「放大缩小」+「固定」自检 */
     if (a === '--diag-calzoom') out.calzoom = true;
     /* --diag-diary：日记页端到端自检（写今天 / 点旧日记改 / 删除 / 导出） */
@@ -1229,18 +1231,20 @@ function createWindow() {
               镜像目录: fs.existsSync(mirror) ? '❌ 还在' : '✅ 已清掉'
             });
           }
-          /* ============ 气泡里的「今日待办」（--diag-bubble） ============
+          /* ============ 气泡里的「今日待办 + 备忘截止」（--diag-bubble） ============
              走真实链路：页面收到 pet-talk-request → 回 pet-talk-data → 主进程 showBubble。
-             两轮：① 种 4 条今天的待办（1 条已完成）→ 重载 → 看气泡里是不是列出来了、
-             气泡有没有长高（只列 3 条 + 「还有 1 条」）；② 清空 → 看那块整个不出现。 */
+             两轮：① 种 4 条今天的待办（1 条已完成）+ 1 条今天截止的备忘 → 重载 → 看气泡里
+             是不是都列出来了、气泡有没有长高（待办只列 3 条 +「还有 1 条」，备忘单独一块）；
+             ② 清空 → 看两块整个不出现。 */
           if (DIAG.bubble) {
             const bwait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
             const todayAt = function (h, mi) {
               const d = new Date(); d.setHours(h, mi, 0, 0); return d.getTime();
             };
-            const seedTodos = function (arr) {
-              return '(function(){localStorage.setItem("kunkun.todos.v1",JSON.stringify({memos:[],todos:' +
-                JSON.stringify(arr) + '}));return true;})()';
+            const seedStore = function (todos, memos) {
+              return '(function(){localStorage.setItem("kunkun.todos.v1",JSON.stringify({memos:' +
+                JSON.stringify(memos || []) + ',todos:' + JSON.stringify(todos) +
+                '}));return true;})()';
             };
             const bubbleReload = function () {
               diagBubbleStage++;
@@ -1264,10 +1268,15 @@ function createWindow() {
                 'var rows=[];var list=g("todoList");' +
                 'if(list){var rs=list.querySelectorAll(".pb-todo-row");' +
                 'for(var i=0;i<rs.length;i++)rows.push(rs[i].textContent.replace(/\\s+/g," ").trim());}' +
+                'var mrows=[];var mlist=g("memoList");' +
+                'if(mlist){var mrs=mlist.querySelectorAll(".pb-todo-row");' +
+                'for(var j=0;j<mrs.length;j++)mrows.push(mrs[j].textContent.replace(/\\s+/g," ").trim());}' +
                 'var more=document.querySelector(".pb-todo-more");' +
                 'var box=g("bubble-inner");' +
                 'return {第一行:g("head").textContent, 待办块收起来了吗:g("todos").hidden,' +
                 ' 待办标题:g("todoHead").textContent, 待办行:rows,' +
+                ' 备忘块收起来了吗:g("memos").hidden,' +
+                ' 备忘标题:g("memoHead").textContent, 备忘行:mrows,' +
                 ' 还有更多:more?more.textContent:null, 最后一行:g("next").textContent,' +
                 ' 内容有没有溢出:box?box.scrollHeight>box.clientHeight+1:null};})()', true);
               let shot = '';
@@ -1280,7 +1289,7 @@ function createWindow() {
             };
 
             if (diagBubbleStage === 0) {
-              await win.webContents.executeJavaScript(seedTodos([
+              await win.webContents.executeJavaScript(seedStore([
                 { id: 'bub1', text: '【自检】上午开会', done: false, at: Date.now(),
                   dueAt: todayAt(9, 30), remindAt: todayAt(9, 30), prio: 'high', notify: true },
                 { id: 'bub2', text: '【自检】吃维生素', done: true, at: Date.now(),
@@ -1289,12 +1298,17 @@ function createWindow() {
                   dueAt: todayAt(15, 0), remindAt: todayAt(15, 0), prio: 'mid', notify: true },
                 { id: 'bub4', text: '【自检】晚上遛狗', done: false, at: Date.now(),
                   dueAt: todayAt(20, 0), remindAt: todayAt(20, 0), prio: 'low', notify: true }
+              ], [
+                /* 今天 23:59 截止的备忘；remindAt 放到遥远的将来，免得自检中途真的弹全屏提醒 */
+                { id: 'bubm1', text: '【自检】今天截止的备忘', done: false, at: Date.now(),
+                  dueAt: todayAt(23, 59), remindBefore: 3600000, remindEvery: 0,
+                  remindAt: todayAt(23, 59) + 86400000 }
               ]), true);
               bubbleReload();
             } else if (diagBubbleStage === 1) {
               await askBubble();
               diagLog('bubble-1-今天有待办', await bubbleInfo('有'));
-              await win.webContents.executeJavaScript(seedTodos([]), true);
+              await win.webContents.executeJavaScript(seedStore([], []), true);
               bubbleReload();
             } else if (diagBubbleStage === 2) {
               await askBubble();
@@ -1743,6 +1757,107 @@ function createWindow() {
               });
               diagLog('alert-4-清理', { 说明: '自检数据已清掉' });
             }
+          }
+          /* ============ 备忘：截止时间 + 截止前周期提醒（--diag-memo） ============
+             走真实弹窗：无限期 / 带截止+周期 / 编辑改期 / 到点真的弹全屏提醒并勾完成。
+             自检用独立 userData，收尾把造的备忘清掉。 */
+          if (DIAG.memo) {
+            const waitM = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            /* ① 无限期：不开「截止」开关 → 存出来不带 dueAt / remindAt */
+            diagLog('memo-1-无限期', await win.webContents.executeJavaScript(
+              '(function(){var out={};' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】无限期备忘";' +
+              'document.getElementById("memoSave").click();' +
+              'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】无限期备忘";})[0];' +
+              'out.保存后弹窗关了=document.getElementById("memoOverlay").hidden;' +
+              'out.无限期=!!m&&m.dueAt===0&&m.remindAt===0;' +
+              'return out;})()', true));
+
+            /* ② 带截止：开开关 → 设「后天 23:59」+ 提前 1 天 + 每 12 小时 → 提醒点 = 截止-1天 */
+            diagLog('memo-2-带截止', await win.webContents.executeJavaScript(
+              '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
+              'var d=new Date();d.setDate(d.getDate()+2);d.setHours(23,59,0,0);' +
+              'var dv=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());' +
+              'var out={};' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】带截止的备忘";' +
+              'var on=document.getElementById("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+              'out.日期行露出来=!document.getElementById("memoDueRow").hidden;' +
+              'out.提醒行露出来=!document.getElementById("memoRemindRow").hidden;' +
+              'document.getElementById("memoDueDate").value=dv;' +
+              'document.getElementById("memoDueTime").value="23:59";' +
+              'document.getElementById("memoRemindBefore").value="86400000";' +
+              'document.getElementById("memoRemindEvery").value="43200000";' +
+              'document.getElementById("memoSave").click();' +
+              'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】带截止的备忘";})[0];' +
+              'out.保存后弹窗关了=document.getElementById("memoOverlay").hidden;' +
+              'out.存了截止=!!m&&m.dueAt>0;' +
+              'out.提前1天=!!m&&m.remindBefore===86400000;' +
+              'out.每12小时=!!m&&m.remindEvery===43200000;' +
+              'out.提醒点=!!m&&m.remindAt===m.dueAt-86400000;' +
+              'var rows=document.querySelectorAll(".memo-item");' +
+              'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("【自检】带截止的备忘")>=0;});' +
+              'out.列表显示截止=!!row&&row.textContent.indexOf("截止")>=0&&row.textContent.indexOf("还有")>=0;' +
+              'return out;})()', true));
+
+            /* ③ 编辑：改截止时间 → remindAt 跟着重算 */
+            diagLog('memo-3-编辑改期', await win.webContents.executeJavaScript(
+              '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
+              'var d=new Date();d.setDate(d.getDate()+3);d.setHours(9,0,0,0);' +
+              'var dv=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());' +
+              'var out={};' +
+              'var rows=document.querySelectorAll(".memo-item");' +
+              'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("【自检】带截止的备忘")>=0;});' +
+              'row.querySelector("[data-role=edit]").click();' +
+              'document.getElementById("memoDueDate").value=dv;' +
+              'document.getElementById("memoDueTime").value="09:00";' +
+              'document.getElementById("memoSave").click();' +
+              'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】带截止的备忘";})[0];' +
+              'out.改完截止=!!m&&m.dueAt>0;' +
+              'out.提醒点重算=!!m&&m.remindAt===m.dueAt-86400000;' +
+              'return out;})()', true));
+
+            /* ④ 到点真的弹：截止 = 1 分钟后，提前 2 分钟开始 + 只提醒一次 → 马上到点弹全屏 */
+            await win.webContents.executeJavaScript(
+              '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
+              'var d=new Date(Date.now()+60*1000);' +
+              'var dv=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());' +
+              'var tv=pad2(d.getHours())+":"+pad2(d.getMinutes());' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】马上弹的备忘";' +
+              'var on=document.getElementById("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+              'document.getElementById("memoDueDate").value=dv;' +
+              'document.getElementById("memoDueTime").value=tv;' +
+              'document.getElementById("memoRemindBefore").value="3600000";' +
+              'document.getElementById("memoRemindEvery").value="0";' +
+              'document.getElementById("memoSave").click();' +
+              'return true;})()', true);
+            await waitM(3500);   // 等 tick 抓到并弹出来
+            const memoFired = await win.webContents.executeJavaScript(
+              '(function(){var o=document.getElementById("overlay");' +
+              'return {弹窗开了:!o.hidden,' +
+              ' 标题:document.getElementById("alertTitle").textContent,' +
+              ' 内容含截止:document.getElementById("alertDesc").textContent.indexOf("截止时间")>=0};})()', true);
+            /* 点「完成 ✓」→ 备忘标完成、不再提醒 */
+            await win.webContents.executeJavaScript(
+              'document.getElementById("alertDone").click(); true', true);
+            const memoDone = await win.webContents.executeJavaScript(
+              '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】马上弹的备忘";})[0];' +
+              'return {完成:!!m&&m.done,不再提醒:!!m&&m.remindAt===0};})()', true);
+            diagLog('memo-4-到点提醒', { 弹窗: memoFired, 完成后: memoDone });
+
+            /* ⑤ 收尾：清掉自检造的备忘 */
+            await win.webContents.executeJavaScript(
+              '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'raw.memos=(raw.memos||[]).filter(function(x){return (x.text||"").indexOf("【自检】")<0;});' +
+              'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));' +
+              'return (raw.memos||[]).length;})()', true);
+            diagLog('memo-5-清理', { 说明: '自检数据已清掉' });
           }
           if (DIAG.calzoom) {
             const waitZ = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -2216,16 +2331,31 @@ function createWindow() {
               { text: '【自检】中优先级', date: dayStr(1), time: '14:00', prio: 'mid' },
               { text: '【自检】低优先级', date: dayStr(2), time: '18:30', prio: 'low' }
             ];
-            /* 0) 再用真实的「新增备忘」弹窗塞两条备忘录（验证左栏那条链路） */
+            /* 0) 再用真实的「新增备忘」弹窗塞两条备忘录（验证左栏那条链路），
+                外加一条带截止的：今天 23:59、提前 1 小时开始、只提醒一次
+                （验证日历格子里出现「虚线备忘截止条」） */
             const memoAdded = await win.webContents.executeJavaScript(
               '(function(){var out=[];["周三上午9点参加部门会议","购物清单：生日蛋糕、红酒、水果"].forEach(function(t){' +
               '  document.getElementById("btnAddMemo").click();' +
               '  document.getElementById("memoText").value=t;' +
               '  document.getElementById("memoSave").click();' +
               '  out.push(document.getElementById("memoOverlay").hidden);});' +
+              'var d=new Date();d.setHours(23,59,0,0);' +
+              'var dv=d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】今天截止的备忘";' +
+              'var on=document.getElementById("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+              'document.getElementById("memoDueDate").value=dv;' +
+              'document.getElementById("memoDueTime").value="23:59";' +
+              'document.getElementById("memoRemindBefore").value="3600000";' +
+              'document.getElementById("memoRemindEvery").value="0";' +
+              'document.getElementById("memoSave").click();' +
+              'out.push(document.getElementById("memoOverlay").hidden);' +
               'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】今天截止的备忘";})[0];' +
               'return {每条都关掉了弹窗:out.every(function(h){return h;}),' +
-              ' 备忘条数:(raw.memos||[]).length};})()', true);
+              ' 备忘条数:(raw.memos||[]).length,' +
+              ' 带截止那条存对了吗:!!m&&m.dueAt>0&&m.remindBefore===3600000&&m.remindEvery===0};})()', true);
             diagLog('cal-0-memo', memoAdded);
 
             /* 1) 全部走真实 UI：点「＋ 新增待办」→ 填表 → 点优先级 → 保存 */
@@ -2345,6 +2475,8 @@ function createWindow() {
                 有农历的格子数: ui.农历格子数,
                 左栏备忘条数: ui.备忘条数,
                 第一条备忘: ui.第一条备忘,
+                今天格子里有备忘截止条: !!(ui.todayKey && ui.byKey && ui.byKey[ui.todayKey] &&
+                  ui.byKey[ui.todayKey].some(function (s) { return s.indexOf('memo:') === 0; })),
                 '＋和⚙按钮都有': ui.有加号按钮 && ui.有设置按钮,
                 三档颜色: ui.colors,
                 fit: ui.fit,
@@ -2357,10 +2489,12 @@ function createWindow() {
                 'c.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
                 'c.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
                 'var p=document.getElementById("panel");' +
+                'var memoRow=document.querySelector("#panelList .pi.memo .txt");' +
                 'return {open:!p.hidden, 真的显示出来了:getComputedStyle(p).display!=="none",' +
                 ' title:document.getElementById("panelTitle").textContent,' +
                 ' rows:document.querySelectorAll("#panelList .pi").length,' +
-                ' first:document.querySelector("#panelList .pi .txt")?document.querySelector("#panelList .pi .txt").textContent:""};' +
+                ' first:document.querySelector("#panelList .pi .txt")?document.querySelector("#panelList .pi .txt").textContent:"",' +
+                ' 备忘截止行: memoRow?memoRow.textContent:""};' +
                 '}catch(e){return {错误:String(e&&e.message||e)};}})()',
                 true);
               diagLog('cal-3-daypanel', panel);
@@ -3793,7 +3927,8 @@ function applyCalMemos(list) {
       id: String(m.id),
       text: String(m.text).slice(0, 500),
       done: !!m.done,
-      at: +m.at || 0
+      at: +m.at || 0,
+      dueAt: +m.dueAt || 0
     };
   }) : [];
   if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-memos', calMemos);
@@ -4456,9 +4591,13 @@ function showBubble(data) {
 
   const bw = ensureBubbleWin();
   const box0 = bubbleBox();
-  /* 今天有待办就把气泡长高一点（每多一条多一行高），没有就一点不占 */
-  const td = (data && data.todos && data.todos.items && data.todos.items.length) ? data.todos : null;
-  const extra = td ? bubbleTodoExtra(td.items.length, td.more) / box0.k : 0;
+  /* 今天有待办/备忘截止就把气泡长高一点（每多一条多一行高），没有就一点不占 */
+  const td = (data && data.todos) ? data.todos : null;
+  let extra = 0;
+  if (td) {
+    extra += bubbleTodoExtra(td.items.length, td.more) / box0.k;
+    if (td.memos) extra += bubbleTodoExtra(td.memos.items.length, td.memos.more) / box0.k;
+  }
   const box = extra > 0
     ? { w: box0.w, h: box0.h + extra, gap: box0.gap, pad: box0.pad, k: box0.k }
     : box0;

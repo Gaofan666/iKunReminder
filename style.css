@@ -385,6 +385,9 @@ body.anim-off *::after{animation-play-state:paused !important}
   padding:7px 10px;border:1px solid var(--line);border-radius:10px;
   font-family:inherit;font-size:13.5px;color:var(--text);
 }
+/* 备忘弹窗：提醒周期两行下拉（提前多久 / 每隔多久）叠放 */
+.memo-remind-cols{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.memo-remind-cols .skin-sel{flex:none;width:100%;max-width:none}
 
 /* ---------- 主内容：整体等比缩放（设计尺寸 1180 宽） ----------
    #view 是缩放容器：「主界面 / 待办 / 设置」三个页面一起缩放、一起居中，
