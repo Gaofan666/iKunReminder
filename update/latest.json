@@ -1,20 +1,20 @@
 {
-  "version": "3.9.4",
-  "releaseDate": "2026-09-23T14:35:16.037Z",
-  "notes": "﻿## iKunReminder v3.9.4\n\n1. 📐 **桌面日历压扁了一点** —— 卡片高度从 **680 收到 610**（宽度不变，还是 940），矮了大约 10%，不再那么占屏幕。月历格子跟着变矮，所以格子里最多显示的小条从 3 条降到 **2 条**（超出仍然显示「+N 条」，不会挤爆格子）。\n   觉得还不够扁（或者压过头了）说一声，高度就是 `CAL_BOX.height` 一个数字，改起来很快（比如 560 / 520 / 650 都行）\n2. 🧰 之前的修复都在：右键拖动贴边（按窗口中心判定，鼠标越过屏边界不再把日历吸到副屏）、缩放原点改左上角（卡片左上角恒贴窗口左上角）、提醒音乐\n\n**下载**：`iKunReminder-setup-v3.9.4.exe`（约 112 MB，Windows x64，双击安装）\r\n",
-  "size": 117352991,
-  "sha512": "txrVO37qWn0odZdDEJ7e2lAat9Eweu/nXuA0/d05edyPPbfzvEgX/p5PsKm7yC9AzRLQXTu9rcYz1GPZA0jg5g==",
+  "version": "3.9.5",
+  "releaseDate": "2026-09-24T03:02:38.331Z",
+  "notes": "## iKunReminder v3.9.5\n\n1. 🎵 **提醒音乐可以换成自己的了** —— 设置里「提醒音乐」下面多了 **「选择音乐文件…」**：挑一首自己电脑里的歌，以后到点就放它。旁边有 **「用回自带音乐」** 一键还原。\n   支持 **mp3 / wav / ogg / m4a / flac** 等常见格式，建议不超过 **10 MB**（文件越大加载越慢）。选的文件被删掉或者格式放不出来时，会自动退回自带音乐，不会到点了没声音。\n2. 🪟 **宠物气泡被别的窗口挡住的问题** —— 桌面上开着别的软件时点宠物，气泡偶尔会钻到人家后面去。现在气泡和提醒窗一样在最上层，点了就在最上面。\n\n**下载**：`iKunReminder-setup-v3.9.5.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 117355921,
+  "sha512": "UBTtYaHFy3qNscCetgpuUqAgLsJjfO1ZpdvK/KhG7XH3pxdq68oltTInD+FQOCBU9m73dMt3m3YumI/8lIRFug==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.4/iKunReminder-setup-v3.9.4.exe.part1",
-      "size": 58676496,
-      "sha512": "lzI2oau38x+noO17noqKY2jG6P1ME1RZNiX6VHgeJtuoSyDfHp8P7Q/zPzku2mQBNXrPwknI9iSmDadis/8iwg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.5/iKunReminder-setup-v3.9.5.exe.part1",
+      "size": 58677961,
+      "sha512": "sFB2dbEsupERobi1hWdwfrUvmuQLaWIdc+iVHrq2HQyGC4/0DGXXzcIm6WpxHYXryT32JDSPvPra6rdsmG/1MQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.4/iKunReminder-setup-v3.9.4.exe.part2",
-      "size": 58676495,
-      "sha512": "Mcc26kXga1GxGGffMYlOAlSBj/HOUHqgnA/DqDARmNRL47+vV3TGpvBVIQIeu+fZN5sgUY2UzvZRqrL4wn1GVw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.5/iKunReminder-setup-v3.9.5.exe.part2",
+      "size": 58677960,
+      "sha512": "Y+uHiPuxOnCQAR+oNyvbKgGih5EJPTazOWuQMCDRgNzXC25JW3yVeFyr6yG28y2UznBOHiCxE8wLZ0/cTqgecg==",
       "index": 2
     }
   ]
