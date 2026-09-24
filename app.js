@@ -563,6 +563,7 @@
     petSizeSeg: $('#petSizeSeg'),
     skinRow: $('#skinRow'),
     skinSel: $('#skinSel'),
+    btnSkinRefresh: $('#btnSkinRefresh'),
     chkSound: $('#chkSound'),
     chkMusic: $('#chkMusic'),
     musicPath: $('#musicPath'),
@@ -795,16 +796,41 @@
     SKINPICK.init(native, PETDRAW, {});
     if (!native || !native.skinsList || !el.skinRow) return;
     el.skinRow.hidden = false;
-    SKINPICK.fillSkinPicker(el.skinSel, function (list) {
-      /* 存着的皮肤已经不存在了 → 退回默认（顺手存一下，免得每次启动都白找） */
+    /* 存着的皮肤已经不存在了 → 退回默认（顺手存一下，免得每次启动都白找） */
+    const skinPickCurrent = function (list) {
       var ids = (list || []).map(function (s) { return s.id; });
       if (ids.indexOf(settings.skin) < 0) {
         settings.skin = '__default';
         saveSettings();
       }
       return settings.skin;
-    });
+    };
+    SKINPICK.fillSkinPicker(el.skinSel, skinPickCurrent);
     if (settings.skin && settings.skin !== '__default') SKINPICK.loadSkin(settings.skin);
+
+    /* 「刷新」：重新扫一遍 skins 文件夹 —— 刚放进去的新形象不用重启软件就能选。
+       顺手把当前形象的图重新读一遍，所以改了图（重画了 sheet.png）点一下也能立刻生效。 */
+    if (el.btnSkinRefresh) {
+      el.btnSkinRefresh.addEventListener('click', function () {
+        if (el.btnSkinRefresh.classList.contains('busy')) return;   // 连点保护
+        el.btnSkinRefresh.classList.add('busy');
+        SKINPICK.fillSkinPicker(el.skinSel, skinPickCurrent).then(function (pickedNow) {
+          settings.skin = pickedNow || '__default';
+          saveSettings();
+          if (native.skinChanged) native.skinChanged(settings.skin);   // 桌面宠物跟着换
+          SKINPICK.loadSkin(settings.skin);                            // 重新读图
+          const n = el.skinSel ? el.skinSel.options.length : 0;
+          const cur = (el.skinSel && el.skinSel.selectedIndex >= 0)
+            ? el.skinSel.options[el.skinSel.selectedIndex].textContent : '';
+          setCaption('找到了 ' + n + ' 个形象' +
+            (settings.skin === '__default' ? '（正在用手绘的篮球男孩）' : '，当前：' + cur));
+          el.btnSkinRefresh.classList.remove('busy');
+        }).catch(function () {
+          el.btnSkinRefresh.classList.remove('busy');
+          setCaption('刷新失败，等一会儿再点一次');
+        });
+      });
+    }
   }
 
   /* ---------------------------------------------------------- 本地存储 */
@@ -2584,7 +2610,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v3.9.5 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v3.9.6 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }

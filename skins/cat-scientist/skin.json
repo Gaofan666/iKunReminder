@@ -1,0 +1,12 @@
+{
+  "name": "喵星科学家",
+  "author": "",
+  "frame": { "w": 295.67, "h": 295.67 },
+  "fps": 10,
+  "sheet": "sheet.png",
+  "animations": {
+    "idle":  { "row": 0, "count": 6, "fps": 2 },
+    "dance": { "row": 1, "count": 6, "fps": 2 },
+    "cheer": { "row": 2, "count": 6, "fps": 3 }
+  }
+}

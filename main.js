@@ -59,6 +59,9 @@ const DIAG = (function () {
     if (m) out.avail = { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
     /* --diag-pet：自检时顺手打开桌面宠物，验证它和主界面能同时存在 */
     if (a === '--diag-pet') out.pet = true;
+    /* --diag-petskin=<id>：自检时指定桌面宠物用哪个形象（用来肉眼确认某个皮肤画得对不对） */
+    m = /^--diag-petskin=(.+)$/.exec(a);
+    if (m) out.petskin = m[1];
     /* --diag-tab=home|todo|settings：自检时切到指定页再截图 */
     m = /^--diag-tab=(home|todo|diary|settings)$/.exec(a);
     if (m) out.tab = m[1];
@@ -565,9 +568,12 @@ function createWindow() {
         try {
           if (DIAG.pet) {
             setPetOn(true);
-            await new Promise(function (r) { setTimeout(r, 1200); });
+            await new Promise(function (r) { setTimeout(r, 400); });
+            /* 换形象要等宠物窗建好之后再发，否则那条消息没人收 */
+            if (DIAG.petskin) setPetSkin(DIAG.petskin);
+            await new Promise(function (r) { setTimeout(r, 1400); });
             /* 护眼模式还没开的时候，宠物右键菜单里那一项应该是没勾的 */
-            diagLog('pet-menu', { 菜单: petMenuSummary() });
+            diagLog('pet-menu', { 菜单: petMenuSummary(), 用的形象: currentSkin });
           }
           if (DIAG.tab) {
             await win.webContents.executeJavaScript(
@@ -1169,6 +1175,49 @@ function createWindow() {
               镜像里还留着吗: mirrorStillHas,
               再清一次目录的动作: m4,
               复活了吗: fs.existsSync(fake)
+            });
+
+            /* ---- 新增：主界面「🔄 刷新」按钮 —— 刚放进去的皮肤不重启也该认出来 ---- */
+            try {
+              fs.mkdirSync(fake, { recursive: true });
+              fs.writeFileSync(path.join(fake, 'skin.json'), JSON.stringify({
+                name: '自检刷新皮肤', author: 'diag',
+                frame: { w: 8, h: 8 },
+                animations: { idle: { row: 0, count: 1, fps: 1 } }
+              }), 'utf8');
+              fs.writeFileSync(path.join(fake, 'sheet.png'), Buffer.from(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+                'base64'));
+            } catch (e) { diagLog('skins-refresh-write-error', String(e && e.message || e)); }
+            const optsBefore = await win.webContents.executeJavaScript(
+              '(function(){var s=document.getElementById("skinSel");return s?s.options.length:-1;})()', true);
+            const clicked = await win.webContents.executeJavaScript(
+              '(function(){var b=document.getElementById("btnSkinRefresh");if(!b)return false;b.click();return true;})()', true);
+            await new Promise(function (r) { setTimeout(r, 1000); });
+            diagLog('skins-7-刷新按钮', await win.webContents.executeJavaScript(
+              '(function(){var s=document.getElementById("skinSel");var cap=document.getElementById("stageCaption");' +
+              'var names=[];if(s){for(var i=0;i<s.options.length;i++)names.push(s.options[i].textContent);}' +
+              'return {按钮点得到吗:' + !!clicked + ', 点之前有几个:' + optsBefore + ', 点之后有几个:names.length,' +
+              ' 新皮肤出现了吗:names.indexOf("自检刷新皮肤")>=0, 下拉框:names,' +
+              ' 说明文字:cap?cap.textContent:null};})()', true));
+
+            /* ---- 朋友画的猫：在不在列表里、帧率有没有按我们调慢的值走 ---- */
+            const catSkin = scanSkins().filter(function (s) { return s.id === 'cat-scientist'; })[0];
+            let catMeta = null;
+            try {
+              catMeta = catSkin
+                ? JSON.parse(fs.readFileSync(path.join(catSkin.dir, 'cat-scientist', 'skin.json'), 'utf8')) : null;
+            } catch (e) { /* 读不到就报空 */ }
+            diagLog('skins-8-新皮肤(喵星科学家)', {
+              列表里找到了吗: !!catSkin,
+              名字: catSkin ? catSkin.name : '',
+              在哪个目录: catSkin ? catSkin.dir : '',
+              单帧尺寸: catMeta ? (catMeta.frame.w + ' x ' + catMeta.frame.h) : '',
+              待机fps: catMeta ? catMeta.animations.idle.fps : null,
+              跳舞fps: catMeta ? catMeta.animations.dance.fps : null,
+              欢呼fps: catMeta ? catMeta.animations.cheer.fps : null,
+              精灵图在吗: catSkin && catMeta
+                ? fs.existsSync(path.join(catSkin.dir, 'cat-scientist', catMeta.sheet || 'sheet.png')) : false
             });
 
             cleanup();
@@ -4449,7 +4498,7 @@ const SKINS_README_FALLBACK = [
   '  skin.json    描述文件',
   '  sheet.png    精灵图（每行一种动作，左到右是帧）',
   '',
-  '放好之后重启软件，主界面「🎨 宠物形象」里就能选到。',
+  '放好之后回到主界面，在「🎨 宠物形象」旁边点一下「🔄 刷新」就能选到，不用重启软件。',
   '完整说明（skin.json 怎么写、精灵图怎么排、出问题怎么办）见安装目录下',
   'resources\\skins\\README.md。',
   ''
@@ -4463,7 +4512,14 @@ function ensureUserSkins() {
   } catch (e) { return dir; }
   try {
     const doc = path.join(dir, 'README.md');
-    if (!fs.existsSync(doc)) {
+    /* 老版本写下的说明文档还在教用户「重启软件」→ 换成新的那份（现在有刷新按钮了）。
+       只认我们自己那份（开头是那个标题、且不含「刷新」二字），用户自己改过的内容不动。 */
+    let stale = false;
+    try {
+      const old = fs.readFileSync(doc, 'utf8');
+      stale = old.indexOf('# 自定义宠物形象（皮肤）') === 0 && old.indexOf('刷新') < 0;
+    } catch (e) { /* 读不到就当不存在 */ }
+    if (!fs.existsSync(doc) || stale) {
       /* 内置那份完整文档：打包后在 resources/skins/，开发时在项目根目录的 skins/。
          两个候选都找一遍（开发模式下 resources 里没有，只有项目里有）。 */
       const cands = [];
@@ -4471,7 +4527,7 @@ function ensureUserSkins() {
       cands.push(path.join(__dirname, 'skins', 'README.md'));
       const src = cands.filter(function (c) { return c !== doc && fs.existsSync(c); })[0];
       if (src) fs.copyFileSync(src, doc);
-      else fs.writeFileSync(doc, SKINS_README_FALLBACK, 'utf8');
+      else if (!fs.existsSync(doc)) fs.writeFileSync(doc, SKINS_README_FALLBACK, 'utf8');
     }
   } catch (e) { /* 说明文档写不进去不致命 */ }
   return dir;

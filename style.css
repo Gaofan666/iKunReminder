@@ -504,6 +504,11 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .skin-sel:hover{border-color:var(--leaf)}
 .skin-sel:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.18)}
+/* 「刷新」：重新扫一遍 skins 文件夹（新放进去的形象不用重启就能看到） */
+.skin-ref{
+  white-space:nowrap;font-size:12.5px;padding:0 10px;height:28px;
+}
+.skin-ref.busy{opacity:.6;cursor:default}
 .seg{
   display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;
   background:rgba(255,255,255,.04);
