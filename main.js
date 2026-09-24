@@ -59,6 +59,8 @@ const DIAG = (function () {
     if (m) out.avail = { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
     /* --diag-pet：自检时顺手打开桌面宠物，验证它和主界面能同时存在 */
     if (a === '--diag-pet') out.pet = true;
+    /* --diag-bubble：点宠物看气泡，验证「今日待办」那一块（有/没有两种） */
+    if (a === '--diag-bubble') out.bubble = true;
     /* --diag-petskin=<id>：自检时指定桌面宠物用哪个形象（用来肉眼确认某个皮肤画得对不对） */
     m = /^--diag-petskin=(.+)$/.exec(a);
     if (m) out.petskin = m[1];
@@ -142,6 +144,7 @@ function effScale(d) {
 let diagDiarySeeded = false;      // 日记自检：种完「以前的日记」要重载一次页面，用它挡住重复种
 let diagAlertStage = 0;           // 弹窗自检：要重载两次数据，用它记住「重载后从哪继续」
 let diagMusicStage = 0;           // 提醒音乐自检：换成自定义音乐/坏路径/还原各要重载一次
+let diagBubbleStage = 0;          // 气泡自检：种待办 → 重载 → 看气泡里有没有今日待办
 /* 自检产物的落脚点：和 diagLog 一样，打包后 __dirname 在 app.asar 里写不进去，
    依次退回「exe 同级目录」和 userData，保证打包版的自检也能把文件落下来。 */
 function diagFilePath(name) {
@@ -1225,6 +1228,78 @@ function createWindow() {
               临时目录: fs.existsSync(tmpDir) ? '❌ 还在' : '✅ 已清掉',
               镜像目录: fs.existsSync(mirror) ? '❌ 还在' : '✅ 已清掉'
             });
+          }
+          /* ============ 气泡里的「今日待办」（--diag-bubble） ============
+             走真实链路：页面收到 pet-talk-request → 回 pet-talk-data → 主进程 showBubble。
+             两轮：① 种 4 条今天的待办（1 条已完成）→ 重载 → 看气泡里是不是列出来了、
+             气泡有没有长高（只列 3 条 + 「还有 1 条」）；② 清空 → 看那块整个不出现。 */
+          if (DIAG.bubble) {
+            const bwait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const todayAt = function (h, mi) {
+              const d = new Date(); d.setHours(h, mi, 0, 0); return d.getTime();
+            };
+            const seedTodos = function (arr) {
+              return '(function(){localStorage.setItem("kunkun.todos.v1",JSON.stringify({memos:[],todos:' +
+                JSON.stringify(arr) + '}));return true;})()';
+            };
+            const bubbleReload = function () {
+              diagBubbleStage++;
+              win.webContents.reload();
+              const stop = new Error('diag-restart');
+              stop.diagRestart = true;
+              throw stop;
+            };
+            const askBubble = async function () {
+              setPetOn(true);
+              await bwait(600);
+              requestPetTalk();            // 走真实链路：页面回 pet-talk-data → showBubble
+              await bwait(1000);
+            };
+            const bubbleInfo = async function (tag) {
+              const w = bubbleWin;
+              if (!w || w.isDestroyed()) return { 气泡窗: '❌ 没建出来' };
+              const bounds = w.getBounds();
+              const inner = await w.webContents.executeJavaScript(
+                '(function(){var g=function(id){return document.getElementById(id);};' +
+                'var rows=[];var list=g("todoList");' +
+                'if(list){var rs=list.querySelectorAll(".pb-todo-row");' +
+                'for(var i=0;i<rs.length;i++)rows.push(rs[i].textContent.replace(/\\s+/g," ").trim());}' +
+                'var more=document.querySelector(".pb-todo-more");' +
+                'var box=g("bubble-inner");' +
+                'return {第一行:g("head").textContent, 待办块收起来了吗:g("todos").hidden,' +
+                ' 待办标题:g("todoHead").textContent, 待办行:rows,' +
+                ' 还有更多:more?more.textContent:null, 最后一行:g("next").textContent,' +
+                ' 内容有没有溢出:box?box.scrollHeight>box.clientHeight+1:null};})()', true);
+              let shot = '';
+              try {
+                const img = await w.capturePage();
+                shot = diagFilePath('bubble-' + tag + '.png');
+                fs.writeFileSync(shot, img.toPNG());
+              } catch (e) { shot = '截图失败: ' + String((e && e.message) || e); }
+              return Object.assign({ 气泡窗: bounds.width + ' x ' + bounds.height, 截图: shot }, inner);
+            };
+
+            if (diagBubbleStage === 0) {
+              await win.webContents.executeJavaScript(seedTodos([
+                { id: 'bub1', text: '【自检】上午开会', done: false, at: Date.now(),
+                  dueAt: todayAt(9, 30), remindAt: todayAt(9, 30), prio: 'high', notify: true },
+                { id: 'bub2', text: '【自检】吃维生素', done: true, at: Date.now(),
+                  dueAt: todayAt(12, 0), remindAt: todayAt(12, 0), prio: 'mid', notify: true },
+                { id: 'bub3', text: '【自检】下午三点交周报', done: false, at: Date.now(),
+                  dueAt: todayAt(15, 0), remindAt: todayAt(15, 0), prio: 'mid', notify: true },
+                { id: 'bub4', text: '【自检】晚上遛狗', done: false, at: Date.now(),
+                  dueAt: todayAt(20, 0), remindAt: todayAt(20, 0), prio: 'low', notify: true }
+              ]), true);
+              bubbleReload();
+            } else if (diagBubbleStage === 1) {
+              await askBubble();
+              diagLog('bubble-1-今天有待办', await bubbleInfo('有'));
+              await win.webContents.executeJavaScript(seedTodos([]), true);
+              bubbleReload();
+            } else if (diagBubbleStage === 2) {
+              await askBubble();
+              diagLog('bubble-2-今天没待办', await bubbleInfo('无'));
+            }
           }
           /* 重复待办自检：全部走真实弹窗 + 真实的「点勾完成」，看下一期排到哪天 */
           if (DIAG.repeat) {
@@ -4257,6 +4332,15 @@ function bubbleBox() {
   };
 }
 
+/* 气泡里「今日待办」那一块要多高（设计单位=物理像素）：
+   有 N 条就多出「标题 + N 行」，没有待办返回 0（气泡保持原来的尺寸）。 */
+function bubbleTodoExtra(rows, more) {
+  const n = Math.max(0, Math.round(rows) || 0);
+  if (!n) return 0;
+  return UI.DESIGN.bubbleTodoHead + n * UI.DESIGN.bubbleTodoRow +
+    (more > 0 ? UI.DESIGN.bubbleTodoRow : 0);
+}
+
 function talkDisplay(px, py) {
   try {
     return screen.getDisplayNearestPoint({ x: Math.round(px), y: Math.round(py) });
@@ -4371,7 +4455,13 @@ function showBubble(data) {
   if (!b) return false;
 
   const bw = ensureBubbleWin();
-  const box = bubbleBox();
+  const box0 = bubbleBox();
+  /* 今天有待办就把气泡长高一点（每多一条多一行高），没有就一点不占 */
+  const td = (data && data.todos && data.todos.items && data.todos.items.length) ? data.todos : null;
+  const extra = td ? bubbleTodoExtra(td.items.length, td.more) / box0.k : 0;
+  const box = extra > 0
+    ? { w: box0.w, h: box0.h + extra, gap: box0.gap, pad: box0.pad, k: box0.k }
+    : box0;
   const disp = talkDisplay(b.x + b.width / 2, b.y + b.height / 2);
   const p = placeBubble(b.x, b.y, b.width, b.height,
     data && data.side === 'left' ? 'left' : 'right', disp.workArea, box);
@@ -4390,6 +4480,7 @@ function showBubble(data) {
     mer: (data && data.mer) || '',
     tip: (data && data.tip) || '',
     next: (data && data.next) || '',
+    todos: td || null,
     tail: p.tail,
     tailPos: p.tailPos,
     /* 页面按这个把「设计尺寸的气泡本体」放大/缩小到当前物理尺寸 */

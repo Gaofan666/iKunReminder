@@ -2610,7 +2610,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v3.9.6 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v3.9.7 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -3487,7 +3487,8 @@
           head: '现在是 ' + cur.name + '（' + cur.label + '）',
           mer: cur.meridian + '当令 · 宜' + cur.tag,
           tip: cur.tip,
-          next: nextReminderText()
+          next: nextReminderText(),
+          todos: bubbleTodos()
         });
       });
     }
@@ -3556,6 +3557,33 @@
      这里只留下供它使用的一句话文案。 */
 
   /* 最近要到的提醒，作为气泡最后一行 */
+  /* 气泡里附带「今日待办」：今天到点的那些（没做完的排前面），最多给 3 条，
+     多了就写「还有 N 条」。一条都没有就返回 null —— 主进程据此决定气泡长不长高。 */
+  const BUBBLE_TODO_MAX = 3;
+  function bubbleTodos() {
+    const now = new Date();
+    const y = now.getFullYear(), mo = now.getMonth(), da = now.getDate();
+    const sameDay = function (ms) {
+      const d = new Date(ms);
+      return d.getFullYear() === y && d.getMonth() === mo && d.getDate() === da;
+    };
+    const list = todos.filter(function (t) { return t && t.dueAt && sameDay(t.dueAt); })
+      .sort(function (a, b) {
+        if (a.done !== b.done) return a.done ? 1 : -1;   // 没做完的排前面
+        return a.dueAt - b.dueAt;
+      });
+    if (!list.length) return null;
+    const shown = list.slice(0, BUBBLE_TODO_MAX);
+    return {
+      total: list.length,
+      left: list.filter(function (t) { return !t.done; }).length,
+      items: shown.map(function (t) {
+        return { time: localTimeValue(new Date(t.dueAt)), text: t.text, done: !!t.done };
+      }),
+      more: Math.max(0, list.length - shown.length)
+    };
+  }
+
   function nextReminderText() {
     let best = null, bestIt = null;
     settings.items.forEach(function (it) {
