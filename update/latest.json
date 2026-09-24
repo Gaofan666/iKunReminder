@@ -1,20 +1,20 @@
 {
-  "version": "3.9.6",
-  "releaseDate": "2026-09-24T03:20:15.206Z",
-  "notes": "## iKunReminder v3.9.6\n\n1. 🐱 **多了一个自带形象：「喵星科学家」**（朋友画的那只白大褂猫）。动画比原来放慢了一大截 —— 待机每张停 1 秒，跳起来/欢呼每张停 0.67 秒，不再一闪一闪的。\n   主界面「🎨 宠物形象」里选它就行，选了之后桌面上的小宠物也一起换。\n2. 🔄 **「宠物形象」旁边多了个「刷新」按钮** —— 新做了形象放进 `skins` 文件夹之后，点一下就能选到，**不用再重启软件**。改了形象里的图（重画了 `sheet.png`）点一下也能立刻生效。\n   顺手把皮肤文件夹里那份说明文档更新了（老版本写的是「重启软件」，现在写的是点刷新）。\n\n**下载**：`iKunReminder-setup-v3.9.6.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 119530623,
-  "sha512": "h+CuMg6/k1x4LO58nRSCY4X5BvWmEdf7MN5MxXxATNkkaCEdxRyE2ww7lbtvK6hl314mf3NKBnM5kXgkEcWCRQ==",
+  "version": "3.9.7",
+  "releaseDate": "2026-09-24T03:42:57.613Z",
+  "notes": "## iKunReminder v3.9.7\n\n1. 🐱 **「喵星科学家」改成 5 秒换一张**（待机 / 跳舞 / 欢呼 都是），慢慢悠悠的，不再一闪一闪。\n2. 📋 **今天有待办的话，宠物气泡里会顺便列出来** —— 点桌面上的宠物，气泡里除了时辰和下一次提醒，还会多一块「今日待办 N 条（M 条没做完）」，按时间排好、最多列 3 条，多了就写「…还有 N 条，点『待办』看全部」。没做完的排前面，做完的划掉。\n   今天没有待办时，这块**完全不出现**，气泡和以前一模一样大。\n\n**下载**：`iKunReminder-setup-v3.9.7.exe`（约 112 MB，Windows x64，双击安装）\n",
+  "size": 119532779,
+  "sha512": "DYbT899WzLgrTteDobEfwmFgMB7724VjrXK9aVkDilw4rRBd8uZmOPyHY3ESdG1fxtJ/c32Gtl5AK+Qg3zPEsQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.6/iKunReminder-setup-v3.9.6.exe.part1",
-      "size": 59765312,
-      "sha512": "w0ZYCACfD4DOHCuA3Uqtt6z07+L/lS//MsauLasfvvnNOpbDcFwPpGxKmZcC8tJ6z2an04pMk+bhX+ln2kVJQw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.7/iKunReminder-setup-v3.9.7.exe.part1",
+      "size": 59766390,
+      "sha512": "8Yjw8qbbSN1GV/EeI5Re5LWSNZ3ItHJEE20BIWv2QMI+hYDoMyh93UMADLQt0t8mAthsLjSz4bC/AAknSOarTA==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.6/iKunReminder-setup-v3.9.6.exe.part2",
-      "size": 59765311,
-      "sha512": "s5B0DgKEW36VG9+kDMEbvErbBn+pFIx+4NZfvkn8JIaqrbXv3o37dsQzoTqRzKM/tOfOsNkaaZyf79EteoNbBw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.7/iKunReminder-setup-v3.9.7.exe.part2",
+      "size": 59766389,
+      "sha512": "LD4Q0coceqDHBe4/JwQWrrmI9kEmf5ECdaIaGDIwF4841mWEecKfpE+vqwCdFXk+KZ2VIx1EAVyk2SytmNjIDg==",
       "index": 2
     }
   ]
