@@ -176,6 +176,7 @@
     items: defaultItems(),     // 提醒事项列表（用户可增删改）
     sound: true,
     music: true,               // 提醒时播一段音乐（语音播报结束后 3 秒开始，放完就停）
+    musicSrc: '',              // 用户自选的音乐文件绝对路径；空串 = 用打包进来的 assets/music.mp3
     speech: true,
     petSize: 'max',            // 桌面宠物大小：max 迷你 / mid 小小 / min 超小
     petOn: false,              // 桌面宠物是否显示（独立小窗，可与主界面同时存在）
@@ -401,8 +402,89 @@
      流程：弹窗出现 → 语音播报 → 播报结束后等 3 秒 → 放一段音乐 → 放完自动停（不循环）。
      关掉提醒（点完成/稍后）时会立刻停掉音乐、并取消还没开始的那次。 */
   const MUSIC_DELAY = 3000;
+  const BUILTIN_MUSIC = 'assets/music.mp3';
   let speechEndCb = null;
   let musicTimer = null;
+  let musicFellBack = false;      // 自选音乐读不出来、已经退回自带（用来给设置里那行小字加说明）
+
+  /* 本地绝对路径 → file:// 地址（中文、空格、# 之类都要转义） */
+  function musicFileUrl(p) {
+    let s = String(p || '').replace(/\\/g, '/');
+    if (/^[a-zA-Z]:/.test(s)) s = '/' + s;                  // D:/a.mp3 → /D:/a.mp3
+    return 'file://' + s.split('/').map(function (seg, i) {
+      return i <= 1 ? seg : encodeURIComponent(seg);        // 开头空段和 /D: 原样保留
+    }).join('/');
+  }
+
+  /* 把当前设置里的音乐装到 <audio> 上，并把「当前：…」那行小字刷新一遍。
+     自选文件读不出来时（被删了/挪走了）自动退回自带音乐。 */
+  function applyMusicSrc() {
+    const a = el.alertMusic;
+    const p = settings.musicSrc;
+    if (a) {
+      const want = p ? musicFileUrl(p) : BUILTIN_MUSIC;
+      if (a.getAttribute('src') !== want) {
+        a.setAttribute('src', want);
+        if (p) {
+          /* 自选文件在启动时就发现读不出来（被删了/挪走了）→ 自动退回自带，并把设置清掉，
+             免得每次提醒都白试一遍 */
+          const onErr = function () {
+            a.removeEventListener('error', onErr);
+            if (settings.musicSrc !== p) return;      // 用户已经又换了/清了，别乱动
+            musicFellBack = true;
+            settings.musicSrc = '';
+            saveSettings();
+            applyMusicSrc();
+          };
+          a.addEventListener('error', onErr);
+        }
+        try { a.load(); } catch (e) { }
+      }
+    }
+    if (el.musicPath) {
+      el.musicPath.textContent = p
+        ? ('当前：' + p)
+        : (musicFellBack
+          ? '当前：自带音乐（上次选的文件读不出来，已经自动换回来）'
+          : '当前：自带音乐');
+    }
+  }
+
+  /* 换一首：path 为空 = 用回自带音乐 */
+  function setMusicSrc(path, silent) {
+    settings.musicSrc = String(path || '');
+    saveSettings();
+    applyMusicSrc();
+    const a = el.alertMusic;
+    if (!a || !settings.musicSrc) {
+      if (!silent) setCaption(settings.musicSrc ? '' : '已经换回自带音乐');
+      return;
+    }
+    /* 试读一下，确认这个文件真的能放；失败就退回自带并直说 */
+    let settled = false;
+    const ok = function () {
+      if (settled) return; settled = true; cleanup();
+      if (!silent) setCaption('换好了，提醒时会放这首：' + baseName(settings.musicSrc));
+    };
+    const bad = function () {
+      if (settled) return; settled = true; cleanup();
+      setMusicSrc('', true);   // 退回自带（含清掉设置）
+      setCaption('这个文件读不出来（可能格式不支持或被删了），已经用回自带音乐');
+    };
+    const cleanup = function () {
+      a.removeEventListener('loadedmetadata', ok);
+      a.removeEventListener('error', bad);
+    };
+    a.addEventListener('loadedmetadata', ok);
+    a.addEventListener('error', bad);
+    try { a.load(); } catch (e) { }
+    setTimeout(function () { if (!settled) ok(); }, 2500);   // 有的格式不给元数据，别卡住用户
+  }
+
+  function baseName(p) {
+    try { return String(p).replace(/\\/g, '/').split('/').pop() || String(p); }
+    catch (e) { return String(p); }
+  }
 
   function stopAlertMusic() {
     if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
@@ -422,7 +504,21 @@
         if (!settings.music || !rt.alertId) return;      // 期间关掉了/提醒没了就别放
         const a = el.alertMusic;
         if (!a) return;
-        try { a.currentTime = 0; a.play(); } catch (e) { }
+        try {
+          a.currentTime = 0;
+          const pr = a.play();
+          if (pr && pr.catch) {
+            pr.catch(function () {
+              /* 自选文件放不出来（被删/格式不支持）→ 当场退回自带音乐再放一次 */
+              if (!settings.musicSrc) return;
+              if (typeof diagLog === 'function') diagLog('music-custom-fail', { src: settings.musicSrc });
+              settings.musicSrc = '';
+              saveSettings();
+              applyMusicSrc();
+              try { a.play(); } catch (e) { }
+            });
+          }
+        } catch (e) { }
       }, MUSIC_DELAY);
     };
   }
@@ -469,6 +565,9 @@
     skinSel: $('#skinSel'),
     chkSound: $('#chkSound'),
     chkMusic: $('#chkMusic'),
+    musicPath: $('#musicPath'),
+    btnPickMusic: $('#btnPickMusic'),
+    btnResetMusic: $('#btnResetMusic'),
     chkSpeech: $('#chkSpeech'),
     chkNotify: $('#chkNotify'),
     scOverlay: $('#shichenOverlay'),
@@ -732,6 +831,7 @@
         }
         if (typeof s.sound === 'boolean') settings.sound = s.sound;
         if (typeof s.music === 'boolean') settings.music = s.music;
+        if (typeof s.musicSrc === 'string' && s.musicSrc.length < 500) settings.musicSrc = s.musicSrc;
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
         if (typeof s.petOn === 'boolean') settings.petOn = s.petOn;
@@ -2484,7 +2584,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v3.9.4 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v3.9.5 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -3988,13 +4088,29 @@
     });
 
     /* 提醒音乐：语音播报结束后 3 秒开始放，放完就停（不循环）。
-       放的是打包进来的 assets/music.mp3，页面里那个 <audio id="alertMusic">。 */
+       默认放打包进来的 assets/music.mp3；在设置里可以换成自己的音乐文件。 */
     if (el.chkMusic) {
       el.chkMusic.addEventListener('change', function (e) {
         settings.music = e.target.checked;
         saveSettings();
         if (!settings.music) stopAlertMusic();
         setCaption(settings.music ? '提醒时会跟着放一段音乐' : '提醒时不再放音乐（语音播报照旧）');
+      });
+    }
+
+    /* 设置里「选择音乐文件」：挑一个自己的音乐当提醒音 */
+    if (el.btnPickMusic) {
+      el.btnPickMusic.addEventListener('click', async function () {
+        let p = '';
+        try { p = (native && native.pickMusic) ? await native.pickMusic() : ''; } catch (e) { p = ''; }
+        if (!p) return;                 // 用户取消，什么都不改
+        setMusicSrc(p);
+      });
+    }
+    if (el.btnResetMusic) {
+      el.btnResetMusic.addEventListener('click', function () {
+        if (!settings.musicSrc) { setCaption('现在用的就是自带音乐'); return; }
+        setMusicSrc('');
       });
     }
 
@@ -4206,6 +4322,7 @@
     loadUiPrefs();
     el.chkSound.checked = settings.sound;
     if (el.chkMusic) el.chkMusic.checked = settings.music;
+    applyMusicSrc();                 // 按设置把提醒音乐装好（自选文件 or 自带）
     el.chkSpeech.checked = settings.speech;
     settings.items.forEach(function (it) { ensureTimer(it); });
     if ('Notification' in window && Notification.permission === 'granted') el.chkNotify.checked = true;

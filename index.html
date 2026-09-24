@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' file:; connect-src 'self'; object-src 'none'; base-uri 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>别感冒 · 喝水休息提醒器</title>
 <link rel="stylesheet" href="style.css">
@@ -18,7 +18,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.9.4</span>
+    <span class="tb-ver" id="tbVer">v3.9.5</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -252,6 +252,15 @@
     <div class="set-row">
       <label class="chk big"><input type="checkbox" id="chkTodoCatchUp"><span>重新打开程序时补提醒过期待办</span></label>
       <p class="set-desc">比如约了下午 3 点，但当时程序没开；下次打开时会弹出来告诉你这条已经过期。</p>
+    </div>
+    <div class="set-row">
+      <p class="set-label">🎵 提醒音乐</p>
+      <button class="btn" id="btnPickMusic">选择音乐文件…</button>
+      <button class="btn" id="btnResetMusic">用回自带音乐</button>
+      <p class="set-desc" id="musicPath">当前：自带音乐</p>
+      <p class="set-desc">想换成自己喜欢的一段，点「选择音乐文件」挑一个就行 ——
+        支持 <b>mp3 / wav / ogg / m4a / flac</b> 等常见格式，建议不超过 <b>10 MB</b>（文件越大加载越慢）。
+        文件被删掉或挪走后会自动退回自带音乐。提醒时要不要放音乐，由主界面上「提醒音乐」那个开关控制。</p>
     </div>
     <div class="set-row">
       <button class="btn" id="btnOpenDataDir">📂 打开数据目录</button>

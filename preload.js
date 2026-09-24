@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   hideToTray: () => ipcRenderer.invoke('hide'),
   showWindow: () => ipcRenderer.invoke('show-window'),
   openDataDir: () => ipcRenderer.invoke('open-data-dir'),
+  /* 选自定义提醒音乐：只回一个路径，取消=空串 */
+  pickMusic: () => ipcRenderer.invoke('pick-music'),
   /* 日记导出：文本由页面拼好，主进程弹「另存为」写文件，返回路径（取消=空串） */
   diaryExport: (text, suggested) => ipcRenderer.invoke('diary-export', String(text || ''), suggested),
   quit: () => ipcRenderer.invoke('quit'),

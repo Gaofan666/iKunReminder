@@ -138,6 +138,7 @@ function effScale(d) {
    和 userData，保证打包版也能留下自检日志。 */
 let diagDiarySeeded = false;      // 日记自检：种完「以前的日记」要重载一次页面，用它挡住重复种
 let diagAlertStage = 0;           // 弹窗自检：要重载两次数据，用它记住「重载后从哪继续」
+let diagMusicStage = 0;           // 提醒音乐自检：换成自定义音乐/坏路径/还原各要重载一次
 /* 自检产物的落脚点：和 diagLog 一样，打包后 __dirname 在 app.asar 里写不进去，
    依次退回「exe 同级目录」和 userData，保证打包版的自检也能把文件落下来。 */
 function diagFilePath(name) {
@@ -1433,27 +1434,94 @@ function createWindow() {
              场景就是用户问的：一条弹窗还挂着，别的又到点了。
              这里用真实数据喂进 localStorage：3 条同时到点 → 应该【合并成一条】弹；
              点「逐条看」→ 一条条弹且带「还有 N 条」提示；再验「全部完成」一把勾掉。 */
-          /* ============ 提醒音乐（--diag-music） ============ */
+          /* ============ 提醒音乐（--diag-music） ============
+             分阶段跑：换自定义音乐 / 换坏路径 / 还原自带，每一步都要 reload 页面，
+             而 reload 会让整个自检重跑一次 —— 用 diagMusicStage 记住从哪继续。 */
           if (DIAG.music) {
-            const el = await win.webContents.executeJavaScript(
-              '(function(){var a=document.getElementById("alertMusic");if(!a)return {error:"页面里没有 audio 元素"};' +
-              'var c=document.getElementById("chkMusic");' +
-              'return {音频地址:a.getAttribute("src"),循环:a.loop,预加载:a.preload,音量:a.volume,' +
-              ' 就绪状态:a.readyState,时长秒:Math.round((a.duration||0)*10)/10,' +
-              ' 默认勾选:c?c.checked:null, 勾选框文字:(c&&c.parentElement)?c.parentElement.textContent.trim():null};})()', true);
-            diagLog('music-1-音频元素', el);
-            /* 关键：Electron 没配 autoplayPolicy 时默认允许无用户手势播放。
-               这里真播一下，看 paused 有没有变 false —— 不允许的话提醒时根本放不出声。 */
-            const played = await win.webContents.executeJavaScript(
-              '(async function(){var a=document.getElementById("alertMusic");' +
-              'try{ a.currentTime=0; await a.play(); }catch(e){ return {能播放:false,错误:String((e&&e.name)||e)}; }' +
-              'await new Promise(function(r){setTimeout(r,700);});' +
-              'var t=a.currentTime, paused=a.paused; a.pause(); a.currentTime=0;' +
-              'return {能播放:!paused, 播了秒数:Math.round(t*10)/10};})()', true);
-            diagLog('music-2-能不能播放', played);
-            diagLog('music-3-设置默认值', await win.webContents.executeJavaScript(
-              '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
-              'return {存着的music:raw.music, 勾选框:(document.getElementById("chkMusic")||{}).checked};})()', true));
+            /* 换阶段：第一次 reload 后这一轮就结束（扔哨兵让外层别退出），
+               新的一轮自检会从 did-finish-load 重新进来，按 diagMusicStage 接着跑。 */
+            const musicReload = function () {
+              diagMusicStage++;
+              win.webContents.reload();
+              const stop = new Error('diag-restart');
+              stop.diagRestart = true;
+              throw stop;
+            };
+            const setSrcInStorage = function (p) {
+              return '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+                'raw.musicSrc=' + JSON.stringify(p) + ';localStorage.setItem("kunkun.settings.v1",JSON.stringify(raw));return true;})()';
+            };
+            const audioNow = function (extra) {
+              return '(async function(){var a=document.getElementById("alertMusic");' +
+                'var out={页面src:a?a.getAttribute("src"):null, 设置里显示:(document.getElementById("musicPath")||{}).textContent};' +
+                'if(!a) return out;' + (extra || '') + 'return out;})()';
+            };
+            /* 等音频把元数据读出来（或报错），最多 3 秒 */
+            const waitMeta =
+              'await new Promise(function(r){ if(a.readyState>=1) return r();' +
+              '  a.addEventListener("loadedmetadata",function(){r();},{once:true});' +
+              '  a.addEventListener("error",function(){r();},{once:true}); setTimeout(r,3000); });' +
+              'out.就绪状态=a.readyState; out.时长秒=Math.round((a.duration||0)*10)/10;' +
+              'out.媒体错误=a.error?a.error.code:null;';
+            const tryPlay =
+              'try{ await a.play(); await new Promise(function(r){setTimeout(r,700);});' +
+              '  out.能播放=!a.paused; out.播了秒数=Math.round(a.currentTime*10)/10; a.pause(); a.currentTime=0;' +
+              '}catch(e){ out.能播放=false; out.播放错误=String((e&&e.name)||e); }';
+
+            if (diagMusicStage === 0) {
+              diagLog('music-1-音频元素', await win.webContents.executeJavaScript(
+                '(function(){var a=document.getElementById("alertMusic");if(!a)return {error:"页面里没有 audio 元素"};' +
+                'var c=document.getElementById("chkMusic");' +
+                'return {音频地址:a.getAttribute("src"),循环:a.loop,预加载:a.preload,音量:a.volume,' +
+                ' 就绪状态:a.readyState,时长秒:Math.round((a.duration||0)*10)/10,' +
+                ' 默认勾选:c?c.checked:null, 勾选框文字:(c&&c.parentElement)?c.parentElement.textContent.trim():null,' +
+                ' 有选歌按钮:!!document.getElementById("btnPickMusic"), 有恢复按钮:!!document.getElementById("btnResetMusic"),' +
+                ' 说明文字:(document.getElementById("musicPath")||{}).textContent};})()', true));
+              /* 关键：Electron 没配 autoplayPolicy 时默认允许无用户手势播放。
+                 这里真播一下，看 paused 有没有变 false —— 不允许的话提醒时根本放不出声。 */
+              diagLog('music-2-能不能播放', await win.webContents.executeJavaScript(
+                '(async function(){var a=document.getElementById("alertMusic");' +
+                'try{ a.currentTime=0; await a.play(); }catch(e){ return {能播放:false,错误:String((e&&e.name)||e)}; }' +
+                'await new Promise(function(r){setTimeout(r,700);});' +
+                'var t=a.currentTime, paused=a.paused; a.pause(); a.currentTime=0;' +
+                'return {能播放:!paused, 播了秒数:Math.round(t*10)/10};})()', true));
+              diagLog('music-3-设置默认值', await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+                'return {存着的music:raw.music, 存着的musicSrc:raw.musicSrc, 勾选框:(document.getElementById("chkMusic")||{}).checked};})()', true));
+
+              /* 自定义音乐：真拿一个「路径里有中文和空格」的文件塞进设置，刷新页面看能不能用。
+                 这覆盖最可能踩的坑：中文路径 / 空格 / file:// 转义 / CSP 拦不拦。 */
+              let tmpMusic = '';
+              try {
+                tmpMusic = path.join(app.getPath('temp'), 'kun 测试 音乐.mp3');
+                fs.copyFileSync(path.join(__dirname, 'assets', 'music.mp3'), tmpMusic);
+              } catch (e) {
+                diagLog('music-4-自定义音乐', { 跳过: '临时文件准备失败: ' + String((e && e.message) || e) });
+              }
+              if (tmpMusic) {
+                await win.webContents.executeJavaScript(setSrcInStorage(tmpMusic), true);
+                await musicReload();
+              }
+            } else if (diagMusicStage === 1) {
+              diagLog('music-4-自定义音乐', await win.webContents.executeJavaScript(
+                audioNow(waitMeta + tryPlay), true));
+              /* 再验「文件读不出来就退回自带」：路径指向一个不存在的文件 */
+              await win.webContents.executeJavaScript(
+                setSrcInStorage(path.join(app.getPath('temp'), 'kun-没有这个文件.mp3')), true);
+              await musicReload();
+            } else if (diagMusicStage === 2) {
+              diagLog('music-5-文件不存在时', await win.webContents.executeJavaScript(
+                audioNow('await new Promise(function(r){setTimeout(r,2200);});' +
+                  'out.就绪状态=a.readyState; out.媒体错误=a.error?a.error.code:null;' +
+                  'out.存着的musicSrc=(function(){try{return JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}").musicSrc;}catch(e){return "读不出";}})();'),
+                true));
+              await win.webContents.executeJavaScript(setSrcInStorage(''), true);
+              await musicReload();
+            } else if (diagMusicStage === 3) {
+              diagMusicStage = 4;                      // 收尾，别再重载了
+              diagLog('music-6-还原自带', await win.webContents.executeJavaScript(
+                audioNow(waitMeta), true));
+            }
           }
           if (DIAG.alert) {
             const waitA = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -2900,6 +2968,8 @@ function createWindow() {
             } catch (e) { diagLog('pet-shot-error', { message: String(e && e.message || e) }); }
           }
         } catch (e) {
+          /* 自检中途故意重载页面换阶段：这一轮就地结束，等新的一轮接着跑，别退出 */
+          if (e && e.diagRestart) return;
           diagLog('error', { message: String(e && e.message || e) });
           console.log('[DIAG-ERROR] ' + (e && e.message ? e.message : e));
         }
@@ -4235,7 +4305,11 @@ function ensureBubbleWin() {
       backgroundThrottling: false
     }
   });
-  bubbleWin.setAlwaysOnTop(true, 'floating');
+  /* ⚠️ 层级要用 'screen-saver'（最高档），不能用 'floating'：
+     'floating' 是最低档的置顶，桌面宠物自己就是这一档，别的软件只要有置顶窗口、
+     或者它自己被提到前面，气泡就会被压在下面（用户报过「点宠物气泡出现在最底层」）。
+     主窗口提醒时用的就是 'screen-saver'，一直稳稳在最上面，气泡跟它对齐。 */
+  bubbleWin.setAlwaysOnTop(true, 'screen-saver');
   bubbleWin.setIgnoreMouseEvents(true);      // 气泡纯展示，鼠标事件穿透过去
   bubbleWin.loadFile(path.join(__dirname, 'bubble.html'));
   bubbleWin.on('closed', () => { bubbleWin = null; });
@@ -4281,7 +4355,14 @@ function showBubble(data) {
   if (bw.webContents.isLoading()) bw.webContents.once('did-finish-load', push);
   else push();
 
-  bw.showInactive();                          // 不激活、不抢焦点
+  /* 每次显示都重新声明一次置顶 + 抬到最前：
+     别的软件（尤其是自己也有置顶窗口的）可能在这中间把层级顶掉，
+     只靠创建时设一次不够稳。 */
+  try {
+    bw.setAlwaysOnTop(true, 'screen-saver');
+    bw.showInactive();                          // 不激活、不抢焦点
+    bw.moveTop();
+  } catch (e) { bw.showInactive(); }
   talkOpen = true;
   armBubbleTimer();                           // 说一会儿自己收掉，不挡着桌面
   return true;
@@ -4565,6 +4646,26 @@ ipcMain.handle('open-data-dir', () => {
     require('electron').shell.openPath(p);
     return true;
   } catch (e) { return false; }
+});
+
+/* 选一段自定义提醒音乐：只把路径交回页面，文件本身不拷贝、不上传。
+   用户取消返回空串（页面据此什么都不改）。 */
+ipcMain.handle('pick-music', async () => {
+  try {
+    const r = await dialog.showOpenDialog(win && !win.isDestroyed() ? win : null, {
+      title: '选一段提醒时播放的音乐',
+      buttonLabel: '就用这首',
+      properties: ['openFile'],
+      filters: [
+        { name: '音乐文件', extensions: ['mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'webm'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    });
+    if (r && !r.canceled && r.filePaths && r.filePaths[0]) return r.filePaths[0];
+  } catch (e) {
+    diagLog('pick-music-error', { message: String((e && e.message) || e) });
+  }
+  return '';
 });
 
 /* 导出日记：弹一个「另存为」，把页面拼好的纯文本写进去。
