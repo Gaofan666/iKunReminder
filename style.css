@@ -719,6 +719,14 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 }
 @keyframes popIn{ from{transform:scale(.86) translateY(14px);opacity:0} to{transform:none;opacity:1} }
 
+/* 表单类弹层（新增/编辑备忘、待办、补写日记等）：去掉毛玻璃和缩放动画。
+   ⚠️ backdrop-filter 或 transform 祖先会让原生 <select> 下拉、日期/时间选择器在
+   Windows 上【偶尔】弹不出来 / 错位 / 点了没反应（Chromium 合成层时序问题，偶发、难复现）。
+   这两个弹窗里有表单控件，必须避开；提醒弹层没有表单控件，保留原观感。 */
+.overlay.modal{backdrop-filter:none}
+.overlay.modal .overlay-card{animation:modalFade .22s ease}
+@keyframes modalFade{ from{opacity:0} to{opacity:1} }
+
 .alert-stage-wrap{width:250px;height:236px;margin:0 auto 2px}
 #alertStage{width:100%;height:100%;display:block}
 
