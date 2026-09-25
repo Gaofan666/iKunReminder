@@ -1534,6 +1534,45 @@ function createWindow() {
                   ' 查询串长度:d.query.length};})()'));
               } catch (e) { diagLog('arxiv-18-关键词上限与宽度提示', { 抛异常了: String((e && e.message) || e) }); }
 
+              /* 19. 用户报的 bug：换关键词后列表要跟着换；标题/摘要标色；只看当前关键词 */
+              try {
+                arxivDb.clearPapers();
+                arxivSvc.setConfig({ keywords: ['transformer'], fields: ['ti', 'abs'], days: 7 });
+                await aw(400);
+                const k1 = await arxivSvc.runFetch('手动');
+                arxivSvc.setConfig({ keywords: ['graph neural network'] });   // 换关键词
+                await aw(300);
+                const k2 = await arxivSvc.runFetch('手动');   // 换了条件 → 必须放行
+                const k3 = await arxivSvc.runFetch('手动');   // 同条件 → 该拦
+                await ajs('document.getElementById("tabArxiv").click(); window.kunkunArxivUI.refresh(); true;');
+                await aw(1000);
+                const on = await ajs(
+                  '(function(){var d=window.kunkunArxivUI._debug();' +
+                  'var rows=document.querySelectorAll("#arxivList .arxiv-item");' +
+                  'var marks=document.querySelectorAll("#arxivList .arxiv-title mark.ax-hit");' +
+                  'var abs=document.querySelector("#arxivList .arxiv-abs");' +
+                  'var full=rows.length&&rows[0].querySelector(".arxiv-abs")?rows[0].querySelector(".arxiv-abs").textContent:"";' +
+                  'return {列表条数:d.listCount, 标题标色处数:marks.length,' +
+                  ' 摘要开头:(abs?abs.textContent:"").slice(0,90), 摘要显示长度:full.length,' +
+                  ' 摘要里有标色:document.querySelectorAll("#arxivList .arxiv-abs mark.ax-hit").length,' +
+                  ' 第一行命中:d.listCount?d.firstTitle.slice(0,40):""};})()');
+                /* 关掉「只看当前关键词」→ 应该能看到换关键词之前那批 */
+                await ajs('(function(){var c=document.getElementById("axOnlyKw");c.checked=false;' +
+                  'c.dispatchEvent(new Event("change"));return true;})()');
+                await aw(1000);
+                const off = await ajs('(function(){var d=window.kunkunArxivUI._debug();' +
+                  'return {列表条数:d.listCount, 库里共:' + 'null};})()');
+                diagLog('arxiv-19-换关键词', {
+                  第一次抓transformer: k1.ok ? ('ok 新增' + k1.added) : (k1.skipped || k1.error || ''),
+                  换词后立刻抓: k2.ok ? ('放行 ✅ 新增' + k2.added) : ('❌ ' + (k2.skipped || k2.error)),
+                  换词后同条件再点: k3.skipped ? ('拦住 ✅ ' + k3.skipped) : '❌ 没拦住',
+                  只看当前关键词时: on,
+                  关掉只看之后的条数: off.列表条数,
+                  整个库里的条数: arxivDb.totalCount()
+                });
+                arxivSvc.setConfig({ fields: ['ti', 'abs'] });
+              } catch (e) { diagLog('arxiv-19-换关键词', { 抛异常了: String((e && e.message) || e) }); }
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];

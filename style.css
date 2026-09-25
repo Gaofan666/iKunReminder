@@ -244,7 +244,8 @@ body.anim-off *::after{animation-play-state:paused !important}
 #pageArxiv .col-sub{font-size:15px;line-height:1.75}
 #pageArxiv .arxiv-acts .btn.sm{font-size:15px;padding:6px 13px}
 .arxiv-acts{display:flex;gap:7px;align-items:center}
-.arxiv-filter{display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap}
+.arxiv-filter{display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap;align-items:center}
+.ax-onlykw{font-size:14px;margin-left:4px}
 .ax-tab{
   font-family:inherit;font-size:16px;color:var(--dim);cursor:pointer;
   padding:5px 13px;border-radius:99px;border:1px solid var(--line);
@@ -276,6 +277,11 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .arxiv-abs{margin-top:6px;font-size:14px;line-height:1.7;color:#2B3A44;word-break:break-word}
 .arxiv-hit{margin-top:6px;font-size:14px;color:#A6522C}
+/* 标题/摘要里命中的关键词：黄底 + 深色字，一眼能扫到 */
+mark.ax-hit{
+  background:rgba(255,193,7,.35);color:#7a4a00;font-weight:700;
+  border-radius:3px;padding:0 2px;box-decoration-break:clone;
+}
 .arxiv-btns{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .arxiv-btns .btn.sm{font-size:14.5px;padding:6px 12px}
 .arxiv-empty{

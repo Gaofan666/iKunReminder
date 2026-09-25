@@ -74,6 +74,12 @@ function createArxivService(opts) {
     return hit.length ? hit : keywords.slice(0, 1);
   }
 
+  /* 把「会影响查询结果的那几项」拼成一个签名：关键词 / 字段 / 匹配模式 / 天数。
+     换过条件之后再点手动抓取，就不该再吃「刚抓过」的冷却了。 */
+  function querySig(c) {
+    return JSON.stringify([c.keywords || [], c.fields || [], !!c.matchAny, c.days || 0]);
+  }
+
   /* ------------------------------------------------------------- 跑一轮抓取
      两种情况的返回要区分清楚：
        · 已经有别的抓取在跑（比如刚加完关键词，8 秒后自动抓的那一轮）→ 手动点的时候
@@ -99,9 +105,11 @@ function createArxivService(opts) {
       return { ok: false, error: '还没设置关键词' };
     }
     if (!c.enabled && r !== '手动') return { ok: false, skipped: '已关闭自动抓取' };
-    if (r === '手动' && c.lastFetchAt && (now() - c.lastFetchAt) < MANUAL_COOLDOWN_MS) {
+    /* 冷却只针对「条件没变、刚抓过又点一次」；换了关键词/字段/模式/天数 → 放行 */
+    if (r === '手动' && c.lastFetchAt && c.lastQuerySig === querySig(c) &&
+        (now() - c.lastFetchAt) < MANUAL_COOLDOWN_MS) {
       const left = Math.max(1, Math.ceil((MANUAL_COOLDOWN_MS - (now() - c.lastFetchAt)) / 1000));
-      return { ok: false, skipped: '刚抓过（' + left + ' 秒前），过一会儿再点' };
+      return { ok: false, skipped: '同样的条件刚抓过（' + left + ' 秒前），过一会儿再点' };
     }
 
     running = true;
@@ -160,7 +168,10 @@ function createArxivService(opts) {
         } catch (e) { log('arxiv-notify-fail', { message: String((e && e.message) || e) }); }
       }
 
-      db.setConfig({ lastFetchAt: now(), lastOkAt: now(), lastCount: ins.added, lastError: '' });
+      db.setConfig({
+        lastFetchAt: now(), lastOkAt: now(), lastCount: ins.added, lastError: '',
+        lastQuerySig: querySig(c)          // 记下「这一批是用什么条件抓的」
+      });
       lastResult = {
         ok: true, at: now(), reason: r, ms: now() - t0,
         total: res.parsed.total, got: entries.length, added: ins.added,

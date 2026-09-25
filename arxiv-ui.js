@@ -20,6 +20,7 @@
   var st = null;                       // 主进程推来的状态
   var listData = { items: [], total: 0 };
   var filter = 'all';
+  var onlyKw = true;                   // 列表默认只看「命中当前关键词」的论文
   var inited = false;
   var busyLocal = false;               // 本地「刚点了抓取」的标记，等状态回来清掉
   var lastMsg = '';
@@ -72,6 +73,76 @@
   }
   function setChk(node, v) { if (node && node.checked !== !!v) node.checked = !!v; }
   function hasCjk(s) { return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/.test(String(s || '')); }
+
+  /* ---------------------------------------------------- 命中关键词的显示
+     两件事：标题里把命中的关键词标色；摘要只挑「含关键词的那几句」。 */
+  function escRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  /* 这篇论文的 matched（抓的时候记下来的）里，哪些真的出现在这段文字里 */
+  function hitsIn(text, keywords) {
+    const low = String(text == null ? '' : text).toLowerCase();
+    return (keywords || []).filter(function (k) {
+      const kk = String(k || '').trim();
+      return kk && low.indexOf(kk.toLowerCase()) >= 0;
+    });
+  }
+
+  /* 把文字写进节点，命中的关键词套 <mark>（不用 innerHTML，全部走 DOM 节点） */
+  function fillHighlighted(node, text, keywords) {
+    const t = String(text == null ? '' : text);
+    node.textContent = '';
+    const kws = (keywords || []).map(function (k) { return String(k || '').trim(); })
+      .filter(Boolean)
+      .sort(function (a, b) { return b.length - a.length; });   // 长的先匹配，免得被短的切碎
+    if (!kws.length) { node.textContent = t; return 0; }
+    let re;
+    try { re = new RegExp('(' + kws.map(escRe).join('|') + ')', 'gi'); }
+    catch (e) { node.textContent = t; return 0; }
+    let last = 0, m, n = 0;
+    while ((m = re.exec(t))) {
+      if (m.index > last) node.appendChild(document.createTextNode(t.slice(last, m.index)));
+      const mk = document.createElement('mark');
+      mk.className = 'ax-hit';
+      mk.textContent = m[0];
+      node.appendChild(mk);
+      last = m.index + m[0].length;
+      n++;
+      if (re.lastIndex <= m.index) re.lastIndex = m.index + 1;   // 防死循环
+    }
+    if (last < t.length) node.appendChild(document.createTextNode(t.slice(last)));
+    return n;
+  }
+
+  /* 摘要切成句子（英文句号/问号/感叹号，也认中文标点） */
+  function splitSentences(s) {
+    return String(s == null ? '' : s)
+      .split(/(?<=[.!?。！？])\s+/)
+      .map(function (x) { return x.trim(); })
+      .filter(Boolean);
+  }
+
+  /* 摘要怎么显示：优先只给「含关键词的那几句」（这才是有用的部分），
+     一句都没命中（比如是分类/作者字段命中的）就退回摘要开头那几句。
+     最多 3 句 / 400 字，避免一篇把列表撑太长。
+     before/after 用来在首尾加「…」，让用户知道这是摘要里摘出来的一段。 */
+  function pickAbstract(summary, keywords) {
+    const text = String(summary == null ? '' : summary).trim();
+    if (!text) return { text: '', before: false, after: false, hit: false };
+    const sents = splitSentences(text);
+    if (!sents.length) {
+      return { text: text.slice(0, 400), before: false, after: text.length > 400, hit: false };
+    }
+    const hitSents = sents.filter(function (s) { return hitsIn(s, keywords).length > 0; });
+    const useHit = hitSents.length > 0;
+    const pool = useHit ? hitSents : sents;
+    const picked = pool.slice(0, 3);
+    const before = useHit && sents.indexOf(picked[0]) > 0;
+    const after = pool.length > picked.length;
+    let out = picked.join(' ');
+    let clipped = false;
+    if (out.length > 400) { out = out.slice(0, 400); clipped = true; }
+    return { text: out, before: before, after: after || clipped, hit: useHit };
+  }
 
   /* ------------------------------------------------------ 右侧：条件表单 */
   function renderFields() {
@@ -255,9 +326,13 @@
     var it = document.createElement('div');
     it.className = 'arxiv-item' + (p.read ? ' done' : (p.pushed ? ' unread' : ''));
 
+    /* 标色用这篇论文自己记录的命中关键词（抓的时候算好的）；
+       老数据没有就退回当前设置里的关键词 */
+    var kws = (p.matched && p.matched.length) ? p.matched : ((st && st.config && st.config.keywords) || []);
+
     var t = document.createElement('div');
     t.className = 'arxiv-title';
-    t.textContent = p.title || '(无标题)';
+    fillHighlighted(t, p.title || '(无标题)', kws);
     t.title = '点一下用浏览器打开 PDF 原文';
     t.addEventListener('click', function () { openPaper(p); });
     it.appendChild(t);
@@ -285,13 +360,20 @@
 
     var ab = document.createElement('div');
     ab.className = 'arxiv-abs';
-    ab.textContent = clip(p.summary, 220);
+    /* 真正出现在这篇文字里的关键词：标色和「命中」都用它（不虚报） */
+    var realHits = hitsIn(String(p.title || '') + ' ' + String(p.summary || ''), kws);
+    var pick = pickAbstract(p.summary, realHits);
+    if (pick.text) {
+      if (pick.before) ab.appendChild(document.createTextNode(pick.hit ? '…（摘要里命中关键词的句子）' : '…'));
+      fillHighlighted(ab, pick.text, realHits);
+      if (pick.after) ab.appendChild(document.createTextNode('…'));
+    }
     it.appendChild(ab);
 
-    if (p.matched && p.matched.length) {
+    if (realHits.length) {
       var hit = document.createElement('div');
       hit.className = 'arxiv-hit';
-      hit.textContent = '命中：' + p.matched.join(' / ');
+      hit.textContent = '命中：' + realHits.join(' / ');
       it.appendChild(hit);
     }
 
@@ -340,7 +422,10 @@
 
   function refresh() {
     if (!native || !native.arxivList) return Promise.resolve();
-    return native.arxivList({ filter: filter, limit: 60 }).then(function (res) {
+    /* onlyKw 打开时只列「命中当前关键词」的论文：换了关键词再抓，
+       列表就只显示这一轮的结果（不然会看到上一轮那批，像没生效一样） */
+    const kw = (onlyKw && st && st.config) ? (st.config.keywords || []) : [];
+    return native.arxivList({ filter: filter, limit: 60, matchKeywords: kw }).then(function (res) {
       listData = res || { items: [], total: 0 };
       renderList();
     }).catch(function () { renderList(); });
@@ -434,6 +519,14 @@
         });
       });
     }
+    if (el.onlyKw) {
+      el.onlyKw.checked = onlyKw;
+      el.onlyKw.addEventListener('change', function (e) {
+        onlyKw = !!e.target.checked;
+        note(onlyKw ? '只显示命中当前关键词的论文' : '显示所有抓过的论文');
+        refresh();
+      });
+    }
   }
 
   function addKeyword() {
@@ -493,7 +586,8 @@
       fetchBtn: $('btnArxivFetch'),
       readAll: $('btnArxivReadAll'),
       clearAll: $('axClearAll'),
-      filter: $('arxivFilter')
+      filter: $('arxivFilter'),
+      onlyKw: $('axOnlyKw')
     };
     if (!el.list) return;
     inited = true;

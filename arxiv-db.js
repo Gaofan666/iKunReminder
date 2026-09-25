@@ -33,7 +33,11 @@ const DEFAULT_CONFIG = {
   lastFetchAt: 0,
   lastOkAt: 0,
   lastCount: 0,
-  lastError: ''
+  lastError: '',
+  /* 上一次抓到结果时用的是哪套条件（关键词/字段/模式/天数）。
+     换条件之后手动抓取不该还吃「刚抓过」的冷却 —— 用户报过：
+     用 a 抓完改 b 再抓，想换回 a 时被拦一句「刚抓过」，列表还是 b 的结果。 */
+  lastQuerySig: ''
 };
 
 function clampInt(v, lo, hi, dflt) {
@@ -73,6 +77,7 @@ function normalizeConfig(patch, base) {
   if (p.lastOkAt != null) out.lastOkAt = Math.max(0, Math.round(Number(p.lastOkAt) || 0));
   if (p.lastCount != null) out.lastCount = Math.max(0, Math.round(Number(p.lastCount) || 0));
   if (typeof p.lastError === 'string') out.lastError = p.lastError.slice(0, 300);
+  if (typeof p.lastQuerySig === 'string') out.lastQuerySig = p.lastQuerySig.slice(0, 400);
   return out;
 }
 
@@ -173,6 +178,11 @@ function openArxivDb(file) {
     try { const a = JSON.parse(s); return Array.isArray(a) ? a : []; } catch (e) { return []; }
   }
 
+/* LIKE 里的特殊字符要转义（关键词里可能有 % 或 _） */
+function likeEscape(s) {
+  return String(s == null ? '' : s).replace(/[\\%_]/g, function (c) { return '\\' + c; });
+}
+
   /* 入库：以 arXiv ID 去重（主键 + INSERT OR IGNORE）。
      返回「这次真正新进来的」那几条 —— 只有新的才值得推送。 */
   function addPapers(list, opts) {
@@ -196,16 +206,29 @@ function openArxivDb(file) {
     const o = opts || {};
     const limit = clampInt(o.limit, 1, 200, 30);
     const offset = Math.max(0, Math.round(Number(o.offset) || 0));
-    /* 默认按提交日期倒序；只看未读 / 只看收藏都支持 */
-    let where = '';
-    if (o.filter === 'unread') where = 'WHERE read = 0 AND pushed = 1';
-    else if (o.filter === 'star') where = 'WHERE star = 1';
-    else if (o.filter === 'new') where = 'WHERE pushed = 0';
+    /* 默认按提交日期倒序；只看未读 / 只看收藏都支持；
+       给 matchKeywords 就只列「命中这些关键词」的论文（列表默认只看当前条件的结果，
+       不然换了关键词之后，看到的是上一轮那批，用户会觉得「列表没变」）。 */
+    const conds = [];
+    const args = [];
+    if (o.filter === 'unread') conds.push('read = 0 AND pushed = 1');
+    else if (o.filter === 'star') conds.push('star = 1');
+    else if (o.filter === 'new') conds.push('pushed = 0');
+    const kw = (o.matchKeywords || []).map(function (k) { return String(k == null ? '' : k).trim(); })
+      .filter(Boolean);
+    if (kw.length) {
+      conds.push('(' + kw.map(function () { return "matched LIKE ? ESCAPE '\\'"; }).join(' OR ') + ')');
+      /* matched 存的是 JSON 数组（["a","b"]），所以按带引号的关键词去匹配 */
+      kw.forEach(function (k) { args.push('%"' + likeEscape(k) + '"%'); });
+    }
+    const where = conds.length ? ('WHERE ' + conds.join(' AND ')) : '';
+    /* 注意：node:sqlite 的语句方法必须带着自己的 this 调用，
+       所以这里用展开调用（不能 apply(null, …)，那样会 Illegal invocation） */
     const rows = db.prepare(
       'SELECT * FROM papers ' + where +
       ' ORDER BY (published IS NULL), published DESC, fetched_at DESC LIMIT ? OFFSET ?'
-    ).all(limit, offset);
-    const cnt = db.prepare('SELECT COUNT(*) AS n FROM papers ' + where).get();
+    ).all(...args, limit, offset);
+    const cnt = db.prepare('SELECT COUNT(*) AS n FROM papers ' + where).get(...args);
     return { items: rows.map(rowToPaper), total: (cnt && cnt.n) || 0, limit: limit, offset: offset };
   }
 
