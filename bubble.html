@@ -48,6 +48,8 @@
   }
   .pb-todos[hidden]{display:none}
   .pb-todo-head{font-size:13.5px;font-weight:800;color:#1A6E80;letter-spacing:.5px}
+  /* 备忘截止那一块的标题：暖色，和「今日待办」的青色区分开 */
+  .pb-memo-head{color:#B8543F}
   .pb-todo-row{display:flex;gap:7px;align-items:baseline;font-size:13px;line-height:1.55;color:#2B3A44}
   .pb-todo-row .t{
     flex:none;font-weight:700;color:#A6522C;
@@ -81,6 +83,10 @@
       <div class="pb-todos" id="todos" hidden>
         <div class="pb-todo-head" id="todoHead"></div>
         <div id="todoList"></div>
+      </div>
+      <div class="pb-todos" id="memos" hidden>
+        <div class="pb-todo-head pb-memo-head" id="memoHead"></div>
+        <div id="memoList"></div>
       </div>
       <div class="pb-next" id="next"></div>
     </div>
