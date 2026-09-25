@@ -79,9 +79,12 @@
     var safe = scale > 0.05 ? scale : 1;
     root.style.setProperty('--bubble-inv', String(1 / safe));
     root.style.setProperty('--tail', ((Number(d.tailPos) || 36) / safe) + 'px');
-    /* ⚠️ 这里整串重写 className，所以 clickable 必须一起带上，
-       不然上面刚加的可点样式会被这行抹掉 */
-    document.body.className = 'tail-' + (d.tail || 'bottom') + (bodyClick ? ' clickable' : '');
+    /* ⚠️ 这里整串重写 className，所以 clickable / msg-arxiv 必须一起带上，
+       不然上面刚加的样式会被这行抹掉。
+       msg-arxiv = 浅绿色系，只给「科研论文推送」这一个气泡用。 */
+    document.body.className = 'tail-' + (d.tail || 'bottom') +
+      (bodyClick ? ' clickable' : '') +
+      (bodyClick === 'arxiv' ? ' msg-arxiv' : '');
   });
 
   /* 点气泡 = 告诉主进程「用户要看详情」（主进程会把主界面叫出来并切到科研动态页） */

@@ -8,7 +8,10 @@
 <style>
   /* 独立的透明小窗：里头只有气泡本体，四周留一点余量给小尾巴。
      窗口逻辑尺寸和 --bubble-w/h 都由主进程按「物理尺寸 ÷ 屏幕缩放」算好传进来
-     （main.js 的 bubbleBox()），所以这里的尺寸写法对 100%~200% 缩放都成立。 */
+     （main.js 的 bubbleBox()），所以这里的尺寸写法对 100%~200% 缩放都成立。
+
+     配色：默认就是原来的白底 + 深色字（说话气泡、今日待办气泡都用这套，不要动）。
+     只有【科研论文推送气泡】用浅绿色系 —— 见下面 body.msg-arxiv 那一段。 */
   html,body{
     margin:0;width:100%;height:100%;overflow:hidden;background:transparent;
     font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
@@ -73,6 +76,20 @@
   body.tail-top    #bubble-inner::after{top:calc(-9px / var(--bubble-scale,1));left:calc(var(--tail,36px) / var(--bubble-scale,1));transform:rotate(225deg) scale(var(--bubble-inv,1))}
   body.tail-left   #bubble-inner::after{left:calc(-9px / var(--bubble-scale,1));top:calc(var(--tail,36px) / var(--bubble-scale,1));transform:rotate(135deg) scale(var(--bubble-inv,1))}
   body.tail-right  #bubble-inner::after{right:calc(-9px / var(--bubble-scale,1));top:calc(var(--tail,36px) / var(--bubble-scale,1));transform:rotate(-45deg) scale(var(--bubble-inv,1))}
+
+  /* ============ 只有「科研论文推送」这一个气泡用浅绿色系 ============
+     （说话气泡 / 今日待办气泡保持原来的白底深色字，一行都不动）
+     绿色取的是主界面的 --leaf #6FB56B 那一系。 */
+  body.msg-arxiv #bubble-inner{
+    background:#F3FBF5;                       /* 淡薄荷底 */
+    border-color:rgba(111,181,107,.45);
+  }
+  body.msg-arxiv #bubble-inner::after{
+    background:#F3FBF5;
+    border-right-color:rgba(111,181,107,.45);
+    border-bottom-color:rgba(111,181,107,.45);
+  }
+  body.msg-arxiv .pb-head{color:#2F7D4E}     /* 那句话用绿字 */
 </style>
 </head>
 <body class="tail-bottom">
