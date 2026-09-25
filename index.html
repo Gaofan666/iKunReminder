@@ -189,8 +189,7 @@
       <h2>⚙ 抓取条件</h2>
       <label class="chk ax-on"><input type="checkbox" id="axEnabled" checked><span>自动抓取</span></label>
     </div>
-    <p class="col-sub">arXiv 上的论文都是英文的，关键词请用<b>英文</b>：例如 graph neural network、
-      transformer、reinforcement learning、cs.LG。多个关键词之间按下面的「匹配模式」组合。</p>
+    <p class="col-sub">请输入英文关键词</p>
 
     <div class="ax-block">
       <div class="ax-label">关注的关键词 <span class="ax-dim" id="axKwCount">0 / 5</span></div>
@@ -229,11 +228,6 @@
       </label>
       <label>一次最多推 <input type="number" id="axCap" min="1" max="20" step="1" value="5"> 篇</label>
       <label>每次向 arXiv 要 <input type="number" id="axMax" min="5" max="100" step="5" value="30"> 条</label>
-    </div>
-
-    <div class="ax-block">
-      <div class="ax-label">当前查询串（程序按上面的条件拼出来的）</div>
-      <pre class="ax-query" id="axQuery">—</pre>
     </div>
   </section>
 </main>

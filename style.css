@@ -274,7 +274,7 @@ body.anim-off *::after{animation-play-state:paused !important}
   padding:1px 8px;border-radius:99px;background:rgba(62,154,168,.12);
   color:#1A6E80;font-weight:600;
 }
-.arxiv-abs{margin-top:7px;font-size:16px;line-height:1.75;color:#2B3A44;word-break:break-word}
+.arxiv-abs{margin-top:6px;font-size:14px;line-height:1.7;color:#2B3A44;word-break:break-word}
 .arxiv-hit{margin-top:6px;font-size:14px;color:#A6522C}
 .arxiv-btns{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .arxiv-btns .btn.sm{font-size:14.5px;padding:6px 12px}

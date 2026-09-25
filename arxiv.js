@@ -118,6 +118,73 @@ function buildArxivQuery(cfg, now) {
 }
 
 /* ------------------------------------------------------------------ 解析 */
+/* ---------------------------------------------------- LaTeX → 能读的纯文本
+   arXiv 的摘要里常夹着行内公式（$v|u := \{ x\in V: ...\}$），原样显示就是一串
+   反斜杠和美元号，根本没法读。这里做「尽力而为」的清洗：
+     · 常见符号换成 Unicode（\in → ∈、\leq → ≤、\alpha → α …）
+     · \mathbb{R} / \text{...} 这层壳去掉，只留里面的内容
+     · 多余的花括号去掉（\{ \} 是集合括号，要留着）
+     · 公式里的空格按习惯收紧（a = b → a=b）
+   认不出来的命令（矩阵、嵌套分式那种）直接去掉，剩下的字还是能看懂个大概 ——
+   比满屏 $ 和 \ 强，但【不追求排版级还原】。 */
+const TEX_SYMBOLS = {
+  /* 关系 / 集合 */
+  in: '∈', notin: '∉', ni: '∋', subset: '⊂', subseteq: '⊆', supset: '⊃', supseteq: '⊇',
+  cup: '∪', cap: '∩', setminus: '∖', emptyset: '∅', varnothing: '∅',
+  le: '≤', leq: '≤', ge: '≥', geq: '≥', ne: '≠', neq: '≠', approx: '≈', equiv: '≡',
+  sim: '∼', simeq: '≃', propto: '∝', ll: '≪', gg: '≫', preceq: '⪯', succeq: '⪰',
+  /* 运算 / 箭头 */
+  times: '×', cdot: '·', pm: '±', mp: '∓', div: '÷', ast: '∗', star: '⋆', circ: '∘',
+  oplus: '⊕', otimes: '⊗', wedge: '∧', vee: '∨', neg: '¬', oplus2: '⊕',
+  to: '→', rightarrow: '→', leftarrow: '←', leftrightarrow: '↔',
+  Rightarrow: '⇒', Leftarrow: '⇐', Leftrightarrow: '⇔', mapsto: '↦', implies: '⟹',
+  /* 大符号 / 其他 */
+  sum: '∑', prod: '∏', int: '∫', oint: '∮', sqrt: '√', partial: '∂', nabla: '∇',
+  infty: '∞', forall: '∀', exists: '∃', nexists: '∄', angle: '∠', perp: '⊥', parallel: '∥',
+  ldots: '…', cdots: '⋯', dots: '…', vdots: '⋮', ddots: '⋱',
+  /* 希腊字母（小写） */
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε',
+  zeta: 'ζ', eta: 'η', theta: 'θ', vartheta: 'ϑ', iota: 'ι', kappa: 'κ', lambda: 'λ',
+  mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ', upsilon: 'υ',
+  phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  /* 希腊字母（大写） */
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π',
+  Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω'
+};
+
+function texToPlain(tex) {
+  let s = String(tex == null ? '' : tex);
+  /* 双反斜杠（换行）→ 空格 */
+  s = s.replace(/\\\\/g, ' ');
+  /* 转义的字面字符 */
+  s = s.replace(/\\&/g, '&').replace(/\\%/g, '%').replace(/\\\$/g, '$')
+    .replace(/\\_/g, '_').replace(/\\#/g, '#');
+  /* 集合括号先藏起来，免得被后面的「去花括号」一起删掉 */
+  s = s.replace(/\\\{/g, '\u0001').replace(/\\\}/g, '\u0002');
+  /* 没有花括号参数的命令：\, \; \! 这种间距 */
+  s = s.replace(/\\[,;:!]/g, ' ').replace(/\\ /g, ' ');
+  /* 命令名：认识的就换符号，不认识（\mathbb \text \bar \frac…）直接去掉，
+     参数里的内容会留在原处（\mathbb{R} → R，\text{for all} → for all） */
+  s = s.replace(/\\([a-zA-Z]+)/g, function (m, name) {
+    return TEX_SYMBOLS[name] != null ? TEX_SYMBOLS[name] : '';
+  });
+  /* 剩下的花括号都只是分组，去掉 */
+  s = s.replace(/[{}]/g, '');
+  s = s.replace(/\u0001/g, '{').replace(/\u0002/g, '}');
+  /* 公式里的空格收紧：a = b → a=b、{ x → {x */
+  s = s.replace(/\s*([{}=+<>|∈∉∋⊂⊆⊃⊇∪∩∖≤≥≠≈≡∼≃∝≪≫→←↔⇒⇐⇔↦±∓×·÷⊕⊗∑∏∫√∂∇∞:^_])\s*/g, '$1');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/* 摘要 / 标题的统一清洗：把 $...$ 公式抽出来转成纯文本，再压掉多余空白 */
+function plainText(s) {
+  let out = String(s == null ? '' : s);
+  out = out.replace(/\$\$([\s\S]*?)\$\$/g, function (m, inner) { return ' ' + texToPlain(inner) + ' '; });
+  out = out.replace(/\$([^$]*?)\$/g, function (m, inner) { return texToPlain(inner); });
+  out = out.replace(/\$/g, '');            // 落单的美元号（公式没配对）直接去掉
+  return out.replace(/\s+/g, ' ').trim();
+}
+
 function decodeEntities(s) {
   return String(s == null ? '' : s)
     .replace(/&lt;/g, '<')
@@ -211,8 +278,10 @@ function parseAtom(xml) {
     const prim = /<arxiv:primary_category\b[^>]*\bterm="([^"]*)"/.exec(block);
     out.entries.push({
       arxivId: arxivId,
-      title: tagText(block, 'title'),
-      summary: tagText(block, 'summary'),
+      /* 标题和摘要过一遍 plainText：公式（$...$）转成能读的纯文本，
+         否则列表里会看到一堆反斜杠和美元号 */
+      title: plainText(tagText(block, 'title')),
+      summary: plainText(tagText(block, 'summary')),
       authors: authors,
       published: tagText(block, 'published'),
       updated: tagText(block, 'updated'),
@@ -285,6 +354,8 @@ module.exports = {
   hasCjk: hasCjk,
   buildArxivQuery: buildArxivQuery,
   parseAtom: parseAtom,
+  plainText: plainText,
+  texToPlain: texToPlain,
   arxivIdFromUrl: arxivIdFromUrl,
   arxivFetch: arxivFetch
 };

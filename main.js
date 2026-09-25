@@ -1343,9 +1343,11 @@ function createWindow() {
               diagLog('arxiv-3-界面初始', await ajs(
                 '(function(){var d=window.kunkunArxivUI._debug();return {' +
                 ' 挂上了吗:d.inited, 列表条数:d.listCount, 状态行:d.status,' +
-                ' 查询串显示出来了:(document.getElementById("axQuery").textContent||"").slice(0,80),' +
+                ' 查询串还在界面上吗:!!document.getElementById("axQuery"),' +
                 ' 关键词卡片数:document.querySelectorAll("#axChips .ax-chip").length,' +
-                ' 字段勾选数:document.querySelectorAll("#axFields input:checked").length};})()'));
+                ' 字段勾选数:document.querySelectorAll("#axFields input:checked").length,' +
+                ' 字段后面还有英文缩写吗:!!document.querySelector("#axFields code"),' +
+                ' 提示文字:(document.querySelector("#pageArxiv .arxiv-col:last-child .col-sub")||{}).textContent};})()'));
 
               /* 开宠物 → 真抓一次（走完整链路：抓取 → 入库 → 去重 → 推送 → 气泡） */
               setPetOn(true);
@@ -1498,6 +1500,20 @@ function createWindow() {
                 ' 清空按钮底: f?Math.round(f.bottom):0, 右列底: r?Math.round(r.bottom):0,' +
                 ' 按钮露全了: !!(f&&r)&&f.bottom<=r.bottom+1,' +
                 ' 页高:p?p.offsetHeight:0};})()'));
+
+              /* 17. 真实抓回来的论文里，公式还残留多少（用户报过摘要里一堆 $ 和反斜杠） */
+              try {
+                const rows = arxivDb.listPapers({ limit: 50 }).items;
+                const dollar = rows.filter(function (p) { return /\$/.test(p.title + p.summary); }).length;
+                const slash = rows.filter(function (p) { return /\\[a-zA-Z]/.test(p.title + p.summary); }).length;
+                diagLog('arxiv-17-公式清洗', {
+                  看了几条: rows.length,
+                  还残留美元号的: dollar,
+                  还残留反斜杠命令的: slash,
+                  样例标题: rows[0] ? String(rows[0].title).slice(0, 70) : '',
+                  样例摘要: rows[0] ? String(rows[0].summary).slice(0, 140) : ''
+                });
+              } catch (e) { diagLog('arxiv-17-公式清洗', { 抛异常了: String((e && e.message) || e) }); }
 
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
