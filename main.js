@@ -1851,6 +1851,74 @@ function createWindow() {
               'return {完成:!!m&&m.done,不再提醒:!!m&&m.remindAt===0};})()', true);
             diagLog('memo-4-到点提醒', { 弹窗: memoFired, 完成后: memoDone });
 
+            /* ⑥ 「我知道了」一次性：点完不标完成、弹完不再提醒（与 ④ 的「完成」对照） */
+            await win.webContents.executeJavaScript(
+              '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
+              'var d=new Date(Date.now()+60*1000);' +
+              'var dv=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());' +
+              'var tv=pad2(d.getHours())+":"+pad2(d.getMinutes());' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】一次性-我知道了";' +
+              'var on=document.getElementById("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+              'document.getElementById("memoDueDate").value=dv;' +
+              'document.getElementById("memoDueTime").value=tv;' +
+              'document.getElementById("memoRemindBefore").value="3600000";' +
+              'document.getElementById("memoRemindEvery").value="0";' +
+              'document.getElementById("memoSave").click();' +
+              'return true;})()', true);
+            await waitM(3500);   // 等 tick 抓到并弹出来
+            const ackOneFired = await win.webContents.executeJavaScript(
+              '(function(){var o=document.getElementById("overlay");' +
+              'return {弹窗开了:!o.hidden,' +
+              ' 我知道了按钮显示:!document.getElementById("alertAck").hidden,' +
+              ' 完成按钮:document.getElementById("alertDone").textContent};})()', true);
+            await win.webContents.executeJavaScript(
+              'document.getElementById("alertAck").click(); true', true);
+            const ackOneAfter = await win.webContents.executeJavaScript(
+              '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】一次性-我知道了";})[0];' +
+              'return {没标完成:!!m&&!m.done,' +
+              ' 不再提醒:!!m&&m.remindAt===0,' +
+              ' 弹窗关了:document.getElementById("overlay").hidden};})()', true);
+            diagLog('memo-6-我知道了-一次性', { 弹窗: ackOneFired, 点完后: ackOneAfter });
+
+            /* ⑦ 「我知道了」周期：不标完成、按设定周期排到下一个提醒点（不打断周期）。
+               新建时 nextMemoRemind 只会排未来的网格点，所以先建好（截止 1 小时后 +
+               提前 1h + 每 1h），再把提醒点改成「1 秒前」并重载页面 → tick 立刻弹。
+               弹完后 advanceMemoRemind 会把提醒点推进到截止时刻（未来）。 */
+            await win.webContents.executeJavaScript(
+              '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
+              'var d=new Date(Date.now()+60*60*1000);' +
+              'var dv=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());' +
+              'var tv=pad2(d.getHours())+":"+pad2(d.getMinutes());' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】周期-我知道了";' +
+              'var on=document.getElementById("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+              'document.getElementById("memoDueDate").value=dv;' +
+              'document.getElementById("memoDueTime").value=tv;' +
+              'document.getElementById("memoRemindBefore").value="3600000";' +
+              'document.getElementById("memoRemindEvery").value="3600000";' +
+              'document.getElementById("memoSave").click();' +
+              'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】周期-我知道了";})[0];' +
+              'if(m)m.remindAt=Date.now()-1000;' +
+              'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));' +
+              'location.reload();return true;})()', true);
+            await waitM(3000);   // 等页面重载 + tick 抓到并弹出来
+            const ackCycleFired = await win.webContents.executeJavaScript(
+              '(function(){var o=document.getElementById("overlay");' +
+              'return {弹窗开了:!o.hidden,' +
+              ' 我知道了按钮显示:!document.getElementById("alertAck").hidden};})()', true);
+            await win.webContents.executeJavaScript(
+              'document.getElementById("alertAck").click(); true', true);
+            const ackCycleAfter = await win.webContents.executeJavaScript(
+              '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】周期-我知道了";})[0];' +
+              'return {没标完成:!!m&&!m.done,' +
+              ' 下一提醒点等于截止:!!m&&m.remindAt===m.dueAt&&m.remindAt>Date.now(),' +
+              ' 弹窗关了:document.getElementById("overlay").hidden};})()', true);
+            diagLog('memo-7-我知道了-周期', { 弹窗: ackCycleFired, 点完后: ackCycleAfter });
+
             /* ⑤ 收尾：清掉自检造的备忘 */
             await win.webContents.executeJavaScript(
               '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +

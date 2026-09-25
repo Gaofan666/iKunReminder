@@ -547,6 +547,7 @@
     alertTitle: $('#alertTitle'),
     alertDesc: $('#alertDesc'),
     alertDone: $('#alertDone'),
+    alertAck: $('#alertAck'),
     alertSnooze: $('#alertSnooze'),
     overlayCard: $('#overlayCard'),
     alertMusic: $('#alertMusic'),
@@ -968,6 +969,7 @@
     el.alertDesc.textContent = info.desc || it.desc || '';
     el.alertDone.textContent = info.done || it.done || '我完成了';
     el.alertSnooze.textContent = '5 分钟后再说';
+    if (el.alertAck) el.alertAck.hidden = true;
     el.overlay.style.setProperty('--accent', it.color || '#4A9BD4');
     el.overlay.hidden = false;
 
@@ -1003,6 +1005,7 @@
     el.alertDone.textContent = '完成 ✓';
     el.alertSnooze.textContent = '10 分钟后再说';
     if (el.alertOneByOne) el.alertOneByOne.hidden = true;
+    if (el.alertAck) el.alertAck.hidden = true;
     el.overlay.style.setProperty('--accent', '#D9A15F');
     el.overlay.hidden = false;
 
@@ -1043,6 +1046,7 @@
     el.alertDone.textContent = '全部完成 (' + list.length + ')';
     el.alertSnooze.textContent = '全部 10 分钟后再说';
     if (el.alertOneByOne) el.alertOneByOne.hidden = false;
+    if (el.alertAck) el.alertAck.hidden = true;
     el.overlay.style.setProperty('--accent', '#D9A15F');
     el.overlay.hidden = false;
     if (el.alertMore) el.alertMore.hidden = true;      // 合并弹窗本身就是"全部"，不用再提示还有几条
@@ -1080,6 +1084,7 @@
     el.alertDone.textContent = '完成 ✓';
     el.alertSnooze.textContent = '10 分钟后再说';
     if (el.alertOneByOne) el.alertOneByOne.hidden = true;
+    if (el.alertAck) el.alertAck.hidden = false;
     el.overlay.style.setProperty('--accent', '#D9A15F');
     el.overlay.hidden = false;
 
@@ -1141,6 +1146,7 @@
     el.floatWords.innerHTML = '';
     if (el.alertMore) el.alertMore.hidden = true;
     if (el.alertOneByOne) el.alertOneByOne.hidden = true;
+    if (el.alertAck) el.alertAck.hidden = true;
     flashTitle(false);
     if (native) native.dismiss();
     setMood('cheer', 2200);
@@ -1238,6 +1244,27 @@
     closeAlert();
     if (it) setCaption('<b>' + it.name + '</b>提醒已延后 5 分钟');
     render();
+  }
+
+  /* 「我知道了」：备忘提醒专用 —— 不标完成、也不打断周期。
+     弹窗弹出时 checkMemoDue 已经调过 advanceMemoRemind，remindAt 已排到下一个
+     周期点（一次性提醒则置 0 = 不再提醒），所以这里只关弹窗、不动数据。 */
+  function ackAlert() {
+    const id = rt.alertId;
+    if (!id) return;
+    if (alertKind === 'memo') {
+      const mm = memoById(id);
+      closeAlert();
+      if (mm) {
+        if (mm.remindAt && mm.remindAt > 0) {
+          setCaption('好的，备忘 <b>' + escapeHtml(mm.text) + '</b> 知道了，按设定周期继续提醒');
+        } else {
+          setCaption('好的，备忘 <b>' + escapeHtml(mm.text) + '</b> 知道了，不再提醒');
+        }
+      }
+      return;
+    }
+    closeAlert();   // 非备忘误触：只关弹窗，不改变任何数据
   }
 
   function setMood(m, ms) {
@@ -4497,6 +4524,7 @@
         setCaption('还有 ' + ids.length + ' 条待办，逐条看吧');
       });
     }
+    if (el.alertAck) el.alertAck.addEventListener('click', ackAlert);
     el.alertClose.addEventListener('click', snoozeAlert);
     el.overlay.addEventListener('click', function (e) { if (e.target === el.overlay) snoozeAlert(); });
 
