@@ -37,10 +37,9 @@
   .pb-head{font-size:16.5px;font-weight:800;letter-spacing:1px;color:#0F2027}
   .pb-mer{font-size:14px;font-weight:600;color:#1A6E80;letter-spacing:.5px}
   .pb-tip{font-size:14px;line-height:1.75;color:#2B3A44;flex:1;overflow:hidden;white-space:pre-line}
-  /* 可点的气泡（科研动态推送）：整块都能点，鼠标变成手型，右下角给个明确提示 */
+  /* 可点的气泡（科研动态推送）：整块都能点，鼠标变成手型。
+     注意：不要加发光/阴影（用户明确说不要气泡四周那圈荧光） */
   body.clickable{cursor:pointer}
-  body.clickable #bubble-inner{border-color:rgba(26,110,128,.55);box-shadow:0 6px 22px rgba(26,110,128,.18)}
-  body.clickable .pb-next{color:#1A6E80}
   .pb-next{
     font-size:13px;font-weight:600;color:#A6522C;letter-spacing:.3px;
     padding-top:7px;border-top:1px solid rgba(74,120,150,.22);

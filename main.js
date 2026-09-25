@@ -4935,10 +4935,14 @@ function showBubble(data) {
 
   const bw = ensureBubbleWin();
   const box0 = bubbleBox();
-  /* 今天有待办 / 科研推送带标题列表时，气泡要长高一点；都没有就一点不占 */
-  const extra = bubbleExtraUnits(data) / box0.k;
-  const box = extra > 0
-    ? { w: box0.w, h: box0.h + extra, gap: box0.gap, pad: box0.pad, k: box0.k }
+  /* 气泡高度（设计单位 = 物理像素）：
+     · 给了 h 就照 h 来（科研推送只有一行字，用不到默认那么高）
+     · 否则 = 默认高度 + 今天待办那一块（每多一条多一行） */
+  const designH = (Number(data && data.h) > 0)
+    ? Number(data.h)
+    : (UI.DESIGN.bubbleH + bubbleExtraUnits(data));
+  const box = (designH / box0.k !== box0.h)
+    ? { w: box0.w, h: designH / box0.k, gap: box0.gap, pad: box0.pad, k: box0.k }
     : box0;
   const disp = talkDisplay(b.x + b.width / 2, b.y + b.height / 2);
   const p = placeBubble(b.x, b.y, b.width, b.height,
@@ -7445,24 +7449,22 @@ function initArxiv() {
 }
 
 /* 抓到新论文 → 让宠物说一句（气泡可点），顺手更新红点。
+   气泡里【只留一句话】：不列论文标题、也不写字样「点一下看详情」——
+   这句话本身就在说「点击查看」。
    宠物没开的时候没有气泡可看，就用系统托盘气泡兜底，别让用户白等。 */
 function notifyArxivPapers(p) {
   const items = (p && p.items) || [];
   arxivLastNotify = { at: Date.now(), count: items.length, items: items, keywords: (p && p.keywords) || [] };
   const kw = ((p && p.keywords) || []).slice(0, 2).join(' / ') || '你关注的方向';
-  const head = '主人，我发现了 ' + items.length + ' 篇关于「' + kw + '」的新论文';
-  const lines = items.slice(0, 3).map(function (x, i) {
-    return (i + 1) + '. ' + arxivShort(x.title, 42);
-  });
-  const tip = lines.join('\n') +
-    (items.length > lines.length ? '\n（还有 ' + (items.length - lines.length) + ' 篇，点开看全部）' : '');
+  const head = '老大，识别到 ' + items.length + ' 篇关于「' + kw + '」的新论文，点击查看';
 
   const payload = {
     head: head,
-    mer: 'arXiv · ' + new Date().toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5) + ' 更新',
-    tip: tip,
-    next: '点一下看详情 / 打开原文 →',
-    extraH: UI.DESIGN.bubbleTodoHead + lines.length * UI.DESIGN.bubbleTodoRow,
+    mer: '',
+    tip: '',
+    next: '',
+    /* 只有一行字（关键词长的时候会折成两行）：气泡按小尺寸显示（设计单位 = 物理像素） */
+    h: 100,
     click: 'arxiv'
   };
   if (petOn) {

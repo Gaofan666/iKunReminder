@@ -57,6 +57,10 @@
     el.tip.textContent = d.tip || '';
     el.next.textContent = d.next || '';
     paintTodos(d.todos);
+    /* 空行直接收掉：不留空盒子、也不留下那条分隔线（科研推送只发一行字） */
+    el.mer.hidden = !el.mer.textContent;
+    el.tip.hidden = !el.tip.textContent;
+    el.next.hidden = !el.next.textContent;
 
     /* 可点气泡（科研动态推送）：整块点哪儿都算「我要看详情」；
        主进程那边同时把这窗的鼠标穿透打开了，不然点不到 */
