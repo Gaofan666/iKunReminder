@@ -145,8 +145,11 @@ function openArxivDb(file) {
     if (!r) return null;
     return {
       arxivId: r.arxiv_id,
-      title: r.title,
-      summary: r.summary || '',
+      /* 标题/摘要在这里再过一遍公式清洗：清洗是入库时做的，但库里可能存着
+         「清洗之前抓进来的」老数据（用户升级后才发现摘要里还是一堆 $ 和反斜杠）——
+         读的时候再洗一次，老数据也就跟着正常了。重复洗是无害的（已经是纯文本时不变）。 */
+      title: ARXIV.plainText(r.title),
+      summary: ARXIV.plainText(r.summary || ''),
       authors: safeArr(r.authors),
       categories: safeArr(r.categories),
       primary: r.primary_cat || '',

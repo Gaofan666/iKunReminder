@@ -331,8 +331,8 @@ body.anim-off *::after{animation-play-state:paused !important}
   white-space:pre-wrap;word-break:break-all;
 }
 /* 列表底下那一条：清空按钮 */
-.arxiv-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
-.arxiv-foot .btn.sm{font-size:15px;padding:6px 13px}
+.ax-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ax-foot .btn.sm{font-size:15px;padding:6px 13px}
 
 .memo-item,.todo-item{
   display:flex;gap:9px;align-items:flex-start;

@@ -1488,15 +1488,17 @@ function createWindow() {
                 diagLog('arxiv-15-按钮撞上自动抓取', { 抛异常了: String((e && e.message) || e) });
               }
 
-              /* 16. 右列（抓取条件）在真实窗口尺寸下到底装不装得下 */
+              /* 16. 右列（抓取条件）在真实窗口尺寸下到底装不装得下，还剩多少空间 */
               diagLog('arxiv-16-右列几何', await ajs(
                 '(function(){var c=document.querySelector("#pageArxiv .arxiv-col:last-child");' +
                 'var foot=document.getElementById("axClearAll");' +
                 'var r=c?c.getBoundingClientRect():null; var f=foot?foot.getBoundingClientRect():null;' +
                 'var p=document.getElementById("pageArxiv");' +
+                'var kids=c?c.children:[]; var last=kids.length?kids[kids.length-1].getBoundingClientRect().bottom:0;' +
                 'return {窗口内高:window.innerHeight, 页面可视高:getComputedStyle(document.documentElement).getPropertyValue("--page-view-h").trim(),' +
                 ' 右列可视:c?c.clientHeight:0, 右列滚动:c?c.scrollHeight:0, 右列边框高:r?Math.round(r.height):0,' +
                 ' 右列要滚动:c?c.scrollHeight>c.clientHeight:null,' +
+                ' 右列还剩空间:r?Math.round(r.bottom-Math.max(last, f?f.bottom:0)):0,' +
                 ' 清空按钮底: f?Math.round(f.bottom):0, 右列底: r?Math.round(r.bottom):0,' +
                 ' 按钮露全了: !!(f&&r)&&f.bottom<=r.bottom+1,' +
                 ' 页高:p?p.offsetHeight:0};})()'));
