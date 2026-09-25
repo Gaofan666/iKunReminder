@@ -1,20 +1,20 @@
 {
-  "version": "3.9.7",
-  "releaseDate": "2026-09-24T03:42:57.613Z",
-  "notes": "## iKunReminder v3.9.7\n\n1. 🐱 **「喵星科学家」改成 5 秒换一张**（待机 / 跳舞 / 欢呼 都是），慢慢悠悠的，不再一闪一闪。\n2. 📋 **今天有待办的话，宠物气泡里会顺便列出来** —— 点桌面上的宠物，气泡里除了时辰和下一次提醒，还会多一块「今日待办 N 条（M 条没做完）」，按时间排好、最多列 3 条，多了就写「…还有 N 条，点『待办』看全部」。没做完的排前面，做完的划掉。\n   今天没有待办时，这块**完全不出现**，气泡和以前一模一样大。\n\n**下载**：`iKunReminder-setup-v3.9.7.exe`（约 112 MB，Windows x64，双击安装）\n",
-  "size": 119532779,
-  "sha512": "DYbT899WzLgrTteDobEfwmFgMB7724VjrXK9aVkDilw4rRBd8uZmOPyHY3ESdG1fxtJ/c32Gtl5AK+Qg3zPEsQ==",
+  "version": "3.9.8",
+  "releaseDate": "2026-09-25T16:09:24.278Z",
+  "notes": "## iKunReminder v3.9.8\n\n1. 🔬 **新增「科研动态」页（arXiv 论文）** —— 顶部多了「🔬 科研」标签：\n   · 填几个**英文关键词**（最多 10 个），选搜索字段（标题/摘要/作者/分类/全字段/评论/期刊引用/报告编号/arXiv ID），选「任一条件」还是「全部条件」，就能抓 arXiv 上最新的论文\n   · 可以设「只看最近几天」「多久抓一次（6/12/24 小时、3 天、每周）」；到点自己在后台抓，不打扰你\n   · 「一次最多取回多少篇」可以设到 200 篇：超过了程序会**自动翻页**分批取（arXiv 一个请求一次给不了那么多），不用你自己再点一次\n   · **删掉的论文不会再被抓回来**（记进忽略名单）；哪天想让它重新出现，右边点「恢复删掉的论文」就行\n   · 抓完宠物会来说一句「老大，识别到 N 篇关于『…』的新论文，点击查看」——**点一下气泡就直接跳到科研页**（这个气泡用浅绿色系）；没开宠物的时候改用系统托盘提示\n   · 列表里点标题用浏览器打开 PDF（或点「🔗 arXiv 页面」看摘要页）；每篇都能收藏、**打 1~5 分（评了就自动算已读）**、删除；按 arXiv ID 去重，同一篇不会反复推\n   · 每篇都能**写评论**：点「💬 评论」在卡片下面展开，写笔记、随手记想法，写过的评论可以再编辑或删除，条数会显示在按钮上\n   · 标题和摘要里**命中的关键词用红色标出**；摘要只显示「含关键词的那几句」，不用自己在大段英文里找\n   · 论文里的数学公式（`$...$`）会自动清理成能读的写法，不再是满屏反斜杠\n   · 「只看当前关键词」开关：换关键词之后列表就只显示这一轮的结果（关掉能看到所有抓过的）\n\n2. 🐱 **新形象「喵星科学家」**（白大褂猫，朋友画的），待机 5 秒换一张，慢慢悠悠的。\n\n3. 🔄 **皮肤刷新按钮** —— 新形象放进 `skins` 文件夹后点一下「🔄 刷新」就能选到，不用再重启软件。\n\n4. 🎵 **提醒音乐可以换成自己的** —— 设置里「提醒音乐」下面多了「选择音乐文件…」，支持 mp3 / wav / ogg / m4a / flac 等，文件读不出来会自动退回自带音乐。\n\n5. 🪟 **宠物气泡不再被别的窗口挡住**（置顶层级提到最高），并且支持点击。\n\n**下载**：`iKunReminder-setup-v3.9.8.exe`（约 114 MB，Windows x64，双击安装）\n",
+  "size": 119563811,
+  "sha512": "HlNrZQxLNZdkrNcT44cceDWkFFnCIgmp55tH/sM9v4kKyWbArt1+6j5HcUyymG0U8HWKQw4es3OKao6z2EU5Rw==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.7/iKunReminder-setup-v3.9.7.exe.part1",
-      "size": 59766390,
-      "sha512": "8Yjw8qbbSN1GV/EeI5Re5LWSNZ3ItHJEE20BIWv2QMI+hYDoMyh93UMADLQt0t8mAthsLjSz4bC/AAknSOarTA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.8/iKunReminder-setup-v3.9.8.exe.part1",
+      "size": 59781906,
+      "sha512": "SiW2o/cj3GmsyHwsIKl/pJb4hSWo6i5sor+krBlj4x1reeOQ2kndBobYRxzyfGSwfTMRzPkQIJwKmwqC2PK1Hg==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.7/iKunReminder-setup-v3.9.7.exe.part2",
-      "size": 59766389,
-      "sha512": "LD4Q0coceqDHBe4/JwQWrrmI9kEmf5ECdaIaGDIwF4841mWEecKfpE+vqwCdFXk+KZ2VIx1EAVyk2SytmNjIDg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.8/iKunReminder-setup-v3.9.8.exe.part2",
+      "size": 59781905,
+      "sha512": "K3SwloJNcVl3P8SYSj6ntcUzA/Mb+3TVDx1Hv0VgMU04wCMAgtNDLmNvXZ8y9+Te7UWZnMiV1cG5oGEq5kgQ8w==",
       "index": 2
     }
   ]
