@@ -101,7 +101,14 @@ function openArxivDb(file) {
     'CREATE INDEX IF NOT EXISTS idx_papers_pushed ON papers(pushed, read);',
     'CREATE TABLE IF NOT EXISTS push_log(',
     '  id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, count INTEGER, note TEXT',
-    ');'
+    ');',
+    /* 评论：一篇论文可以写多条，用户可以编辑/删除 */
+    'CREATE TABLE IF NOT EXISTS comments(',
+    '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+    '  arxiv_id TEXT NOT NULL, text TEXT NOT NULL,',
+    '  created_at INTEGER, updated_at INTEGER',
+    ');',
+    'CREATE INDEX IF NOT EXISTS idx_comments_paper ON comments(arxiv_id);'
   ].join('\n'));
 
   /* 老版本的库没有 score 列（评分是后加的）→ 补上。
@@ -135,7 +142,13 @@ function openArxivDb(file) {
     pruneIds: db.prepare([
       'SELECT arxiv_id FROM papers ORDER BY (published IS NULL), published DESC, fetched_at DESC',
       ' LIMIT -1 OFFSET ?'
-    ].join(''))
+    ].join('')),
+    /* 评论 */
+    addComment: db.prepare('INSERT INTO comments(arxiv_id, text, created_at, updated_at) VALUES (?,?,?,?)'),
+    listComments: db.prepare('SELECT id, text, created_at, updated_at FROM comments WHERE arxiv_id = ? ORDER BY id ASC'),
+    updComment: db.prepare('UPDATE comments SET text = ?, updated_at = ? WHERE id = ?'),
+    delComment: db.prepare('DELETE FROM comments WHERE id = ?'),
+    commentCount: db.prepare('SELECT COUNT(*) AS n FROM comments WHERE arxiv_id = ?')
   };
 
   function getConfig() {
@@ -178,7 +191,8 @@ function openArxivDb(file) {
       pushedAt: r.pushed_at || 0,
       read: !!r.read,
       star: !!r.star,
-      score: Math.max(0, Math.min(5, Math.round(Number(r.score) || 0)))
+      score: Math.max(0, Math.min(5, Math.round(Number(r.score) || 0))),
+      comments: Number(r.comment_count) || 0
     };
   }
   function safeArr(s) {
@@ -233,7 +247,8 @@ function likeEscape(s) {
     /* 注意：node:sqlite 的语句方法必须带着自己的 this 调用，
        所以这里用展开调用（不能 apply(null, …)，那样会 Illegal invocation） */
     const rows = db.prepare(
-      'SELECT * FROM papers ' + where +
+      'SELECT papers.*, (SELECT COUNT(*) FROM comments c WHERE c.arxiv_id = papers.arxiv_id) AS comment_count' +
+      ' FROM papers ' + where +
       ' ORDER BY (published IS NULL), published DESC, fetched_at DESC LIMIT ? OFFSET ?'
     ).all(...args, limit, offset);
     const cnt = db.prepare('SELECT COUNT(*) AS n FROM papers ' + where).get(...args);
@@ -249,6 +264,33 @@ function likeEscape(s) {
   function markRead(id) { const r = q.markRead.run(id); return !!(r && r.changes); }
   function markAllRead() { const r = q.markAllRead.run(); return (r && r.changes) || 0; }
   function setStar(id, on) { const r = q.star.run(on ? 1 : 0, id); return !!(r && r.changes); }
+  /* 评论：写 / 读 / 改 / 删（一篇可以多条） */
+  function addComment(arxivId, text) {
+    const t = String(text == null ? '' : text).trim().slice(0, 2000);
+    if (!arxivId || !t) return null;
+    const now = Date.now();
+    const r = q.addComment.run(String(arxivId), t, now, now);
+    return { id: Number(r.lastInsertRowid), arxivId: String(arxivId), text: t, createdAt: now, updatedAt: now };
+  }
+  function listComments(arxivId) {
+    return q.listComments.all(String(arxivId)).map(function (c) {
+      return { id: c.id, text: c.text, createdAt: c.created_at || 0, updatedAt: c.updated_at || 0 };
+    });
+  }
+  function updateComment(id, text) {
+    const t = String(text == null ? '' : text).trim().slice(0, 2000);
+    if (!t) return false;
+    const r = q.updComment.run(t, Date.now(), Math.round(Number(id) || 0));
+    return !!(r && r.changes);
+  }
+  function deleteComment(id) {
+    const r = q.delComment.run(Math.round(Number(id) || 0));
+    return !!(r && r.changes);
+  }
+  function commentCount(arxivId) {
+    const r = q.commentCount.get(String(arxivId));
+    return (r && r.n) || 0;
+  }
   /* 评分（1~5）：评了就默认已读；传 0 表示取消评分 */
   function setScore(id, n) {
     const v = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
@@ -292,6 +334,11 @@ function likeEscape(s) {
     markAllRead: markAllRead,
     setStar: setStar,
     setScore: setScore,
+    addComment: addComment,
+    listComments: listComments,
+    updateComment: updateComment,
+    deleteComment: deleteComment,
+    commentCount: commentCount,
     removePaper: removePaper,
     clearPapers: clearPapers,
     unreadCount: unreadCount,

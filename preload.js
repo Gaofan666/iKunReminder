@@ -132,6 +132,11 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   arxivStar: (id, on) => ipcRenderer.invoke('arxiv-star', String(id || ''), !!on),
   arxivScore: (id, n) => ipcRenderer.invoke('arxiv-score', String(id || ''), Number(n) || 0),
   arxivRemove: (id) => ipcRenderer.invoke('arxiv-remove', String(id || '')),
+  /* 评论：读 / 写 / 改 / 删 */
+  arxivComments: (id) => ipcRenderer.invoke('arxiv-comments', String(id || '')),
+  arxivCommentAdd: (id, text) => ipcRenderer.invoke('arxiv-comment-add', String(id || ''), String(text || '')),
+  arxivCommentUpdate: (cid, text) => ipcRenderer.invoke('arxiv-comment-update', cid, String(text || '')),
+  arxivCommentDelete: (cid) => ipcRenderer.invoke('arxiv-comment-delete', cid),
   arxivClear: () => ipcRenderer.invoke('arxiv-clear'),
   arxivOpen: (url) => ipcRenderer.invoke('arxiv-open', String(url || '')),
   onArxivState: (cb) => ipcRenderer.on('arxiv-state', (e, s) => cb(s)),

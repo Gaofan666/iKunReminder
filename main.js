@@ -1618,6 +1618,55 @@ function createWindow() {
                   : { 气泡: '没建出来' });
               } catch (e) { diagLog('arxiv-21-气泡说总数', { 抛异常了: String((e && e.message) || e) }); }
 
+              /* 22. 评论：按钮顺序、写一条、编辑、删除（用户要的「评论」功能） */
+              try {
+                await ajs('window.confirm=function(){return true;};' +
+                  'document.getElementById("tabArxiv").click();window.kunkunArxivUI.refresh();true;');
+                await aw(1000);
+                const order = await ajs(
+                  '(function(){var f=document.querySelector("#arxivList .arxiv-item");if(!f)return null;' +
+                  'var bs=f.querySelectorAll(".arxiv-btns > *");var out=[];' +
+                  'for(var i=0;i<bs.length;i++){out.push(bs[i].className.indexOf("ax-stars")>=0?"⭐评分":bs[i].textContent.trim());}' +
+                  'return {按钮顺序:out, 还有打开PDF按钮吗:[].some.call(bs,function(b){return b.textContent.indexOf("PDF")>=0;})};})()');
+                await ajs('(function(){var f=document.querySelector("#arxivList .arxiv-item");' +
+                  'var b=f.querySelector(".ax-cm-btn");if(b)b.click();return true;})()');
+                await aw(700);
+                const opened = await ajs(
+                  '(function(){var a=document.querySelector("#arxivList .ax-comments");' +
+                  'return {评论区长出来了吗:!!a, 有输入框吗:!!(a&&a.querySelector("textarea")),' +
+                  ' 空提示:(a&&a.querySelector(".ax-cm-empty"))?a.querySelector(".ax-cm-empty").textContent:null};})()');
+                await ajs('(function(){var a=document.querySelector("#arxivList .ax-comments");' +
+                  'if(!a)return false;var t=a.querySelector("textarea");t.value="【自检】这条评论是自动写的";' +
+                  'a.querySelector(".ax-cm-bar .btn").click();return true;})()');
+                await aw(1000);
+                const added = await ajs(
+                  '(function(){var f=document.querySelector("#arxivList .arxiv-item");var a=f.querySelector(".ax-comments");' +
+                  'var items=a?a.querySelectorAll(".ax-cm-item"):[];' +
+                  'return {条数:items.length, 第一条内容:items.length?items[0].querySelector(".ax-cm-text").textContent:null,' +
+                  ' 按钮文字:f.querySelector(".ax-cm-btn")?f.querySelector(".ax-cm-btn").textContent:null,' +
+                  ' 有编辑删除吗:items.length?items[0].textContent.indexOf("编辑")>=0&&items[0].textContent.indexOf("删除")>=0:null};})()');
+                /* 编辑 */
+                await ajs('(function(){var it=document.querySelector("#arxivList .ax-cm-item");' +
+                  'if(!it)return false;var bs=it.querySelectorAll(".ax-cm-acts .btn");if(!bs.length)return false;bs[0].click();return true;})()');
+                await aw(500);
+                await ajs('(function(){var it=document.querySelector("#arxivList .ax-cm-item");' +
+                  'var t=it?it.querySelector("textarea"):null;if(!t)return false;t.value="【自检】改过之后的评论";' +
+                  'it.querySelector(".ax-cm-bar .btn").click();return true;})()');
+                await aw(1000);
+                /* 删除 */
+                const edited = await ajs('(function(){var it=document.querySelector("#arxivList .ax-cm-item");' +
+                  'var t=it?it.querySelector(".ax-cm-text"):null;return {改完的文字:t?t.textContent:null};})()');
+                await ajs('(function(){var it=document.querySelector("#arxivList .ax-cm-item");' +
+                  'var bs=it?it.querySelectorAll(".ax-cm-acts .btn"):[];if(bs.length<2)return false;bs[1].click();return true;})()');
+                await aw(1000);
+                const deleted = await ajs(
+                  '(function(){var f=document.querySelector("#arxivList .arxiv-item");var a=f.querySelector(".ax-comments");' +
+                  'return {剩余条数:a?a.querySelectorAll(".ax-cm-item").length:0,' +
+                  ' 空提示:(a&&a.querySelector(".ax-cm-empty"))?a.querySelector(".ax-cm-empty").textContent:null,' +
+                  ' 按钮文字:f.querySelector(".ax-cm-btn")?f.querySelector(".ax-cm-btn").textContent:null};})()');
+                diagLog('arxiv-22-评论', { 按钮: order, 展开: opened, 发表后: added, 编辑后: edited, 删除后: deleted });
+              } catch (e) { diagLog('arxiv-22-评论', { 抛异常了: String((e && e.message) || e) }); }
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];
@@ -7429,6 +7478,27 @@ ipcMain.handle('arxiv-score', (e, id, n) => {
   arxivPushState();
   return r;
 });
+/* 评论：一篇论文可以写多条，能改能删 */
+ipcMain.handle('arxiv-comments', (e, id) => (arxivDb ? arxivDb.listComments(String(id || '')) : []));
+ipcMain.handle('arxiv-comment-add', (e, id, text) => {
+  if (!arxivDb) return null;
+  const c = arxivDb.addComment(String(id || ''), text);
+  arxivPushState();
+  return c;
+});
+ipcMain.handle('arxiv-comment-update', (e, cid, text) => {
+  if (!arxivDb) return false;
+  const r = arxivDb.updateComment(cid, text);
+  arxivPushState();
+  return r;
+});
+ipcMain.handle('arxiv-comment-delete', (e, cid) => {
+  if (!arxivDb) return false;
+  const r = arxivDb.deleteComment(cid);
+  arxivPushState();
+  return r;
+});
+
 ipcMain.handle('arxiv-remove', (e, id) => {
   if (!arxivDb) return false;
   const r = arxivDb.removePaper(String(id || ''));

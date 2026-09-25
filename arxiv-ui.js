@@ -21,6 +21,7 @@
   var listData = { items: [], total: 0 };
   var filter = 'all';
   var onlyKw = true;                   // 列表默认只看「命中当前关键词」的论文
+  var openComments = {};               // 哪些论文的评论区是展开的（arxivId → true）
   var inited = false;
   var busyLocal = false;               // 本地「刚点了抓取」的标记，等状态回来清掉
   var lastMsg = '';
@@ -378,17 +379,145 @@
 
     var btns = document.createElement('div');
     btns.className = 'arxiv-btns';
-    btns.appendChild(mkBtn('📄 打开 PDF', 'primary', function () { openPaper(p); }));
+    /* 顺序：评论 / arXiv 页面 / 收藏 / 删除，评分放最右边（撑开的）
+       打开 PDF 改成点标题了，所以这里不再重复一个 PDF 按钮 */
+    var cmBtn = mkBtn(cmtLabel(p), '', function () {
+      if (openComments[p.arxivId]) delete openComments[p.arxivId];
+      else openComments[p.arxivId] = true;
+      refresh();
+    });
+    cmBtn.classList.add('ax-cm-btn');
+    btns.appendChild(cmBtn);
     btns.appendChild(mkBtn('🔗 arXiv 页面', '', function () { openUrl(p.absUrl); }));
     btns.appendChild(mkBtn(p.star ? '★ 已收藏' : '☆ 收藏', '', function () {
       if (native.arxivStar) native.arxivStar(p.arxivId, !p.star).then(function () { p.star = !p.star; refresh(); });
     }));
-    btns.appendChild(scoreNode(p));
-    btns.appendChild(mkBtn('删掉这条', '', function () {
+    btns.appendChild(mkBtn('删除', '', function () {
       if (native.arxivRemove) native.arxivRemove(p.arxivId).then(refresh);
     }));
+    btns.appendChild(scoreNode(p));          // 最右边
     it.appendChild(btns);
+
+    /* 评论区（展开时才有）：新评论写在下面前，已有评论列在最下面 */
+    if (openComments[p.arxivId]) it.appendChild(commentArea(p, cmBtn));
     return it;
+  }
+
+  function cmtLabel(p) {
+    var n = Number(p.comments) || 0;
+    return '💬 评论' + (n > 0 ? ' ' + n : '');
+  }
+
+  /* ---------------------------------------------------------------- 评论区 */
+  function commentArea(p, cmBtn) {
+    const box = document.createElement('div');
+    box.className = 'ax-comments';
+
+    /* 新的写在最上面（免得评论多了要往下滚），已有评论在下面 */
+    const editor = document.createElement('div');
+    editor.className = 'ax-cm-editor';
+    const ta = document.createElement('textarea');
+    ta.className = 'ax-cm-input';
+    ta.rows = 2;
+    ta.maxLength = 2000;
+    ta.placeholder = '写点笔记 / 想法…（回车换行，写完点「发表」）';
+    const bar = document.createElement('div');
+    bar.className = 'ax-cm-bar';
+    const send = mkBtn('发表', 'primary', function () {
+      const text = String(ta.value || '').trim();
+      if (!text) { hint.textContent = '先写点内容吧'; return; }
+      send.disabled = true;
+      native.arxivCommentAdd(p.arxivId, text).then(function () {
+        ta.value = '';
+        hint.textContent = '';
+        p.comments = (Number(p.comments) || 0) + 1;
+        reload();
+      }).catch(function () { send.disabled = false; hint.textContent = '保存失败，再试一次'; });
+    });
+    const hint = document.createElement('span');
+    hint.className = 'ax-hint';
+    bar.appendChild(send);
+    bar.appendChild(hint);
+    editor.appendChild(ta);
+    editor.appendChild(bar);
+    box.appendChild(editor);
+
+    const list = document.createElement('div');
+    list.className = 'ax-cm-list';
+    box.appendChild(list);
+
+    function reload() {
+      if (!native.arxivComments) return;
+      native.arxivComments(p.arxivId).then(function (items) {
+        list.textContent = '';
+        p.comments = (items || []).length;
+        if (!items || !items.length) {
+          const e = document.createElement('div');
+          e.className = 'ax-cm-empty';
+          e.textContent = '还没有评论';
+          list.appendChild(e);
+        }
+        (items || []).forEach(function (c) { list.appendChild(commentNode(p, c, reload)); });
+        /* 顺便把这条论文的按钮文字（💬 评论 N）刷新一下 */
+        if (cmBtn) cmBtn.textContent = cmtLabel(p);
+      });
+    }
+    reload();
+    setTimeout(function () { try { ta.focus(); } catch (e) { } }, 30);
+    return box;
+  }
+
+  /* 单条评论：文字 + 时间 + 编辑 / 删除 */
+  function commentNode(p, c, reload) {
+    const row = document.createElement('div');
+    row.className = 'ax-cm-item';
+    const txt = document.createElement('div');
+    txt.className = 'ax-cm-text';
+    txt.textContent = c.text;
+    const meta = document.createElement('div');
+    meta.className = 'ax-cm-meta';
+    const when = document.createElement('span');
+    when.textContent = fmtWhen(new Date(c.createdAt).toISOString()) +
+      (c.updatedAt && c.updatedAt !== c.createdAt ? '（改过）' : '');
+    meta.appendChild(when);
+    const acts = document.createElement('span');
+    acts.className = 'ax-cm-acts';
+    const editBtn = mkBtn('编辑', '', function () { startEdit(); });
+    const delBtn = mkBtn('删除', '', function () {
+      if (!window.confirm('删掉这条评论？')) return;
+      native.arxivCommentDelete(c.id).then(function () {
+        p.comments = Math.max(0, (Number(p.comments) || 1) - 1);
+        reload();
+      });
+    });
+    acts.appendChild(editBtn);
+    acts.appendChild(delBtn);
+    meta.appendChild(acts);
+    row.appendChild(txt);
+    row.appendChild(meta);
+
+    function startEdit() {
+      row.textContent = '';
+      const ta = document.createElement('textarea');
+      ta.className = 'ax-cm-input';
+      ta.rows = 2;
+      ta.maxLength = 2000;
+      ta.value = c.text;
+      const bar = document.createElement('div');
+      bar.className = 'ax-cm-bar';
+      const save = mkBtn('保存', 'primary', function () {
+        const text = String(ta.value || '').trim();
+        if (!text) return;
+        native.arxivCommentUpdate(c.id, text).then(function () { reload(); });
+      });
+      const cancel = mkBtn('取消', '', function () { reload(); });
+      bar.appendChild(save);
+      bar.appendChild(cancel);
+      row.appendChild(ta);
+      row.appendChild(bar);
+      try { ta.focus(); } catch (e) { }
+    }
+    return row;
   }
 
   /* 评分：5 颗星，点第几颗就是几分；评了就当已读（主进程那边一起写） */

@@ -292,6 +292,34 @@ mark.ax-hit{
 .ax-stars .ax-score-txt{font-size:12.5px;color:var(--dim);margin-left:4px}
 .arxiv-btns{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;align-items:center}
 .arxiv-btns .btn.sm{font-size:14px;padding:5px 10px}
+/* 评分推到最右边 */
+.arxiv-btns .ax-stars{margin-left:auto}
+/* ---------- 评论区（点「评论」展开，显示在卡片最下面） ---------- */
+.ax-comments{
+  margin-top:9px;padding-top:9px;border-top:1px dashed rgba(74,120,150,.28);
+  display:flex;flex-direction:column;gap:8px;
+}
+.ax-cm-editor{display:flex;flex-direction:column;gap:6px}
+.ax-cm-input{
+  width:100%;box-sizing:border-box;resize:vertical;
+  font-family:inherit;font-size:14.5px;line-height:1.6;color:var(--text);
+  padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:#fff;outline:none;
+}
+.ax-cm-input:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.15)}
+.ax-cm-bar{display:flex;gap:8px;align-items:center}
+.ax-cm-list{display:flex;flex-direction:column;gap:7px}
+.ax-cm-empty{font-size:13px;color:var(--dim)}
+.ax-cm-item{
+  padding:8px 10px;border-radius:10px;background:rgba(62,154,168,.06);
+  border:1px solid rgba(62,154,168,.16);
+}
+.ax-cm-text{font-size:14.5px;line-height:1.7;color:#2B3A44;white-space:pre-wrap;word-break:break-word}
+.ax-cm-meta{
+  margin-top:4px;display:flex;gap:8px;align-items:center;justify-content:space-between;
+  font-size:12.5px;color:var(--dim);flex-wrap:wrap;
+}
+.ax-cm-acts{display:flex;gap:6px}
+.ax-cm-acts .btn.sm,.ax-cm-bar .btn.sm{font-size:13px;padding:3px 9px}
 .arxiv-empty{
   padding:26px 10px;text-align:center;font-size:15px;line-height:1.9;color:var(--dim);
   white-space:pre-line;
