@@ -1424,6 +1424,24 @@ function createWindow() {
                 again.close();
               } catch (e) { diagLog('arxiv-11-持久化失败', { message: String((e && e.message) || e) }); }
 
+              /* 宠物没开的时候：没有气泡可弹，要退化成系统托盘气泡，而且不能抛异常 */
+              try {
+                setPetOn(false);
+                await aw(600);
+                notifyArxivPapers({
+                  count: 1, freshCount: 1, keywords: ['graph neural network'],
+                  items: [{ title: '【自检】没开宠物时的兜底通知', pdfUrl: '', absUrl: '' }]
+                });
+                await aw(500);
+                diagLog('arxiv-12-没开宠物时', {
+                  气泡开着: talkOpen, 没抛异常: true, 未读: arxivSvc.state().unread
+                });
+              } catch (e) {
+                diagLog('arxiv-12-没开宠物时', { 抛异常了: String((e && e.message) || e) });
+              }
+              setPetOn(true);
+              await aw(500);
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];
