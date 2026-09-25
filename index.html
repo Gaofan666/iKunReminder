@@ -9,6 +9,7 @@
 <script src="ui-scale.js"></script>
 <script src="pet-draw.js"></script>
 <script src="skin-picker.js"></script>
+<script src="arxiv-ui.js"></script>
 </head>
 <body>
 
@@ -18,12 +19,13 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v3.9.7</span>
+    <span class="tb-ver" id="tbVer">v3.9.8</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
     <button class="tab-btn" data-tab="todo" id="tabTodo">📝 待办<em class="tab-badge" id="todoBadge" hidden></em></button>
     <button class="tab-btn" data-tab="diary" id="tabDiary">📖 日记</button>
+    <button class="tab-btn" data-tab="arxiv" id="tabArxiv">🔬 科研<em class="tab-badge" id="arxivBadge" hidden></em></button>
     <button class="tab-btn" data-tab="settings" id="tabSettings">⚙ 设置</button>
   </nav>
   <div class="tb-right">
@@ -151,6 +153,88 @@
     </div>
     <p class="col-sub">设好日期和时间，到点会自动跳出来提醒你（过期未完成的，下次打开程序时补提醒一次）。</p>
     <div class="todo-list" id="todoList"></div>
+  </section>
+</main>
+
+<!-- ===================== 科研动态页：左论文列表 / 右抓取条件 =====================
+     数据源只用 arXiv 官方 API（免费、不要密钥）。抓取和存库都在主进程里异步跑，
+     这一页只负责显示和改条件，抓的时候界面照样能用。
+     点标题 → 用默认浏览器打开 PDF（只放行 arxiv.org 的链接）。 -->
+<main class="layout page" id="pageArxiv" hidden>
+  <section class="card arxiv-col">
+    <div class="col-head">
+      <h2>🔬 科研动态</h2>
+      <div class="arxiv-acts">
+        <button class="btn sm primary" id="btnArxivFetch">↻ 立即抓取</button>
+        <button class="btn sm" id="btnArxivReadAll" title="把列表里的未读全标成已读">全部已读</button>
+      </div>
+    </div>
+    <p class="col-sub" id="arxivStatus">正在读状态…</p>
+    <div class="arxiv-filter" id="arxivFilter">
+      <button class="ax-tab on" data-af="all">全部</button>
+      <button class="ax-tab" data-af="unread">未读</button>
+      <button class="ax-tab" data-af="star">收藏</button>
+      <button class="ax-tab" data-af="new">还没推的</button>
+    </div>
+    <div class="arxiv-list" id="arxivList"></div>
+  </section>
+
+  <section class="card arxiv-col">
+    <div class="col-head">
+      <h2>⚙ 抓取条件</h2>
+      <label class="chk ax-on"><input type="checkbox" id="axEnabled" checked><span>自动抓取</span></label>
+    </div>
+    <p class="col-sub">arXiv 是英文库（美国），关键词请用<b>英文</b>：例如 graph neural network、
+      transformer、reinforcement learning、cs.LG。多个关键词之间按下面的「匹配模式」组合。</p>
+
+    <div class="ax-block">
+      <div class="ax-label">关注的关键词 <span class="ax-dim" id="axKwCount">0 / 5</span></div>
+      <div class="ax-chips" id="axChips"></div>
+      <div class="ax-add">
+        <input type="text" id="axKwInput" maxlength="60" placeholder="英文关键词，回车添加">
+        <button class="btn sm primary" id="axKwAdd">添加</button>
+      </div>
+      <p class="ax-hint" id="axKwHint"></p>
+    </div>
+
+    <div class="ax-block">
+      <div class="ax-label">搜索字段（可多选，对应 arXiv 的元数据前缀）</div>
+      <div class="ax-fields" id="axFields"></div>
+    </div>
+
+    <div class="ax-block">
+      <div class="ax-label">匹配模式</div>
+      <div class="seg ax-seg" id="axMatch">
+        <button data-m="any">任一条件</button>
+        <button data-m="all">全部条件</button>
+      </div>
+      <p class="ax-hint" id="axMatchHint"></p>
+    </div>
+
+    <div class="ax-block ax-nums">
+      <label>只看最近 <input type="number" id="axDays" min="0" max="365" step="1" value="7"> 天提交的</label>
+      <label>抓取频率
+        <select id="axInterval">
+          <option value="6">每 6 小时</option>
+          <option value="12">每 12 小时</option>
+          <option value="24">每天</option>
+          <option value="72">每 3 天</option>
+          <option value="168">每周</option>
+        </select>
+      </label>
+      <label>一次最多推 <input type="number" id="axCap" min="1" max="20" step="1" value="5"> 篇</label>
+      <label>每次向 arXiv 要 <input type="number" id="axMax" min="5" max="100" step="5" value="30"> 条</label>
+    </div>
+
+    <div class="ax-block">
+      <div class="ax-label">当前查询串（程序按上面的条件拼出来的）</div>
+      <pre class="ax-query" id="axQuery">—</pre>
+    </div>
+
+    <div class="ax-block ax-foot">
+      <button class="btn sm" id="axClearAll" title="只清空本地列表，不影响设置">清空已抓到的论文</button>
+      <span class="ax-hint" id="axFootHint"></span>
+    </div>
   </section>
 </main>
 

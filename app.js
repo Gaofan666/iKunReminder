@@ -20,6 +20,8 @@
   const ikArm = PETDRAW.ikArm;
   /* 皮肤「取列表 / 载入」要调主进程桥，放在 skin-picker.js */
   const SKINPICK = window.kunkunSkinPicker;
+  /* 科研动态页的界面逻辑放在 arxiv-ui.js（抓取/存库在主进程里） */
+  const ARXIVUI = window.kunkunArxivUI;
 
   /* ------------------------------------------------------------------ 常量 */
   const RING_C = 2 * Math.PI * 52;          // 进度环周长
@@ -2504,7 +2506,10 @@
   }
 
   /* ------------------------------------------------------------ 标签页 */
-  const TAB_PAGES = { home: '#app', todo: '#pageTodo', diary: '#pageDiary', settings: '#pageSettings' };
+  const TAB_PAGES = {
+    home: '#app', todo: '#pageTodo', diary: '#pageDiary',
+    arxiv: '#pageArxiv', settings: '#pageSettings'
+  };
 
   function openTab(name) {
     if (!TAB_PAGES[name]) name = 'home';
@@ -2517,6 +2522,8 @@
       if (btn) btn.classList.toggle('on', key === name);
     });
     if (name !== 'home') { renderMemos(); renderTodos(); }
+    /* 进科研动态页：拉一次最新列表（顺手把标签上的未读红点刷新） */
+    if (name === 'arxiv' && ARXIVUI) ARXIVUI.open();
     if (name === 'diary') {
       renderDiary();
       updateDiaryQuote();          // 每次进日记页换一句古诗词
@@ -2610,7 +2617,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v3.9.7 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v3.9.8 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -4351,6 +4358,7 @@
     if (native && native.onShowTodo) native.onShowTodo(function () { showWindowSelf(); openTab('todo'); });
     if (native && native.onShowDiary) native.onShowDiary(function () { showWindowSelf(); openTab('diary'); });
     if (native && native.onShowSettings) native.onShowSettings(function () { showWindowSelf(); openTab('settings'); });
+    if (native && native.onShowArxiv) native.onShowArxiv(function () { showWindowSelf(); openTab('arxiv'); });
     /* 屏幕缩放变化（换屏 / 改系统缩放）：主进程已经把窗口尺寸改好了，
        这里只需要按新的 k 重排内容 */
     uiScale.attach(function () { fitApp(); });
@@ -4359,8 +4367,7 @@
     });
 
     /* 备忘 / 待办 / 日记 / 设置 / 桌面宠物 / 软件更新（更新只挂设置页，主界面与待办页不动） */
-    bindTodoPage();
-    bindDiaryPage();
+    bindTodoPage();    bindDiaryPage();
     bindSettings();
     bindDesktopPet();
     bindUpdate();
@@ -4402,6 +4409,11 @@
 
     /* 皮肤：列出可选形象，并载入上次选的那个 */
     initSkin();
+
+    /* 科研动态：界面先挂好，状态由主进程推过来（没起来就静默降级） */
+    try {
+      if (ARXIVUI) ARXIVUI.init(native, {});
+    } catch (e) { /* 科研动态挂了也不能连累主界面 */ }
 
     bindAll();
     renderPanels();

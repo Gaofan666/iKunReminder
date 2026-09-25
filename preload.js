@@ -119,5 +119,20 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onDisplayInfo: (cb) => ipcRenderer.on('display-info', (e, d) => cb(d)),
 
   /* 页面 → 主进程：同步运行状态与提醒列表，用于刷新托盘菜单 */
-  syncState: (state) => ipcRenderer.send('state', state)
+  syncState: (state) => ipcRenderer.send('state', state),
+
+  /* ---------------------------------------------------------- 科研动态（arXiv）
+     抓取、解析、存库全在主进程；页面只拿状态、列表，点按钮触发抓取。 */
+  arxivState: () => ipcRenderer.invoke('arxiv-state'),
+  arxivSetConfig: (patch) => ipcRenderer.invoke('arxiv-set-config', patch || {}),
+  arxivFetchNow: () => ipcRenderer.invoke('arxiv-fetch-now'),
+  arxivList: (opts) => ipcRenderer.invoke('arxiv-list', opts || {}),
+  arxivMarkRead: (id) => ipcRenderer.invoke('arxiv-mark-read', String(id || '')),
+  arxivMarkAllRead: () => ipcRenderer.invoke('arxiv-mark-all-read'),
+  arxivStar: (id, on) => ipcRenderer.invoke('arxiv-star', String(id || ''), !!on),
+  arxivRemove: (id) => ipcRenderer.invoke('arxiv-remove', String(id || '')),
+  arxivClear: () => ipcRenderer.invoke('arxiv-clear'),
+  arxivOpen: (url) => ipcRenderer.invoke('arxiv-open', String(url || '')),
+  onArxivState: (cb) => ipcRenderer.on('arxiv-state', (e, s) => cb(s)),
+  onShowArxiv: (cb) => ipcRenderer.on('show-arxiv', () => cb())
 });

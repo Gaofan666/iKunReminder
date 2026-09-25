@@ -47,6 +47,9 @@
     }
   }
 
+  /* 这个气泡点下去要干什么（'' = 不可点，鼠标整块穿透过去） */
+  var bodyClick = '';
+
   b.onData(function (d) {
     if (!d) return;
     el.head.textContent = d.head || '';
@@ -54,6 +57,11 @@
     el.tip.textContent = d.tip || '';
     el.next.textContent = d.next || '';
     paintTodos(d.todos);
+
+    /* 可点气泡（科研动态推送）：整块点哪儿都算「我要看详情」；
+       主进程那边同时把这窗的鼠标穿透打开了，不然点不到 */
+    bodyClick = d.click ? String(d.click) : '';
+    document.body.classList.toggle('clickable', !!bodyClick);
 
     var root = document.documentElement;
     var scale = Number(d.scale) > 0 ? Number(d.scale) : 1;
@@ -67,6 +75,14 @@
     var safe = scale > 0.05 ? scale : 1;
     root.style.setProperty('--bubble-inv', String(1 / safe));
     root.style.setProperty('--tail', ((Number(d.tailPos) || 36) / safe) + 'px');
-    document.body.className = 'tail-' + (d.tail || 'bottom');
+    /* ⚠️ 这里整串重写 className，所以 clickable 必须一起带上，
+       不然上面刚加的可点样式会被这行抹掉 */
+    document.body.className = 'tail-' + (d.tail || 'bottom') + (bodyClick ? ' clickable' : '');
+  });
+
+  /* 点气泡 = 告诉主进程「用户要看详情」（主进程会把主界面叫出来并切到科研动态页） */
+  document.addEventListener('click', function () {
+    if (!bodyClick) return;                 // 不可点的气泡根本收不到鼠标事件，这里只是兜底
+    try { b.clicked(); } catch (e) { }
   });
 })();

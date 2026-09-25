@@ -61,6 +61,10 @@ const DIAG = (function () {
     if (a === '--diag-pet') out.pet = true;
     /* --diag-bubble：点宠物看气泡，验证「今日待办」那一块（有/没有两种） */
     if (a === '--diag-bubble') out.bubble = true;
+    /* --diag-arxiv：科研动态端到端自检（真抓一次 arXiv + 界面 + 可点气泡） */
+    if (a === '--diag-arxiv') out.arxiv = true;
+    /* --diag-arxiv-hold：自检时把程序留着不退出（配合外面用真鼠标点气泡） */
+    if (a === '--diag-arxiv-hold') { out.arxiv = true; out.arxivHold = true; }
     /* --diag-petskin=<id>：自检时指定桌面宠物用哪个形象（用来肉眼确认某个皮肤画得对不对） */
     m = /^--diag-petskin=(.+)$/.exec(a);
     if (m) out.petskin = m[1];
@@ -1299,6 +1303,155 @@ function createWindow() {
             } else if (diagBubbleStage === 2) {
               await askBubble();
               diagLog('bubble-2-今天没待办', await bubbleInfo('无'));
+            }
+          }
+          /* ============ 科研动态（--diag-arxiv） ============
+             端到端：真去 arXiv 抓一次 → 存库去重 → 宠物气泡推送（可点）→ 界面列表。
+             抓的是真网络，所以这一步比较慢（两三秒）。 */
+          if (DIAG.arxiv) {
+            const aw = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const ajs = function (code) { return win.webContents.executeJavaScript(code, true); };
+            const shortSt = function (s) {
+              if (!s) return null;
+              return {
+                关键词: s.config.keywords, 字段: s.config.fields,
+                模式: s.config.matchAny ? '任一条件' : '全部条件',
+                天数: s.config.days, 间隔小时: s.config.intervalH,
+                每次上限: s.config.pushCap, 未读: s.unread, 库里共: s.total,
+                下次抓取: s.nextAt > 0 ? '已排期' : '没排期'
+              };
+            };
+            diagLog('arxiv-1-服务', { 起来了: !!arxivSvc, 状态: arxivSvc ? shortSt(arxivSvc.state()) : null });
+            if (arxivSvc) {
+              /* 用真关键词跑：图神经网络（标题+摘要）、最近 7 天、每次最多推 2 篇 */
+              arxivSvc.setConfig({
+                keywords: ['graph neural network'], fields: ['ti', 'abs'], matchAny: true,
+                days: 7, intervalH: 12, pushCap: 2, maxResults: 10, enabled: true
+              });
+              await aw(400);
+              const st1 = arxivSvc.state();
+              const ARXIVMOD = require('./arxiv');
+              diagLog('arxiv-2-查询串', {
+                查询串: st1.query,
+                日期过滤对不对: /submittedDate:\[\d{12} TO \d{12}\]/.test(st1.query),
+                运算符都大写: !/\b(and|or)\b/.test(st1.query.replace(/"[^"]*"/g, '')),
+                没关键词时为空: ARXIVMOD.buildArxivQuery({ keywords: [], fields: ['ti'], matchAny: true, days: 7 }) === ''
+              });
+              /* 界面先切到科研页，看看「还没抓」时的样子 */
+              await ajs('document.getElementById("tabArxiv").click(); true;');
+              await aw(600);
+              diagLog('arxiv-3-界面初始', await ajs(
+                '(function(){var d=window.kunkunArxivUI._debug();return {' +
+                ' 挂上了吗:d.inited, 列表条数:d.listCount, 状态行:d.status,' +
+                ' 查询串显示出来了:(document.getElementById("axQuery").textContent||"").slice(0,80),' +
+                ' 关键词卡片数:document.querySelectorAll("#axChips .ax-chip").length,' +
+                ' 字段勾选数:document.querySelectorAll("#axFields input:checked").length};})()'));
+
+              /* 开宠物 → 真抓一次（走完整链路：抓取 → 入库 → 去重 → 推送 → 气泡） */
+              setPetOn(true);
+              await aw(700);
+              const r1 = await arxivSvc.runFetch('手动');
+              await aw(1200);
+              diagLog('arxiv-4-真抓取', {
+                ok: r1.ok, 命中总数: r1.total, 这一页: r1.got, 新增: r1.added, 推送: r1.pushed,
+                用时秒: Math.round((r1.ms || 0) / 100) / 10, 重试几次: r1.tries, 错误: r1.error || ''
+              });
+              diagLog('arxiv-5-推送', {
+                宠物开着: petOn, 气泡开着: talkOpen,
+                气泡窗: (bubbleWin && !bubbleWin.isDestroyed()) ? JSON.stringify(bubbleWin.getBounds()) : '没建出来',
+                本次通知: arxivLastNotify
+                  ? { 篇数: arxivLastNotify.count, 关键词: arxivLastNotify.keywords,
+                      第一篇: (arxivLastNotify.items[0] || {}).title }
+                  : null
+              });
+
+              if (bubbleWin && !bubbleWin.isDestroyed()) {
+                diagLog('arxiv-6-气泡内容', await bubbleWin.webContents.executeJavaScript(
+                  '(function(){return {第一行:document.getElementById("head").textContent,' +
+                  ' 内容:document.getElementById("tip").textContent,' +
+                  ' 最后一行:document.getElementById("next").textContent,' +
+                  ' 可点样式:document.body.classList.contains("clickable")};})()', true));
+                try {
+                  const img = await bubbleWin.capturePage();
+                  const f = diagFilePath('arxiv-bubble.png');
+                  fs.writeFileSync(f, img.toPNG());
+                  diagLog('arxiv-6b-气泡截图', { file: f, size: img.getSize() });
+                } catch (e) { diagLog('arxiv-6b-截图失败', { message: String((e && e.message) || e) }); }
+                /* 点气泡（真实链路：气泡页面 → 主进程 → 主界面切到科研页） */
+                await bubbleWin.webContents.executeJavaScript(
+                  'document.dispatchEvent(new MouseEvent("click",{bubbles:true})); true;', true);
+                await aw(700);
+                diagLog('arxiv-7-点气泡后', await ajs(
+                  '(function(){var on=document.querySelector(".tab-btn.on");' +
+                  'return {当前标签:on?on.id:null, 气泡还开着:' + (talkOpen ? 'true' : 'false') + '};})()'));
+              }
+
+              /* 去重：同样条件再抓一次，应该「0 新增、0 推送」 */
+              const r2 = await arxivSvc.runFetch('定时');
+              diagLog('arxiv-8-去重', { 新增: r2.added, 推送: r2.pushed, 库里共: arxivSvc.state().total });
+
+              /* 列表界面：条数、标题、按钮、红点 */
+              await ajs('document.getElementById("tabArxiv").click(); window.kunkunArxivUI.refresh(); true;');
+              await aw(800);
+              diagLog('arxiv-9-列表界面', await ajs(
+                '(function(){var d=window.kunkunArxivUI._debug();' +
+                'var rows=document.querySelectorAll("#arxivList .arxiv-item");' +
+                'var first=rows[0];' +
+                'var badge=document.getElementById("arxivBadge");' +
+                'return {列表条数:d.listCount, DOM条数:rows.length,' +
+                ' 第一条标题:first?first.querySelector(".arxiv-title").textContent:null,' +
+                ' 第一条按钮数:first?first.querySelectorAll(".arxiv-btns button").length:0,' +
+                ' 有摘要吗:first?first.querySelector(".arxiv-abs").textContent.length>30:null,' +
+                ' 未读:d.unread, 红点:badge.hidden?"(无)":badge.textContent};})()'));
+
+              /* 0 结果的情况：不能崩、也不能把它当成错误（用「定时」绕开手动抓取的冷却） */
+              arxivSvc.setConfig({ keywords: ['zzzqqqxxnotarealterm'] });
+              await aw(300);
+              const r3 = await arxivSvc.runFetch('定时');
+              diagLog('arxiv-10-查不到结果', {
+                ok: r3.ok, 命中总数: r3.total, 新增: r3.added, 推送: r3.pushed, 错误: r3.error || ''
+              });
+
+              /* 配置持久化：写进去 → 重新开一个连接读回来 */
+              try {
+                const ARXIVDB = require('./arxiv-db');
+                const again = ARXIVDB.openArxivDb(ARXIVDB.arxivDbPath(app.getPath('userData')));
+                const back = again.getConfig();
+                diagLog('arxiv-11-配置持久化', {
+                  重新读出来的关键词: back.keywords, 字段: back.fields,
+                  间隔小时: back.intervalH, 上限: back.pushCap, 天数: back.days
+                });
+                again.close();
+              } catch (e) { diagLog('arxiv-11-持久化失败', { message: String((e && e.message) || e) }); }
+
+              /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
+              if (DIAG.arxivHold) {
+                const items = (arxivLastNotify && arxivLastNotify.items) || [];
+                arxivSvc.setConfig({ keywords: ['graph neural network'] });
+                notifyArxivPapers({
+                  count: Math.max(1, items.length), freshCount: Math.max(1, items.length),
+                  keywords: ['graph neural network'], items: items
+                });
+                await aw(800);
+                let info = { 气泡: '没建出来' };
+                if (bubbleWin && !bubbleWin.isDestroyed()) {
+                  const bb = bubbleWin.getBounds();
+                  /* 多屏 / 混合缩放时 DIP→物理像素没法简单乘 scaleFactor（实测点会落到桌面上），
+                     所以把 Win32 的窗口句柄给外面，让它用 GetWindowRect 拿真实像素位置去点 */
+                  let hwnd = 0;
+                  try {
+                    const buf = bubbleWin.getNativeWindowHandle();
+                    hwnd = buf.readBigUInt64LE ? Number(buf.readBigUInt64LE(0)) : buf.readUInt32LE(0);
+                  } catch (e) { hwnd = 0; }
+                  info = {
+                    气泡窗口: bb.width + 'x' + bb.height + ' @ ' + bb.x + ',' + bb.y,
+                    可见: bubbleWin.isVisible(),
+                    置顶: bubbleWin.isAlwaysOnTop(),
+                    句柄: hwnd
+                  };
+                }
+                diagLog('arxiv-hold', info);
+              }
             }
           }
           /* 重复待办自检：全部走真实弹窗 + 真实的「点勾完成」，看下一期排到哪天 */
@@ -3097,6 +3250,13 @@ function createWindow() {
           diagLog('error', { message: String(e && e.message || e) });
           console.log('[DIAG-ERROR] ' + (e && e.message ? e.message : e));
         }
+        if (DIAG.arxivHold) {
+          /* 自检要求「先别退出」：外面要用真鼠标点气泡。
+             气泡 15 秒后自己收，所以留 40 秒足够；超时也自己退，别留个孤儿进程。 */
+          diagLog('diag-hold', { 说明: '保持运行，等外面点气泡', pid: process.pid });
+          setTimeout(function () { try { app.exit(0); } catch (e) { } }, 40000);
+          return;
+        }
         quitting = true;
         /* --diag-eyequit 要验证「正常退出会不会还原色温」，所以走真正的 app.quit()，
            让 will-quit 跑一遍；其它自检仍然是 app.exit(0) 直接走人。 */
@@ -3194,6 +3354,7 @@ function refreshTrayMenu() {
     { label: '＋ 添加提醒事项', click: () => { showWindow(); send('add-item'); } },
     { label: '📝 待办与备忘', click: () => { showWindow(); send('show-todo'); } },
     { label: '📖 日记', click: () => { showWindow(); send('show-diary'); } },
+    { label: '🔬 科研动态（arXiv 论文）', click: () => { showWindow(); send('show-arxiv'); } },
     { label: '⚙ 设置', click: () => { showWindow(); send('show-settings'); } },
     { type: 'separator' }
   ];
@@ -4341,6 +4502,15 @@ function bubbleTodoExtra(rows, more) {
     (more > 0 ? UI.DESIGN.bubbleTodoRow : 0);
 }
 
+/* 气泡要额外长高多少（设计单位）：今天有待办按行数算；科研推送按标题行数算 */
+function bubbleExtraUnits(data) {
+  const d = data || {};
+  if (d.todos && d.todos.items && d.todos.items.length) {
+    return bubbleTodoExtra(d.todos.items.length, d.todos.more);
+  }
+  return Math.max(0, Math.round(Number(d.extraH) || 0));
+}
+
 function talkDisplay(px, py) {
   try {
     return screen.getDisplayNearestPoint({ x: Math.round(px), y: Math.round(py) });
@@ -4443,7 +4613,7 @@ function ensureBubbleWin() {
      或者它自己被提到前面，气泡就会被压在下面（用户报过「点宠物气泡出现在最底层」）。
      主窗口提醒时用的就是 'screen-saver'，一直稳稳在最上面，气泡跟它对齐。 */
   bubbleWin.setAlwaysOnTop(true, 'screen-saver');
-  bubbleWin.setIgnoreMouseEvents(true);      // 气泡纯展示，鼠标事件穿透过去
+  bubbleWin.setIgnoreMouseEvents(true);      // 默认纯展示，鼠标事件穿透过去（可点的气泡会临时打开）
   bubbleWin.loadFile(path.join(__dirname, 'bubble.html'));
   bubbleWin.on('closed', () => { bubbleWin = null; });
   return bubbleWin;
@@ -4456,9 +4626,8 @@ function showBubble(data) {
 
   const bw = ensureBubbleWin();
   const box0 = bubbleBox();
-  /* 今天有待办就把气泡长高一点（每多一条多一行高），没有就一点不占 */
-  const td = (data && data.todos && data.todos.items && data.todos.items.length) ? data.todos : null;
-  const extra = td ? bubbleTodoExtra(td.items.length, td.more) / box0.k : 0;
+  /* 今天有待办 / 科研推送带标题列表时，气泡要长高一点；都没有就一点不占 */
+  const extra = bubbleExtraUnits(data) / box0.k;
   const box = extra > 0
     ? { w: box0.w, h: box0.h + extra, gap: box0.gap, pad: box0.pad, k: box0.k }
     : box0;
@@ -4475,12 +4644,15 @@ function showBubble(data) {
     height: winH
   });
 
+  const td = (data && data.todos && data.todos.items && data.todos.items.length) ? data.todos : null;
+  const click = (data && data.click) ? String(data.click) : '';
   const payload = {
     head: (data && data.head) || '',
     mer: (data && data.mer) || '',
     tip: (data && data.tip) || '',
     next: (data && data.next) || '',
     todos: td || null,
+    click: click,
     tail: p.tail,
     tailPos: p.tailPos,
     /* 页面按这个把「设计尺寸的气泡本体」放大/缩小到当前物理尺寸 */
@@ -4500,31 +4672,42 @@ function showBubble(data) {
      只靠创建时设一次不够稳。 */
   try {
     bw.setAlwaysOnTop(true, 'screen-saver');
+    /* 可点的气泡临时允许被激活：Windows 上有些情况下（WS_EX_NOACTIVATE）
+       鼠标消息不一定送进来，让它可以被点一下更保险 —— 点完立刻就开主界面了 */
+    if (click) bw.setFocusable(true);
     bw.showInactive();                          // 不激活、不抢焦点
     bw.moveTop();
+    /* 鼠标穿透必须在【显示之后】再声明一次：
+       显示这个动作会把窗口样式重新应用一遍，之前设的会失效 —— 可点的气泡就点不到了。 */
+    bw.setIgnoreMouseEvents(!click);
   } catch (e) { bw.showInactive(); }
   talkOpen = true;
-  armBubbleTimer();                           // 说一会儿自己收掉，不挡着桌面
+  armBubbleTimer(click ? BUBBLE_CLICK_MS : 0);  // 说一会儿自己收掉，不挡着桌面
   return true;
 }
 
-/* 气泡自动收起：显示 6 秒（再点一次 / 开始拖动会提前收掉） */
+/* 气泡自动收起：普通说话 6 秒；可点的（科研推送）给 15 秒，够看清标题再点 */
 const BUBBLE_MS = 6000;
+const BUBBLE_CLICK_MS = 15000;
 let bubbleTimer = null;
 
-function armBubbleTimer() {
+function armBubbleTimer(ms) {
   if (bubbleTimer) clearTimeout(bubbleTimer);
   bubbleTimer = setTimeout(function () {
     bubbleTimer = null;
     hideBubble();
-  }, BUBBLE_MS);
+  }, Math.max(1000, Math.round(Number(ms) || BUBBLE_MS)));
 }
 
 function hideBubble() {
   talkOpen = false;
   requestWanted = false;
   if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
-  if (bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()) bubbleWin.hide();
+  if (bubbleWin && !bubbleWin.isDestroyed()) {
+    try { bubbleWin.setIgnoreMouseEvents(true); } catch (e) { }   // 收掉就恢复鼠标穿透
+    try { bubbleWin.setFocusable(false); } catch (e) { }          // 别留着「可激活」
+    if (bubbleWin.isVisible()) bubbleWin.hide();
+  }
 }
 
 /* 彻底销毁气泡窗（不只是隐藏）。
@@ -6905,6 +7088,151 @@ ipcMain.handle('eye-care-set-restore-on-quit', (e, on) => {
   return eyeCareSnapshot();
 });
 
+/* ============================================================== 科研动态（arXiv）
+   需求里的东西在 Electron 里是这样落地的：
+     · 定时调度：主进程里的定时器（启动时若已超过间隔就补抓一次），跟界面完全无关，
+       抓取全程异步，不占渲染进程、不卡界面
+     · 数据源：只用 arXiv 官方 API（http://export.arxiv.org/api/query）——
+       免费、不要密钥；走 Chromium 网络栈（net.fetch），会跟着系统代理
+     · 存储：SQLite（Electron 自带 Node 24 的 node:sqlite，不需要编译原生模块），
+       库文件在 userData/arxiv.db，以 arXiv ID 为主键天然去重
+     · 推送：桌面宠物气泡（可点，点开进科研动态页）+ 托盘气泡（没开宠物时兜底）
+       + 标签页上的未读红点
+   任何一步出问题都只记日志、标状态，绝不让主界面跟着崩。 */
+let arxivDb = null;
+let arxivSvc = null;
+let arxivLastNotify = null;       // 最近一次推送（自检/气泡复现用）
+
+function arxivPushState() {
+  send('arxiv-state', arxivSvc ? arxivSvc.state() : null);
+}
+
+function arxivShort(s, n) {
+  const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  return t.length > n ? (t.slice(0, n - 1) + '…') : t;
+}
+
+function initArxiv() {
+  try {
+    const electron = require('electron');
+    const ARXIVDB = require('./arxiv-db');
+    const ARXIVSVC = require('./arxiv-service');
+    arxivDb = ARXIVDB.openArxivDb(ARXIVDB.arxivDbPath(app.getPath('userData')));
+    arxivSvc = ARXIVSVC.createArxivService({
+      db: arxivDb,
+      fetchImpl: function (url, opt) { return electron.net.fetch(url, opt); },
+      notify: notifyArxivPapers,
+      broadcast: function () { arxivPushState(); },
+      log: function (tag, obj) { diagLog('arxiv-' + tag, obj); }
+    });
+    diagLog('arxiv-init', { 库: arxivDb.file, 关键词: arxivDb.getConfig().keywords });
+    return true;
+  } catch (e) {
+    arxivDb = null;
+    arxivSvc = null;
+    diagLog('arxiv-init-fail', { message: String((e && e.message) || e) });
+    return false;
+  }
+}
+
+/* 抓到新论文 → 让宠物说一句（气泡可点），顺手更新红点。
+   宠物没开的时候没有气泡可看，就用系统托盘气泡兜底，别让用户白等。 */
+function notifyArxivPapers(p) {
+  const items = (p && p.items) || [];
+  arxivLastNotify = { at: Date.now(), count: items.length, items: items, keywords: (p && p.keywords) || [] };
+  const kw = ((p && p.keywords) || []).slice(0, 2).join(' / ') || '你关注的方向';
+  const head = '主人，我发现了 ' + items.length + ' 篇关于「' + kw + '」的新论文';
+  const lines = items.slice(0, 3).map(function (x, i) {
+    return (i + 1) + '. ' + arxivShort(x.title, 42);
+  });
+  const tip = lines.join('\n') +
+    ((p && p.freshCount > items.length)
+      ? '\n（一共新增 ' + p.freshCount + ' 篇，先挑最前面的 ' + items.length + ' 篇给你）' : '');
+
+  const payload = {
+    head: head,
+    mer: 'arXiv · ' + new Date().toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5) + ' 更新',
+    tip: tip,
+    next: '点一下看详情 / 打开原文 →',
+    extraH: UI.DESIGN.bubbleTodoHead + lines.length * UI.DESIGN.bubbleTodoRow,
+    click: 'arxiv'
+  };
+  if (petOn) {
+    showBubble(payload);
+  } else if (tray) {
+    try {
+      tray.displayBalloon({
+        title: '🔬 有新的科研论文',
+        content: head + '\n点托盘图标 → 「🔬 科研动态」看详情'
+      });
+    } catch (e) { /* 托盘气泡失败不影响主流程 */ }
+  }
+  arxivPushState();
+}
+
+/* 用户点了可点的气泡：把主界面叫出来并切到科研动态页 */
+ipcMain.on('bubble-clicked', () => {
+  diagLog('arxiv-bubble-clicked', { 来源: '气泡被点了' });
+  hideBubble();
+  showWindow();
+  send('show-arxiv');
+});
+
+ipcMain.handle('arxiv-state', () => (arxivSvc ? arxivSvc.state() : null));
+ipcMain.handle('arxiv-set-config', (e, patch) => {
+  if (!arxivSvc) return null;
+  const next = arxivSvc.setConfig(patch || {});
+  diagLog('arxiv-config', {
+    关键词: next.keywords, 字段: next.fields, 模式: next.matchAny ? '任一' : '全部',
+    天数: next.days, 间隔小时: next.intervalH, 每次上限: next.pushCap, 开启: next.enabled
+  });
+  return next;
+});
+ipcMain.handle('arxiv-fetch-now', async () => {
+  if (!arxivSvc) return { ok: false, error: '科研动态在当前环境不可用' };
+  return await arxivSvc.runFetch('手动');
+});
+ipcMain.handle('arxiv-list', (e, opts) => {
+  if (!arxivDb) return { items: [], total: 0, limit: 0, offset: 0 };
+  return arxivDb.listPapers(opts || {});
+});
+ipcMain.handle('arxiv-mark-read', (e, id) => {
+  if (!arxivDb) return false;
+  const r = arxivDb.markRead(String(id || ''));
+  arxivPushState();
+  return r;
+});
+ipcMain.handle('arxiv-mark-all-read', () => {
+  if (!arxivDb) return 0;
+  const n = arxivDb.markAllRead();
+  arxivPushState();
+  return n;
+});
+ipcMain.handle('arxiv-star', (e, id, on) => {
+  if (!arxivDb) return false;
+  const r = arxivDb.setStar(String(id || ''), !!on);
+  arxivPushState();
+  return r;
+});
+ipcMain.handle('arxiv-remove', (e, id) => {
+  if (!arxivDb) return false;
+  const r = arxivDb.removePaper(String(id || ''));
+  arxivPushState();
+  return r;
+});
+ipcMain.handle('arxiv-clear', () => {
+  if (!arxivDb) return false;
+  arxivDb.clearPapers();
+  arxivPushState();
+  return true;
+});
+/* 打开原文 / PDF：只放行 arxiv.org（用户点的是论文，不是任意网址） */
+ipcMain.handle('arxiv-open', (e, url) => {
+  const u = String(url || '');
+  if (!/^https?:\/\/(www\.)?arxiv\.org\//i.test(u)) return false;
+  try { require('electron').shell.openExternal(u); return true; } catch (err) { return false; }
+});
+
 /* ------------------------------------------------------------ 生命周期 */
 const gotLock = app.requestSingleInstanceLock();
 
@@ -6960,6 +7288,17 @@ if (!gotLock) {
       diagLog('eye-care-init-error', { message: String((e && e.message) || e) });
     }
 
+    /* 科研动态：开库 → 排定时 → 该补抓就补抓（等界面起来 15 秒后再动，别和启动抢） */
+    try {
+      if (initArxiv()) {
+        arxivSvc.armTimer();
+        arxivSvc.maybeCatchUp();
+        arxivPushState();
+      }
+    } catch (e) {
+      diagLog('arxiv-boot-fail', { message: String((e && e.message) || e) });
+    }
+
     /* 全局热键看门狗：Windows 上偶尔会有别的软件把热键抢走、或者系统把它丢掉，
        表现就是「按了老板键一点反应都没有」。每 30 秒确认一次还在，不在就补注册。 */
     setInterval(function () {
@@ -6977,6 +7316,9 @@ if (!gotLock) {
   /* 退出前窗口会被关掉，先记下来；色温的还原也放在这里做（见下） */
   app.on('before-quit', (e) => {
     quitting = true;
+    /* 科研动态：停掉定时器、关掉数据库，别留半截写入 */
+    try { if (arxivSvc) arxivSvc.dispose(); } catch (err) { }
+    try { if (arxivDb) arxivDb.close(); } catch (err) { }
     /* 退出前把色温还原掉 —— 必须【在做完之前不退】。
        原先是在 will-quit 里 spawn 一个 detached 的 PowerShell 去还原，实测没用：
        Electron（Chromium）在 Windows 上用 job object 管子进程，主进程一退，
