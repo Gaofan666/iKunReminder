@@ -95,7 +95,7 @@ function openArxivDb(file) {
     '  published TEXT, updated TEXT, comment TEXT, journal_ref TEXT,',
     '  pdf_url TEXT, abs_url TEXT, matched TEXT,',
     '  fetched_at INTEGER, pushed INTEGER DEFAULT 0, pushed_at INTEGER DEFAULT 0,',
-    '  read INTEGER DEFAULT 0, star INTEGER DEFAULT 0',
+    '  read INTEGER DEFAULT 0, star INTEGER DEFAULT 0, score INTEGER DEFAULT 0',
     ');',
     'CREATE INDEX IF NOT EXISTS idx_papers_pub ON papers(published DESC);',
     'CREATE INDEX IF NOT EXISTS idx_papers_pushed ON papers(pushed, read);',
@@ -103,6 +103,11 @@ function openArxivDb(file) {
     '  id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, count INTEGER, note TEXT',
     ');'
   ].join('\n'));
+
+  /* 老版本的库没有 score 列（评分是后加的）→ 补上。
+     新库上面建表时已经带了这一列，ALTER 会报「duplicate column」，
+     属于预料之中，吞掉就行。 */
+  try { db.exec('ALTER TABLE papers ADD COLUMN score INTEGER DEFAULT 0'); } catch (e) { }
 
   const q = {
     getCfg: db.prepare('SELECT v FROM config WHERE k = ?'),
@@ -118,6 +123,8 @@ function openArxivDb(file) {
     markRead: db.prepare('UPDATE papers SET read = 1 WHERE arxiv_id = ?'),
     markAllRead: db.prepare('UPDATE papers SET read = 1 WHERE read = 0'),
     star: db.prepare('UPDATE papers SET star = ? WHERE arxiv_id = ?'),
+    /* 评分：1~5，顺手把 read 置 1（评过分就是看过了） */
+    setScore: db.prepare('UPDATE papers SET score = ?, read = 1 WHERE arxiv_id = ?'),
     delPaper: db.prepare('DELETE FROM papers WHERE arxiv_id = ?'),
     clearPapers: db.prepare('DELETE FROM papers'),
     unread: db.prepare('SELECT COUNT(*) AS n FROM papers WHERE read = 0 AND pushed = 1'),
@@ -170,7 +177,8 @@ function openArxivDb(file) {
       pushed: !!r.pushed,
       pushedAt: r.pushed_at || 0,
       read: !!r.read,
-      star: !!r.star
+      star: !!r.star,
+      score: Math.max(0, Math.min(5, Math.round(Number(r.score) || 0)))
     };
   }
   function safeArr(s) {
@@ -241,6 +249,12 @@ function likeEscape(s) {
   function markRead(id) { const r = q.markRead.run(id); return !!(r && r.changes); }
   function markAllRead() { const r = q.markAllRead.run(); return (r && r.changes) || 0; }
   function setStar(id, on) { const r = q.star.run(on ? 1 : 0, id); return !!(r && r.changes); }
+  /* 评分（1~5）：评了就默认已读；传 0 表示取消评分 */
+  function setScore(id, n) {
+    const v = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
+    const r = q.setScore.run(v, id);
+    return !!(r && r.changes);
+  }
   function removePaper(id) { const r = q.delPaper.run(id); return !!(r && r.changes); }
   function clearPapers() { q.clearPapers.run(); return true; }
 
@@ -277,6 +291,7 @@ function likeEscape(s) {
     markRead: markRead,
     markAllRead: markAllRead,
     setStar: setStar,
+    setScore: setScore,
     removePaper: removePaper,
     clearPapers: clearPapers,
     unreadCount: unreadCount,

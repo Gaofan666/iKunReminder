@@ -286,7 +286,6 @@
     var c = (st && st.config) || {};
     setChk(el.enabled, c.enabled !== false);
     setVal(el.days, c.days == null ? 7 : c.days);
-    setVal(el.cap, c.pushCap == null ? 5 : c.pushCap);
     setVal(el.max, c.maxResults == null ? 30 : c.maxResults);
     if (el.interval && c.intervalH != null) {
       var want = String(c.intervalH);
@@ -384,16 +383,43 @@
     btns.appendChild(mkBtn(p.star ? '★ 已收藏' : '☆ 收藏', '', function () {
       if (native.arxivStar) native.arxivStar(p.arxivId, !p.star).then(function () { p.star = !p.star; refresh(); });
     }));
-    if (!p.read) {
-      btns.appendChild(mkBtn('标为已读', '', function () {
-        if (native.arxivMarkRead) native.arxivMarkRead(p.arxivId).then(function () { p.read = true; refresh(); });
-      }));
-    }
+    btns.appendChild(scoreNode(p));
     btns.appendChild(mkBtn('删掉这条', '', function () {
       if (native.arxivRemove) native.arxivRemove(p.arxivId).then(refresh);
     }));
     it.appendChild(btns);
     return it;
+  }
+
+  /* 评分：5 颗星，点第几颗就是几分；评了就当已读（主进程那边一起写） */
+  function scoreNode(p) {
+    const wrap = document.createElement('span');
+    wrap.className = 'ax-stars';
+    wrap.title = '点星星给这篇打个分（1~5 分）；评完自动标成已读';
+    const cur = Math.max(0, Math.min(5, Number(p.score) || 0));
+    for (let i = 1; i <= 5; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = i <= cur ? 'on' : '';
+      b.textContent = '★';
+      b.title = i + ' 分';
+      b.addEventListener('click', function () {
+        const val = (i === cur) ? 0 : i;          // 再点同一颗 = 取消评分
+        if (native.arxivScore) {
+          native.arxivScore(p.arxivId, val).then(function () {
+            p.score = val;
+            p.read = true;
+            refresh();
+          });
+        }
+      });
+      wrap.appendChild(b);
+    }
+    const txt = document.createElement('span');
+    txt.className = 'ax-score-txt';
+    txt.textContent = cur ? (cur + ' 分') : '未评分';
+    wrap.appendChild(txt);
+    return wrap;
   }
 
   function renderList() {
@@ -470,7 +496,6 @@
     }
     if (el.days) el.days.addEventListener('change', function (e) { save({ days: e.target.value }); });
     if (el.interval) el.interval.addEventListener('change', function (e) { save({ intervalH: e.target.value }); });
-    if (el.cap) el.cap.addEventListener('change', function (e) { save({ pushCap: e.target.value }); });
     if (el.max) el.max.addEventListener('change', function (e) { save({ maxResults: e.target.value }); });
 
     if (el.fetchBtn) {
@@ -580,7 +605,6 @@
       enabled: $('axEnabled'),
       days: $('axDays'),
       interval: $('axInterval'),
-      cap: $('axCap'),
       max: $('axMax'),
       query: $('axQuery'),
       fetchBtn: $('btnArxivFetch'),

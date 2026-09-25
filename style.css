@@ -277,13 +277,21 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .arxiv-abs{margin-top:6px;font-size:14px;line-height:1.7;color:#2B3A44;word-break:break-word}
 .arxiv-hit{margin-top:6px;font-size:14px;color:#A6522C}
-/* 标题/摘要里命中的关键词：黄底 + 深色字，一眼能扫到 */
+/* 标题/摘要里命中的关键词：只用文字颜色区分（用户不要黄底高亮） */
 mark.ax-hit{
-  background:rgba(255,193,7,.35);color:#7a4a00;font-weight:700;
-  border-radius:3px;padding:0 2px;box-decoration-break:clone;
+  background:none;color:#d0342c;font-weight:inherit;padding:0;
 }
-.arxiv-btns{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
-.arxiv-btns .btn.sm{font-size:14.5px;padding:6px 12px}
+/* 评分：1~5 颗星，点第几颗就是几分 */
+.ax-stars{display:inline-flex;align-items:center;gap:1px}
+.ax-stars button{
+  border:none;background:none;cursor:pointer;padding:0 1px;
+  font-size:15px;line-height:1;color:#d6dde3;
+}
+.ax-stars button.on{color:#f0a500}
+.ax-stars button:hover{color:#f0a500}
+.ax-stars .ax-score-txt{font-size:12.5px;color:var(--dim);margin-left:4px}
+.arxiv-btns{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;align-items:center}
+.arxiv-btns .btn.sm{font-size:14px;padding:5px 10px}
 .arxiv-empty{
   padding:26px 10px;text-align:center;font-size:15px;line-height:1.9;color:var(--dim);
   white-space:pre-line;

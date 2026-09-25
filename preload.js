@@ -130,6 +130,7 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   arxivMarkRead: (id) => ipcRenderer.invoke('arxiv-mark-read', String(id || '')),
   arxivMarkAllRead: () => ipcRenderer.invoke('arxiv-mark-all-read'),
   arxivStar: (id, on) => ipcRenderer.invoke('arxiv-star', String(id || ''), !!on),
+  arxivScore: (id, n) => ipcRenderer.invoke('arxiv-score', String(id || ''), Number(n) || 0),
   arxivRemove: (id) => ipcRenderer.invoke('arxiv-remove', String(id || '')),
   arxivClear: () => ipcRenderer.invoke('arxiv-clear'),
   arxivOpen: (url) => ipcRenderer.invoke('arxiv-open', String(url || '')),

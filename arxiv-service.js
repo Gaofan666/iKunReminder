@@ -146,7 +146,9 @@ function createArxivService(opts) {
 
       let pushed = [];
       if (fresh.length) {
-        pushed = fresh.slice(0, Math.max(1, c.pushCap));       // 一次最多推 N 条，避免信息过载
+        /* 不再限制「一次最多推几篇」—— 用户要的是「直接告诉我一共发现多少篇」。
+           通知里给的是【总数】，气泡里只列最前面几条当例子，剩下的点进去看。 */
+        pushed = fresh;
         db.markPushed(pushed.map(function (p) { return p.arxivId; }));
         db.logPush(pushed.length, r + ' · 抓到 ' + entries.length + ' 篇，其中新的 ' + fresh.length + ' 篇');
         lastPushAt = now();

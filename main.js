@@ -1573,6 +1573,51 @@ function createWindow() {
                 arxivSvc.setConfig({ fields: ['ti', 'abs'] });
               } catch (e) { diagLog('arxiv-19-换关键词', { 抛异常了: String((e && e.message) || e) }); }
 
+              /* 20. 评分（1~5，评了就算已读）/ 去掉「还没推的」和「一次最多推」/ 高亮只用颜色 */
+              try {
+                await ajs('document.getElementById("tabArxiv").click(); window.kunkunArxivUI.refresh(); true;');
+                await aw(900);
+                const dom = await ajs(
+                  '(function(){var tabs=[];' +
+                  'document.querySelectorAll("#arxivFilter .ax-tab").forEach(function(b){tabs.push(b.textContent);});' +
+                  'var first=document.querySelector("#arxivList .arxiv-item");' +
+                  'var stars=first?first.querySelectorAll(".ax-stars button"):[];' +
+                  'var mk=document.querySelector("#arxivList mark.ax-hit");' +
+                  'var cs=mk?getComputedStyle(mk):null;' +
+                  'return {筛选按钮:tabs, 还有一次最多推这项吗:!!document.getElementById("axCap"),' +
+                  ' 星星数:stars.length,' +
+                  ' 评分文字:(first&&first.querySelector(".ax-score-txt"))?first.querySelector(".ax-score-txt").textContent:null,' +
+                  ' 高亮底色:cs?cs.backgroundColor:null, 高亮字色:cs?cs.color:null, 高亮加粗:cs?cs.fontWeight:null,' +
+                  ' 还有标为已读按钮吗:[].some.call(document.querySelectorAll("#arxivList .arxiv-btns button"),function(b){return b.textContent.indexOf("标为已读")>=0;})};})()');
+                /* 点第 4 颗星 → 应该变成 4 分 + 已读 */
+                await ajs('(function(){var f=document.querySelector("#arxivList .arxiv-item");' +
+                  'if(!f)return false;var st=f.querySelectorAll(".ax-stars button");' +
+                  'if(st.length<4)return false;st[3].click();return true;})()');
+                await aw(1000);
+                const after = await ajs(
+                  '(function(){var f=document.querySelector("#arxivList .arxiv-item");var d=window.kunkunArxivUI._debug();' +
+                  'return {第一条评分:(f&&f.querySelector(".ax-score-txt"))?f.querySelector(".ax-score-txt").textContent:null,' +
+                  ' 亮了几颗星:f?f.querySelectorAll(".ax-stars button.on").length:0,' +
+                  ' 第一条已读样式:f?f.className.indexOf("done")>=0:null, 未读:d.unread};})()');
+                diagLog('arxiv-20-评分与界面整理', { 界面: dom, 评分后: after });
+              } catch (e) { diagLog('arxiv-20-评分与界面整理', { 抛异常了: String((e && e.message) || e) }); }
+
+              /* 21. 气泡里说的是总数（不再有「一次最多推几篇」） */
+              try {
+                notifyArxivPapers({
+                  count: 6, freshCount: 6, keywords: ['graph neural network'],
+                  items: [1, 2, 3, 4, 5, 6].map(function (i) {
+                    return { title: '测试论文标题 ' + i, pdfUrl: '', absUrl: '' };
+                  })
+                });
+                await aw(800);
+                diagLog('arxiv-21-气泡说总数', (bubbleWin && !bubbleWin.isDestroyed())
+                  ? await bubbleWin.webContents.executeJavaScript(
+                    '(function(){return {第一行:document.getElementById("head").textContent,' +
+                    ' 内容:document.getElementById("tip").textContent};})()', true)
+                  : { 气泡: '没建出来' });
+              } catch (e) { diagLog('arxiv-21-气泡说总数', { 抛异常了: String((e && e.message) || e) }); }
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];
@@ -7310,8 +7355,7 @@ function notifyArxivPapers(p) {
     return (i + 1) + '. ' + arxivShort(x.title, 42);
   });
   const tip = lines.join('\n') +
-    ((p && p.freshCount > items.length)
-      ? '\n（一共新增 ' + p.freshCount + ' 篇，先挑最前面的 ' + items.length + ' 篇给你）' : '');
+    (items.length > lines.length ? '\n（还有 ' + (items.length - lines.length) + ' 篇，点开看全部）' : '');
 
   const payload = {
     head: head,
@@ -7375,6 +7419,13 @@ ipcMain.handle('arxiv-mark-all-read', () => {
 ipcMain.handle('arxiv-star', (e, id, on) => {
   if (!arxivDb) return false;
   const r = arxivDb.setStar(String(id || ''), !!on);
+  arxivPushState();
+  return r;
+});
+/* 评分 1~5：评了就默认已读 */
+ipcMain.handle('arxiv-score', (e, id, n) => {
+  if (!arxivDb) return false;
+  const r = arxivDb.setScore(String(id || ''), n);
   arxivPushState();
   return r;
 });
