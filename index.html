@@ -177,6 +177,11 @@
       <button class="ax-tab" data-af="new">还没推的</button>
     </div>
     <div class="arxiv-list" id="arxivList"></div>
+    <!-- 清空放在列表下面：它清的就是上面这个列表 -->
+    <div class="arxiv-foot">
+      <button class="btn sm" id="axClearAll" title="只清空本地列表，不影响设置">清空已抓到的论文</button>
+      <span class="ax-hint" id="axFootHint"></span>
+    </div>
   </section>
 
   <section class="card arxiv-col">
@@ -184,7 +189,7 @@
       <h2>⚙ 抓取条件</h2>
       <label class="chk ax-on"><input type="checkbox" id="axEnabled" checked><span>自动抓取</span></label>
     </div>
-    <p class="col-sub">arXiv 是英文库（美国），关键词请用<b>英文</b>：例如 graph neural network、
+    <p class="col-sub">arXiv 上的论文都是英文的，关键词请用<b>英文</b>：例如 graph neural network、
       transformer、reinforcement learning、cs.LG。多个关键词之间按下面的「匹配模式」组合。</p>
 
     <div class="ax-block">
@@ -229,11 +234,6 @@
     <div class="ax-block">
       <div class="ax-label">当前查询串（程序按上面的条件拼出来的）</div>
       <pre class="ax-query" id="axQuery">—</pre>
-    </div>
-
-    <div class="ax-block ax-foot">
-      <button class="btn sm" id="axClearAll" title="只清空本地列表，不影响设置">清空已抓到的论文</button>
-      <span class="ax-hint" id="axFootHint"></span>
     </div>
   </section>
 </main>

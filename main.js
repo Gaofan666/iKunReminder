@@ -1455,6 +1455,50 @@ function createWindow() {
                 库里共: stAfter.total
               });
 
+              /* 15. 用户报的 bug 复现：自动抓取正在跑的时候点「立即抓取」，
+                     宠物弹窗会提示，但科研界面的列表以前不会自己刷新 ——
+                     现在要求：不点气泡、不切页，列表自己就得出来。 */
+              try {
+                await ajs('document.getElementById("tabArxiv").click(); true;');
+                await aw(400);
+                arxivDb.clearPapers();                       // 先把库清空，列表也刷成空
+                await ajs('window.kunkunArxivUI.refresh(); true;');
+                await aw(800);
+                const emptyNow = await ajs('window.kunkunArxivUI._debug().listCount');
+                const autoP = arxivSvc.runFetch('定时');      // 自动那一轮先跑起来
+                await aw(250);
+                await ajs('document.getElementById("btnArxivFetch").click(); true;');   // 用户同时点按钮
+                const seen = [];
+                for (let i = 1; i <= 14; i++) {
+                  await aw(1000);
+                  seen.push(await ajs('(function(){var d=window.kunkunArxivUI._debug();' +
+                    'return {' + '秒:' + i + ', 列表:d.listCount, 未读:d.unread};})()'));
+                }
+                const autoR = await autoP;
+                diagLog('arxiv-15-按钮撞上自动抓取', {
+                  清空后列表条数: emptyNow,
+                  自动那轮: { ok: autoR.ok, 新增: autoR.added, 跳过: autoR.skipped || '' },
+                  每秒的列表条数: seen.map(function (x) { return x.秒 + '→' + x.列表; }).join(' '),
+                  最后: seen.length ? seen[seen.length - 1] : null,
+                  列表自己出来了: !!(seen.length && seen[seen.length - 1].列表 > 0)
+                });
+              } catch (e) {
+                diagLog('arxiv-15-按钮撞上自动抓取', { 抛异常了: String((e && e.message) || e) });
+              }
+
+              /* 16. 右列（抓取条件）在真实窗口尺寸下到底装不装得下 */
+              diagLog('arxiv-16-右列几何', await ajs(
+                '(function(){var c=document.querySelector("#pageArxiv .arxiv-col:last-child");' +
+                'var foot=document.getElementById("axClearAll");' +
+                'var r=c?c.getBoundingClientRect():null; var f=foot?foot.getBoundingClientRect():null;' +
+                'var p=document.getElementById("pageArxiv");' +
+                'return {窗口内高:window.innerHeight, 页面可视高:getComputedStyle(document.documentElement).getPropertyValue("--page-view-h").trim(),' +
+                ' 右列可视:c?c.clientHeight:0, 右列滚动:c?c.scrollHeight:0, 右列边框高:r?Math.round(r.height):0,' +
+                ' 右列要滚动:c?c.scrollHeight>c.clientHeight:null,' +
+                ' 清空按钮底: f?Math.round(f.bottom):0, 右列底: r?Math.round(r.bottom):0,' +
+                ' 按钮露全了: !!(f&&r)&&f.bottom<=r.bottom+1,' +
+                ' 页高:p?p.offsetHeight:0};})()'));
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];

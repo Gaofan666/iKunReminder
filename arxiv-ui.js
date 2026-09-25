@@ -92,11 +92,8 @@
         });
         var name = document.createElement('span');
         name.textContent = f.label;
-        var code = document.createElement('code');
-        code.textContent = f.id + ':';
         lab.appendChild(cb);
         lab.appendChild(name);
-        lab.appendChild(code);
         el.fields.appendChild(lab);
       });
     }
@@ -480,10 +477,21 @@
     inited = true;
     bind();
     if (native.onArxivState) native.onArxivState(function (s) {
+      /* 主进程每次抓取完都会推一次状态。这里要盯住「是不是刚抓完」：
+         抓取可能是自动跑起来的（到点了 / 刚改完条件），那种情况没人会去调
+         refresh()，列表就会一直停在上一次的内容 ——
+         用户报过「点了立即抓取，宠物弹窗提示了但科研界面没显示，
+         点了气泡才有」。所以只要这一轮跑完、或者库里条数变了，就自己把列表重拉一遍。 */
+      const was = st;
       st = s;
       if (busyLocal && st && !st.running) busyLocal = false;
       render();
-      renderList();
+      const finished = !!was && was.running && st && !st.running;
+      const resultChanged = !!(st && st.lastResult) &&
+        (!was || !was.lastResult || was.lastResult.at !== st.lastResult.at);
+      const totalChanged = !!was && !!st && was.total !== st.total;
+      if (finished || resultChanged || totalChanged) refresh();
+      else renderList();
     });
     native.arxivState().then(function (s) { st = s; render(); }).catch(function () { render(); });
     refresh();

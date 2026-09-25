@@ -224,25 +224,37 @@ body.anim-off *::after{animation-play-state:paused !important}
   max-height:620px;
 }
 
-/* ---------- 科研动态页（左论文列表 / 右抓取条件） ---------- */
+/* ---------- 科研动态页（左论文列表 / 右抓取条件） ----------
+   字比其它页大一号（正文 16px）：这一页是拿来读论文标题和摘要的，
+   小字看着累。要再大就改这里的 px。 */
 #pageArxiv{
   grid-template-columns:minmax(420px,1.3fr) minmax(330px,1fr);
   min-height:var(--page-min-h, 560px);
   align-items:stretch;
 }
-.arxiv-col{display:flex;flex-direction:column;padding:14px 16px 16px;min-width:0}
+.arxiv-col{
+  display:flex;flex-direction:column;padding:13px 16px 13px;min-width:0;
+  /* 字调大到 16px 之后右列自然高会超过窗口设计高（实测 831 > 803），
+     页面就会被顶出可视区。这里给两列各自封顶 + 内部滚动：
+     超过就在这一列里滚，整页永远不超过窗口高度。 */
+  max-height:calc(var(--page-view-h, 803px) - 30px);
+  overflow:auto;
+}
+.arxiv-col .col-head h2{font-size:17px}
+#pageArxiv .col-sub{font-size:15px;line-height:1.75}
+#pageArxiv .arxiv-acts .btn.sm{font-size:15px;padding:6px 13px}
 .arxiv-acts{display:flex;gap:7px;align-items:center}
 .arxiv-filter{display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap}
 .ax-tab{
-  font-family:inherit;font-size:12px;color:var(--dim);cursor:pointer;
-  padding:4px 11px;border-radius:99px;border:1px solid var(--line);
+  font-family:inherit;font-size:16px;color:var(--dim);cursor:pointer;
+  padding:5px 13px;border-radius:99px;border:1px solid var(--line);
   background:rgba(255,255,255,.65);transition:.15s;
 }
 .ax-tab:hover{border-color:var(--leaf);color:var(--text)}
 .ax-tab.on{background:var(--lake);border-color:var(--lake);color:#fff;font-weight:600}
-.arxiv-list{flex:1;display:flex;flex-direction:column;gap:9px;overflow:auto;padding-right:4px;max-height:620px}
+.arxiv-list{flex:1;display:flex;flex-direction:column;gap:10px;overflow:auto;padding-right:4px;max-height:620px}
 .arxiv-item{
-  padding:11px 13px;border-radius:14px;
+  padding:12px 14px;border-radius:14px;
   background:linear-gradient(180deg,#ffffff,#f7fafe);
   border:1px solid var(--line);transition:.15s;
 }
@@ -250,72 +262,77 @@ body.anim-off *::after{animation-play-state:paused !important}
 .arxiv-item.unread{border-color:rgba(62,154,168,.5);box-shadow:0 0 0 2px rgba(62,154,168,.08)}
 .arxiv-item.done{opacity:.72}
 .arxiv-title{
-  font-size:13.5px;font-weight:700;line-height:1.5;color:#16697A;
+  font-size:16px;font-weight:700;line-height:1.55;color:#16697A;
   cursor:pointer;word-break:break-word;
 }
 .arxiv-title:hover{text-decoration:underline}
 .arxiv-meta{
-  margin-top:5px;font-size:11.5px;color:var(--dim);
+  margin-top:6px;font-size:14.5px;color:var(--dim);
   display:flex;gap:8px;flex-wrap:wrap;align-items:center;
 }
 .arxiv-meta .ax-cat{
-  padding:1px 7px;border-radius:99px;background:rgba(62,154,168,.12);
+  padding:1px 8px;border-radius:99px;background:rgba(62,154,168,.12);
   color:#1A6E80;font-weight:600;
 }
-.arxiv-abs{margin-top:6px;font-size:12px;line-height:1.75;color:#2B3A44;word-break:break-word}
-.arxiv-hit{margin-top:5px;font-size:11.5px;color:#A6522C}
-.arxiv-btns{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.arxiv-abs{margin-top:7px;font-size:16px;line-height:1.75;color:#2B3A44;word-break:break-word}
+.arxiv-hit{margin-top:6px;font-size:14px;color:#A6522C}
+.arxiv-btns{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.arxiv-btns .btn.sm{font-size:14.5px;padding:6px 12px}
 .arxiv-empty{
-  padding:26px 10px;text-align:center;font-size:12.5px;line-height:1.9;color:var(--dim);
+  padding:26px 10px;text-align:center;font-size:15px;line-height:1.9;color:var(--dim);
+  white-space:pre-line;
 }
 
 /* 右侧：条件表单 */
-.ax-on{font-size:12.5px}
-.ax-block{margin-top:12px}
-.ax-label{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px;display:flex;gap:8px;align-items:baseline}
-.ax-dim{font-weight:400;color:var(--dim);font-size:11.5px}
-.ax-chips{display:flex;gap:6px;flex-wrap:wrap;min-height:26px}
+.ax-on{font-size:15.5px}
+.ax-block{margin-top:8px}
+.ax-label{font-size:16px;font-weight:700;color:var(--text);margin-bottom:7px;display:flex;gap:8px;align-items:baseline}
+.ax-dim{font-weight:400;color:var(--dim);font-size:14px}
+.ax-chips{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}
 .ax-chip{
   display:inline-flex;align-items:center;gap:6px;
-  padding:3px 6px 3px 10px;border-radius:99px;font-size:12.5px;
+  padding:4px 7px 4px 11px;border-radius:99px;font-size:16px;
   background:rgba(62,154,168,.13);color:#16697A;border:1px solid rgba(62,154,168,.3);
 }
 .ax-chip button{
   border:none;background:transparent;color:#16697A;cursor:pointer;
-  font-size:13px;line-height:1;padding:2px 3px;border-radius:50%;
+  font-size:15px;line-height:1;padding:2px 4px;border-radius:50%;
 }
 .ax-chip button:hover{background:rgba(62,154,168,.22)}
-.ax-chip.none{background:transparent;border:1px dashed var(--line);color:var(--dim);padding:3px 10px}
-.ax-add{display:flex;gap:7px;margin-top:8px}
+.ax-chip.none{background:transparent;border:1px dashed var(--line);color:var(--dim);padding:4px 11px}
+.ax-add{display:flex;gap:7px;margin-top:9px}
 .ax-add input{
-  flex:1;min-width:0;height:28px;padding:0 9px;font-family:inherit;font-size:12.5px;
+  flex:1;min-width:0;height:32px;padding:0 10px;font-family:inherit;font-size:16px;
   color:var(--text);background:#fff;border:1px solid var(--line);border-radius:8px;outline:none;
 }
 .ax-add input:focus{border-color:var(--lake);box-shadow:0 0 0 3px rgba(62,154,168,.18)}
-.ax-hint{margin:6px 0 0;font-size:11.5px;line-height:1.7;color:var(--dim);min-height:0}
+.ax-add .btn.sm{font-size:15px;padding:0 14px;height:32px}
+.ax-hint{margin:6px 0 0;font-size:14.5px;line-height:1.55;color:var(--dim);min-height:0}
 .ax-hint.bad{color:#cf574d}
 .ax-hint.ok{color:#1A6E80}
-.ax-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:5px 10px}
-.ax-field{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text);cursor:pointer}
-.ax-field input{margin:0}
-.ax-field code{font-size:11px;color:var(--dim);font-family:ui-monospace,Consolas,monospace}
+.ax-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:7px 10px}
+.ax-field{display:flex;gap:6px;align-items:center;font-size:16px;color:var(--text);cursor:pointer}
+.ax-field input{margin:0;width:15px;height:15px}
 .ax-seg{margin-top:2px}
+.ax-seg button{font-size:16px;padding:5px 16px}
 .ax-seg button.on{background:var(--lake);color:#fff}
-.ax-nums{display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:var(--text)}
+.ax-nums{display:flex;flex-direction:column;gap:6px;font-size:16px;color:var(--text)}
 .ax-nums label{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .ax-nums input,.ax-nums select{
-  height:26px;padding:0 7px;font-family:inherit;font-size:12.5px;
+  height:30px;padding:0 8px;font-family:inherit;font-size:15px;
   color:var(--text);background:#fff;border:1px solid var(--line);border-radius:8px;outline:none;
 }
-.ax-nums input[type=number]{width:64px;text-align:center}
+.ax-nums input[type=number]{width:72px;text-align:center}
 .ax-nums select{cursor:pointer}
 .ax-query{
-  margin:0;padding:9px 11px;border-radius:10px;max-height:110px;overflow:auto;
-  font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.65;
+  margin:0;padding:9px 12px;border-radius:10px;max-height:66px;overflow:auto;
+  font-family:ui-monospace,Consolas,monospace;font-size:14px;line-height:1.7;
   color:#16697A;background:rgba(62,154,168,.08);border:1px solid rgba(62,154,168,.22);
   white-space:pre-wrap;word-break:break-all;
 }
-.ax-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* 列表底下那一条：清空按钮 */
+.arxiv-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.arxiv-foot .btn.sm{font-size:15px;padding:6px 13px}
 
 .memo-item,.todo-item{
   display:flex;gap:9px;align-items:flex-start;

@@ -14,8 +14,9 @@
 const ARXIV = require('./arxiv');
 const DB = require('./arxiv-db');
 
-/* 手动抓取的冷却：刚抓过就别再打 arXiv 了（官方建议间隔 ≥3 秒，这里更保守） */
-const MANUAL_COOLDOWN_MS = 60 * 1000;
+/* 手动抓取的冷却：刚抓过就别再打 arXiv 了（官方建议间隔 ≥3 秒，这里更保守）。
+   自动抓取正在跑的时候点「立即抓取」不算冷却 —— 那一下会等这一轮跑完并把结果给界面。 */
+const MANUAL_COOLDOWN_MS = 20 * 1000;
 const STARTUP_DELAY_MS = 15 * 1000;     // 启动补抓：等界面起来、别和启动抢资源
 const NEW_KEYWORD_DELAY_MS = 8 * 1000;  // 刚加完关键词：稍等一下就去抓一次
 const MIN_TIMER_MS = 30 * 1000;         // 定时器最短间隔（自检时可以把 intervalH 设很小）
@@ -31,6 +32,7 @@ function createArxivService(opts) {
 
   let timer = null;
   let running = false;
+  let inflight = null;              // 正在跑的那一轮抓取（手动点撞上时复用它，别丢结果）
   let lastResult = null;
   let startedAt = now();
   let lastPushAt = 0;
@@ -72,10 +74,23 @@ function createArxivService(opts) {
     return hit.length ? hit : keywords.slice(0, 1);
   }
 
-  /* ------------------------------------------------------------- 跑一轮抓取 */
+  /* ------------------------------------------------------------- 跑一轮抓取
+     两种情况的返回要区分清楚：
+       · 已经有别的抓取在跑（比如刚加完关键词，8 秒后自动抓的那一轮）→ 手动点的时候
+         不是直接甩一句「正在抓取中」就完了 —— 那样界面拿不到结果、列表不会刷新
+         （用户报过：「点了立即抓取，宠物弹窗提示了，科研界面却没显示」）。
+         这里改成【等这一轮跑完，把它的结果原样返回】。
+       · 冷却期内的重复点击 → 老老实实说还剩几秒。 */
   async function runFetch(reason) {
     const r = reason || '手动';
-    if (running) return { ok: false, skipped: '正在抓取中' };
+    if (running) {
+      if (inflight) {
+        try { return await inflight; } catch (e) {
+          return { ok: false, at: now(), reason: r, error: String((e && e.message) || e) };
+        }
+      }
+      return { ok: false, skipped: '正在抓取中' };
+    }
     const c = cfgNow();
     if (!c.keywords.length) {
       try { db.setConfig({ lastError: '还没设置关键词' }); } catch (e) { }
@@ -85,11 +100,31 @@ function createArxivService(opts) {
     }
     if (!c.enabled && r !== '手动') return { ok: false, skipped: '已关闭自动抓取' };
     if (r === '手动' && c.lastFetchAt && (now() - c.lastFetchAt) < MANUAL_COOLDOWN_MS) {
-      return { ok: false, skipped: '刚抓过，等一下再点' };
+      const left = Math.max(1, Math.ceil((MANUAL_COOLDOWN_MS - (now() - c.lastFetchAt)) / 1000));
+      return { ok: false, skipped: '刚抓过（' + left + ' 秒前），过一会儿再点' };
     }
 
     running = true;
     pushState();                      // 界面/宠物据此显示「正在阅读文献…」
+    inflight = doFetch(r, c).then(function (res) {
+      return res;
+    }, function (e) {
+      return { ok: false, at: now(), reason: r, error: String((e && e.message) || e) };
+    }).then(function (res) {
+      /* 收尾：不管成功失败都要做，放在这里（而不是 finally）是为了让
+         「撞上来的手动请求」等到这一刻才拿到结果 */
+      inflight = null;
+      running = false;
+      try { const n = db.prune(); if (n) log('arxiv-pruned', { 删了: n }); } catch (e) { }
+      try { armTimer(); } catch (e) { }
+      try { pushState(); } catch (e) { }
+      return res;
+    });
+    return inflight;
+  }
+
+  /* 真正干活的那一轮（查询 → 抓取 → 入库 → 推送 → 记账） */
+  async function doFetch(r, c) {
     const t0 = now();
     try {
       const res = await ARXIV.arxivFetch(c, {
@@ -143,11 +178,6 @@ function createArxivService(opts) {
       lastResult = { ok: false, at: now(), reason: r, error: msg, ms: now() - t0 };
       log('arxiv-fetch-fail', { reason: r, error: msg });
       return lastResult;
-    } finally {
-      running = false;
-      try { const n = db.prune(); if (n) log('arxiv-pruned', { 删了: n }); } catch (e) { }
-      try { armTimer(); } catch (e) { }
-      try { pushState(); } catch (e) { }
     }
   }
 
