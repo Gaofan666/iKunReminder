@@ -1442,6 +1442,19 @@ function createWindow() {
               setPetOn(true);
               await aw(500);
 
+              /* 定时调度这条链：改了关键词 → 服务自己排一次抓取（8 秒后）→ 不手动点也该抓。
+                 这一步真的会再打一次 arXiv（3 秒限速照样生效）。 */
+              const beforeFetchAt = arxivSvc.state().config.lastFetchAt;
+              arxivSvc.setConfig({ keywords: ['transformer', 'graph neural network'] });
+              await aw(11500);
+              const stAfter = arxivSvc.state();
+              diagLog('arxiv-13-自动抓取', {
+                上次抓取时间往前走了吗: stAfter.config.lastFetchAt > beforeFetchAt,
+                最近一次的原因: stAfter.lastResult ? stAfter.lastResult.reason : '',
+                这一轮新增: stAfter.lastResult ? stAfter.lastResult.added : null,
+                库里共: stAfter.total
+              });
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];
