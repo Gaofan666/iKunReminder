@@ -224,12 +224,15 @@
           <option value="168">每周</option>
         </select>
       </label>
-      <label>每次向 arXiv 要 <input type="number" id="axMax" min="5" max="100" step="5" value="30"> 条</label>
+      <label title="一次抓取最多取回多少篇。arXiv 一个请求最多给 2000 条，这里按每页 100 条自动翻页取够（请求之间会隔 3 秒，这是 arXiv 的要求）">
+        一次最多取回 <input type="number" id="axMax" min="5" max="200" step="5" value="30"> 篇
+      </label>
     </div>
 
     <!-- 清空放在条件这一列的底部：删掉「当前查询串」之后这里空出来了 -->
     <div class="ax-block ax-foot">
       <button class="btn sm" id="axClearAll" title="只清空本地列表，不影响设置">清空已抓到的论文</button>
+      <button class="btn sm" id="axRestoreHidden" title="把「删掉的论文」从忽略名单里放出来，以后抓取还能再出现">恢复删掉的论文</button>
       <span class="ax-hint" id="axFootHint"></span>
     </div>
   </section>

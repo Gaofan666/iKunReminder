@@ -1667,6 +1667,57 @@ function createWindow() {
                 diagLog('arxiv-22-评论', { 按钮: order, 展开: opened, 发表后: added, 编辑后: edited, 删除后: deleted });
               } catch (e) { diagLog('arxiv-22-评论', { 抛异常了: String((e && e.message) || e) }); }
 
+              /* 23. 删掉的论文不该再被抓回来（用户问的那个 bug）+ 恢复入口 */
+              try {
+                arxivDb.clearHidden();
+                arxivDb.clearPapers();
+                arxivSvc.setConfig({ keywords: ['transformer'], fields: ['ti', 'abs'], days: 7, maxResults: 30 });
+                await aw(300);
+                const d1 = await arxivSvc.runFetch('定时');
+                const victim = arxivDb.listPapers({ matchKeywords: ['transformer'], limit: 1 }).items[0];
+                await ajs('window.confirm=function(){return true;};' +
+                  'document.getElementById("tabArxiv").click();window.kunkunArxivUI.refresh();true;');
+                await aw(1000);
+                const before = await ajs('(function(){var d=window.kunkunArxivUI._debug();' +
+                  'return {列表条数:d.listCount, 有恢复按钮吗:!!document.getElementById("axRestoreHidden"),' +
+                  ' 取回篇数标签:(function(){var l=document.getElementById("axMax");var p=l?l.closest("label"):null;return p?p.textContent.replace(/\\s+/g," ").trim():null;})()};})()');
+                /* 点第一张卡片的「删除」（真实按钮） */
+                const clicked = await ajs('(function(){var f=document.querySelector("#arxivList .arxiv-item");' +
+                  'if(!f)return false;var bs=f.querySelectorAll(".arxiv-btns .btn");var del=null;' +
+                  'for(var i=0;i<bs.length;i++){if(bs[i].textContent.trim()==="删除")del=bs[i];}' +
+                  'if(!del)return false;del.click();return true;})()');
+                await aw(1200);
+                const afterDel = await ajs('(function(){var d=window.kunkunArxivUI._debug();' +
+                  'return {列表条数:d.listCount, 底部提示:(document.getElementById("axFootHint")||{}).textContent};})()');
+                /* 同样条件再抓一次：被删的那篇必须还在忽略名单里、不回来 */
+                const d2 = await arxivSvc.runFetch('定时');
+                await ajs('window.kunkunArxivUI.refresh();true;');
+                await aw(1000);
+                const afterRe = await ajs('(function(){var d=window.kunkunArxivUI._debug();' +
+                  'return {列表条数:d.listCount, 底部提示:(document.getElementById("axFootHint")||{}).textContent};})()');
+                const victimBack = !!arxivDb.listPapers({ limit: 200 }).items.filter(function (p) {
+                  return victim && p.arxivId === victim.arxivId;
+                }).length;
+                diagLog('arxiv-23-删掉不再抓回来', {
+                  第一次抓到: d1.added, 界面: before, 点到删除了吗: clicked,
+                  删完界面: afterDel,
+                  再抓一次新增: d2.added,
+                  再抓后界面: afterRe,
+                  被删的那篇又回来了吗: victimBack,
+                  忽略名单条数: arxivDb.hiddenCount()
+                });
+                /* 恢复忽略名单：恢复后它又能被抓回来 */
+                arxivDb.clearHidden();
+                const d3 = await arxivSvc.runFetch('定时');
+                diagLog('arxiv-24-恢复之后', {
+                  恢复后新增: d3.added,
+                  被删的那篇回来了吗: !!arxivDb.listPapers({ limit: 200 }).items.filter(function (p) {
+                    return victim && p.arxivId === victim.arxivId;
+                  }).length,
+                  忽略名单: arxivDb.hiddenCount()
+                });
+              } catch (e) { diagLog('arxiv-23-删掉不再抓回来', { 抛异常了: String((e && e.message) || e) }); }
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];
@@ -7507,9 +7558,20 @@ ipcMain.handle('arxiv-remove', (e, id) => {
 });
 ipcMain.handle('arxiv-clear', () => {
   if (!arxivDb) return false;
-  arxivDb.clearPapers();
+  const n = arxivDb.clearPapers();      // 同时记进忽略名单，免得下次抓取整批刷回来
+  diagLog('arxiv-clear', { 清掉几篇: n, 忽略名单: arxivDb.hiddenCount() });
   arxivPushState();
   return true;
+});
+/* 忽略名单：看看删了多少篇 / 一键恢复（恢复后以后抓取还能再出现） */
+ipcMain.handle('arxiv-hidden-count', () => (arxivDb ? arxivDb.hiddenCount() : 0));
+ipcMain.handle('arxiv-hidden-clear', () => {
+  if (!arxivDb) return 0;
+  const n = arxivDb.hiddenCount();
+  arxivDb.clearHidden();
+  diagLog('arxiv-hidden-clear', { 放出来几篇: n });
+  arxivPushState();
+  return n;
 });
 /* 打开原文 / PDF：只放行 arxiv.org（用户点的是论文，不是任意网址） */
 ipcMain.handle('arxiv-open', (e, url) => {

@@ -135,12 +135,36 @@ function createArxivService(opts) {
   async function doFetch(r, c) {
     const t0 = now();
     try {
-      const res = await ARXIV.arxivFetch(c, {
-        fetchImpl: fetchImpl,
-        maxResults: c.maxResults,
-        retries: 2
-      });
-      const entries = res.parsed.entries || [];
+      /* 一次抓取要多少篇就翻页抓多少篇：
+         arXiv 一个请求最多给 2000 条，但一次要太多会很慢、响应也大，
+         所以按每页最多 100 条分几次请求（每次之间照样隔 3 秒，这是 arXiv 的要求）。
+         用户设「一次最多取回 200 篇」就自动翻 2~3 页，不用自己再点一次。 */
+      const want = Math.max(1, Math.round(Number(c.maxResults) || 30));
+      const PAGE = 100;
+      const MAX_PAGES = 10;
+      let got = [];
+      let start = 0;
+      let pages = 0;
+      let total = 0;
+      let lastQuery = '';
+      let tries = 0;
+      while (got.length < want && pages < MAX_PAGES) {
+        const size = Math.min(PAGE, want - got.length);
+        const res = await ARXIV.arxivFetch(c, {
+          fetchImpl: fetchImpl, maxResults: size, start: start, retries: 2
+        });
+        pages++;
+        tries += res.tries || 1;
+        total = res.parsed.total || total;
+        lastQuery = res.query;
+        const batch = res.parsed.entries || [];
+        got = got.concat(batch);
+        start += batch.length;
+        /* 这一页没给满 = 后面没有了，别再翻 */
+        if (batch.length < size) break;
+        if (total && start >= total) break;
+      }
+      const entries = got;
       const ins = db.addPapers(entries, { matchedFor: function (p) { return matchedFor(p, c.keywords); } });
       const fresh = entries.filter(function (p) { return ins.ids.indexOf(p.arxivId) >= 0; });
 
@@ -176,12 +200,12 @@ function createArxivService(opts) {
       });
       lastResult = {
         ok: true, at: now(), reason: r, ms: now() - t0,
-        total: res.parsed.total, got: entries.length, added: ins.added,
-        pushed: pushed.length, query: res.query, tries: res.tries
+        total: total, got: entries.length, added: ins.added,
+        pushed: pushed.length, query: lastQuery, tries: tries, pages: pages
       };
       log('arxiv-fetch-ok', {
-        reason: r, 用时ms: now() - t0, 命中总数: res.parsed.total,
-        这一页拿到: entries.length, 其中新的: ins.added, 推送: pushed.length
+        reason: r, 用时ms: now() - t0, 命中总数: total, 翻了几页: pages,
+        拿到: entries.length, 其中新的: ins.added, 推送: pushed.length
       });
       return lastResult;
     } catch (e) {

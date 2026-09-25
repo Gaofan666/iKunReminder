@@ -138,6 +138,8 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   arxivCommentUpdate: (cid, text) => ipcRenderer.invoke('arxiv-comment-update', cid, String(text || '')),
   arxivCommentDelete: (cid) => ipcRenderer.invoke('arxiv-comment-delete', cid),
   arxivClear: () => ipcRenderer.invoke('arxiv-clear'),
+  arxivHiddenCount: () => ipcRenderer.invoke('arxiv-hidden-count'),
+  arxivHiddenClear: () => ipcRenderer.invoke('arxiv-hidden-clear'),
   arxivOpen: (url) => ipcRenderer.invoke('arxiv-open', String(url || '')),
   onArxivState: (cb) => ipcRenderer.on('arxiv-state', (e, s) => cb(s)),
   onShowArxiv: (cb) => ipcRenderer.on('show-arxiv', () => cb())

@@ -253,6 +253,16 @@
     el.widthHint.textContent = text;
   }
 
+  /* 底部那行小字：告诉用户忽略名单里攒了多少篇（删/清空过的） */
+  function renderFoot() {
+    if (!el.footHint || !native || !native.arxivHiddenCount) return;
+    native.arxivHiddenCount().then(function (n) {
+      el.footHint.textContent = n
+        ? '已忽略 ' + n + ' 篇（删掉或清空过的，抓取不会再出现）'
+        : '';
+    }).catch(function () { });
+  }
+
   function renderStatus() {
     if (!el.status) return;
     if (!st || !st.config) {
@@ -282,6 +292,7 @@
     renderFields();
     renderMatch();
     renderWidthHint();
+    renderFoot();
     renderStatus();
     renderQuery();
     var c = (st && st.config) || {};
@@ -393,7 +404,12 @@
       if (native.arxivStar) native.arxivStar(p.arxivId, !p.star).then(function () { p.star = !p.star; refresh(); });
     }));
     btns.appendChild(mkBtn('删除', '', function () {
-      if (native.arxivRemove) native.arxivRemove(p.arxivId).then(refresh);
+      if (!window.confirm('删掉这篇？\n（删掉之后不会再抓回来；想让它再出现，去右边点「恢复删掉的论文」）')) return;
+      if (native.arxivRemove) native.arxivRemove(p.arxivId).then(function () {
+        note('已删掉，以后抓取不会再出现');
+        refresh();
+        renderFoot();
+      });
     }));
     btns.appendChild(scoreNode(p));          // 最右边
     it.appendChild(btns);
@@ -636,8 +652,10 @@
         native.arxivFetchNow().then(function (r) {
           busyLocal = false;
           if (r && r.ok) {
-            lastMsg = '抓取完成：arXiv 命中 ' + r.total + ' 篇，这一页拿到 ' + r.got +
-              ' 篇，其中新的 ' + r.added + ' 篇，推送 ' + r.pushed + ' 篇（用了 ' + Math.round((r.ms || 0) / 100) / 10 + ' 秒）';
+            lastMsg = '抓取完成：这个条件 arXiv 上共 ' + r.total + ' 篇，这次取回 ' + r.got +
+              ' 篇（翻了 ' + (r.pages || 1) + ' 页），其中新的 ' + r.added + ' 篇' +
+              (r.pushed ? '，已推送 ' + r.pushed + ' 篇' : '') +
+              '（用了 ' + Math.round((r.ms || 0) / 100) / 10 + ' 秒）';
           } else {
             lastMsg = '⚠ ' + ((r && (r.error || r.skipped)) || '抓取没成功');
           }
@@ -660,8 +678,25 @@
     }
     if (el.clearAll) {
       el.clearAll.addEventListener('click', function () {
-        if (!window.confirm('清空本地已抓到的论文？\n（只是清空列表和去重记录，设置和关键词都留着；清空后下次抓到会被当成新的）')) return;
+        if (!window.confirm('清空本地已抓到的论文？\n\n' +
+          '（只清空列表和去重记录，设置和关键词都留着。\n' +
+          '清空后这些论文会记进「忽略名单」，下次抓取不会再冒出来；\n' +
+          '想让它们还能再出现，点旁边的「恢复删掉的论文」。）')) return;
         native.arxivClear().then(function () { note('列表已清空'); refresh(); });
+      });
+    }
+    /* 恢复忽略名单：放出来之后，以后抓取还能再出现 */
+    if (el.restoreHidden) {
+      el.restoreHidden.addEventListener('click', function () {
+        native.arxivHiddenCount().then(function (n) {
+          if (!n) { note('没有删掉过的论文，不用恢复'); return; }
+          if (!window.confirm('把 ' + n + ' 篇「删掉过、不再抓回来」的论文放出来？\n' +
+            '（放出来之后，以后抓取还会再出现）')) return;
+          native.arxivHiddenClear().then(function (k) {
+            note('已放出 ' + k + ' 篇，下次抓取会重新出现');
+            renderFoot();
+          });
+        });
       });
     }
     if (el.filter) {
@@ -739,6 +774,8 @@
       fetchBtn: $('btnArxivFetch'),
       readAll: $('btnArxivReadAll'),
       clearAll: $('axClearAll'),
+      restoreHidden: $('axRestoreHidden'),
+      footHint: $('axFootHint'),
       filter: $('arxivFilter'),
       onlyKw: $('axOnlyKw')
     };

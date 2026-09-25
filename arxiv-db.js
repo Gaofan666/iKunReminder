@@ -19,6 +19,7 @@ const ARXIV = require('./arxiv');
 const MAX_KEYWORDS = 10;           // 用户要的上限（原来按需求文档是 5，放宽到 10）
 const WIDE_ATOMS = 40;             // 关键词 × 字段 超过这个数就在界面上提醒「条件太宽」
 const PAPERS_KEEP = 800;           // 库里最多留这么多篇，多了删最老的
+const HIDDEN_KEEP = 5000;          // 「删过、不再抓回来」的名单最多记这么多条
 
 /* 默认配置：装了就能用（关键词留空，等用户去界面里加） */
 const DEFAULT_CONFIG = {
@@ -71,7 +72,7 @@ function normalizeConfig(patch, base) {
   }
   if (p.days != null) out.days = clampInt(p.days, 0, 365, cur.days);          // 0 = 不限日期
   if (p.intervalH != null) out.intervalH = clampInt(p.intervalH, 1, 24 * 30, cur.intervalH);
-  if (p.maxResults != null) out.maxResults = clampInt(p.maxResults, 5, 100, cur.maxResults);
+  if (p.maxResults != null) out.maxResults = clampInt(p.maxResults, 5, 200, cur.maxResults);
   if (p.pushCap != null) out.pushCap = clampInt(p.pushCap, 1, 20, cur.pushCap);
   if (p.lastFetchAt != null) out.lastFetchAt = Math.max(0, Math.round(Number(p.lastFetchAt) || 0));
   if (p.lastOkAt != null) out.lastOkAt = Math.max(0, Math.round(Number(p.lastOkAt) || 0));
@@ -108,7 +109,9 @@ function openArxivDb(file) {
     '  arxiv_id TEXT NOT NULL, text TEXT NOT NULL,',
     '  created_at INTEGER, updated_at INTEGER',
     ');',
-    'CREATE INDEX IF NOT EXISTS idx_comments_paper ON comments(arxiv_id);'
+    'CREATE INDEX IF NOT EXISTS idx_comments_paper ON comments(arxiv_id);',
+    /* 忽略名单：用户删掉的论文记在这儿，下次抓取不会再进来（不然一抓又冒出来） */
+    'CREATE TABLE IF NOT EXISTS hidden(arxiv_id TEXT PRIMARY KEY, at INTEGER);'
   ].join('\n'));
 
   /* 老版本的库没有 score 列（评分是后加的）→ 补上。
@@ -148,7 +151,16 @@ function openArxivDb(file) {
     listComments: db.prepare('SELECT id, text, created_at, updated_at FROM comments WHERE arxiv_id = ? ORDER BY id ASC'),
     updComment: db.prepare('UPDATE comments SET text = ?, updated_at = ? WHERE id = ?'),
     delComment: db.prepare('DELETE FROM comments WHERE id = ?'),
-    commentCount: db.prepare('SELECT COUNT(*) AS n FROM comments WHERE arxiv_id = ?')
+    commentCount: db.prepare('SELECT COUNT(*) AS n FROM comments WHERE arxiv_id = ?'),
+    /* 忽略名单 */
+    hide: db.prepare('INSERT OR IGNORE INTO hidden(arxiv_id, at) VALUES (?,?)'),
+    isHidden: db.prepare('SELECT 1 AS x FROM hidden WHERE arxiv_id = ?'),
+    hiddenCount: db.prepare('SELECT COUNT(*) AS n FROM hidden'),
+    clearHidden: db.prepare('DELETE FROM hidden'),
+    hiddenIds: db.prepare('SELECT arxiv_id FROM papers'),
+    trimHidden: db.prepare([
+      'SELECT arxiv_id FROM hidden ORDER BY at DESC LIMIT -1 OFFSET ?'
+    ].join(''))
   };
 
   function getConfig() {
@@ -206,7 +218,8 @@ function likeEscape(s) {
 }
 
   /* 入库：以 arXiv ID 去重（主键 + INSERT OR IGNORE）。
-     返回「这次真正新进来的」那几条 —— 只有新的才值得推送。 */
+     返回「这次真正新进来的」那几条 —— 只有新的才值得推送。
+     被用户删掉过的（忽略名单里的）直接跳过：否则删了下次抓取又冒出来。 */
   function addPapers(list, opts) {
     const o = opts || {};
     const now = Date.now();
@@ -214,6 +227,7 @@ function likeEscape(s) {
     (list || []).forEach(function (p) {
       if (!p || !p.arxivId || !p.title) return;
       if (q.hasPaper.get(p.arxivId)) return;             // 老熟人，跳过（连改都不改）
+      if (q.isHidden.get(p.arxivId)) return;             // 用户删过 → 不再抓回来
       const info = q.insPaper.run(
         p.arxivId, p.title, p.summary || '', JSON.stringify(p.authors || []),
         JSON.stringify(p.categories || []), p.primary || '', p.published || '', p.updated || '',
@@ -297,8 +311,34 @@ function likeEscape(s) {
     const r = q.setScore.run(v, id);
     return !!(r && r.changes);
   }
-  function removePaper(id) { const r = q.delPaper.run(id); return !!(r && r.changes); }
-  function clearPapers() { q.clearPapers.run(); return true; }
+  /* 删除单篇：同时记进忽略名单，下次抓取不会再冒出来 */
+  function removePaper(id) {
+    const key = String(id || '');
+    if (!key) return false;
+    q.hide.run(key, Date.now());
+    const r = q.delPaper.run(key);
+    return !!(r && r.changes);
+  }
+  /* 清空列表：把所有当前论文都记进忽略名单（否则下一次抓取会整批刷回来） */
+  function clearPapers() {
+    const ids = q.hiddenIds.all().map(function (x) { return x.arxiv_id; });
+    const now = Date.now();
+    ids.forEach(function (id) { q.hide.run(id, now); });
+    q.clearPapers.run();
+    trimHidden();
+    return ids.length;
+  }
+  function hiddenCount() { const r = q.hiddenCount.get(); return (r && r.n) || 0; }
+  function clearHidden() { q.clearHidden.run(); return true; }
+  /* 忽略名单只留最近 HIDDEN_KEEP 条，免得越攒越大 */
+  function trimHidden() {
+    const n = hiddenCount();
+    if (n <= HIDDEN_KEEP) return 0;
+    const ids = q.trimHidden.all(HIDDEN_KEEP).map(function (x) { return x.arxiv_id; });
+    const del = db.prepare('DELETE FROM hidden WHERE arxiv_id = ?');
+    ids.forEach(function (id) { del.run(id); });
+    return ids.length;
+  }
 
   function unreadCount() { const r = q.unread.get(); return (r && r.n) || 0; }
   function totalCount() { const r = q.total.get(); return (r && r.n) || 0; }
@@ -341,6 +381,8 @@ function likeEscape(s) {
     commentCount: commentCount,
     removePaper: removePaper,
     clearPapers: clearPapers,
+    hiddenCount: hiddenCount,
+    clearHidden: clearHidden,
     unreadCount: unreadCount,
     totalCount: totalCount,
     logPush: logPush,
@@ -359,6 +401,7 @@ module.exports = {
   MAX_KEYWORDS: MAX_KEYWORDS,
   WIDE_ATOMS: WIDE_ATOMS,
   PAPERS_KEEP: PAPERS_KEEP,
+  HIDDEN_KEEP: HIDDEN_KEEP,
   DEFAULT_CONFIG: DEFAULT_CONFIG,
   normalizeConfig: normalizeConfig,
   openArxivDb: openArxivDb,
