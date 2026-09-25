@@ -1517,6 +1517,23 @@ function createWindow() {
                 });
               } catch (e) { diagLog('arxiv-17-公式清洗', { 抛异常了: String((e && e.message) || e) }); }
 
+              /* 18. 关键词上限 10 + 条件太宽时的提示 */
+              try {
+                arxivSvc.setConfig({
+                  keywords: ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8', 'k9', 'k10', 'k11'],
+                  fields: ['ti', 'abs', 'all']
+                });
+                await aw(500);
+                diagLog('arxiv-18-关键词上限与宽度提示', await ajs(
+                  '(function(){var d=window.kunkunArxivUI._debug();' +
+                  'var hint=document.getElementById("axWidthHint");' +
+                  'return {存下来几个:d.config?d.config.keywords.length:0,' +
+                  ' 上限标签:(document.getElementById("axKwCount")||{}).textContent,' +
+                  ' 关键词卡片数:document.querySelectorAll("#axChips .ax-chip").length,' +
+                  ' 提示显示了吗:hint?!hint.hidden:null, 提示文字:hint?hint.textContent:null,' +
+                  ' 查询串长度:d.query.length};})()'));
+              } catch (e) { diagLog('arxiv-18-关键词上限与宽度提示', { 抛异常了: String((e && e.message) || e) }); }
+
               /* 留下一个「可点的气泡」不动，等外面用真鼠标来点（--diag-arxiv-hold） */
               if (DIAG.arxivHold) {
                 const items = (arxivLastNotify && arxivLastNotify.items) || [];

@@ -161,6 +161,26 @@
     }
   }
 
+  /* 关键词多了之后「关键词 × 字段」会变成几十段条件，查询串很长、arXiv 会慢甚至查不动。
+     这里只是提醒，不拦着用户 —— 上限本身是 10 个关键词（DB 那边卡的）。 */
+  function renderWidthHint() {
+    if (!el.widthHint) return;
+    const c = (st && st.config) || {};
+    const kw = (c.keywords || []).length, fd = (c.fields || []).length;
+    const n = kw * fd;
+    let text = '', bad = false;
+    if (n > 40) {
+      text = '⚠ 现在是 ' + kw + ' 个关键词 × ' + fd + ' 个字段 = ' + n +
+        ' 段条件，查询串很长，arXiv 可能会很慢或者查不动 —— 建议少勾几个字段。';
+      bad = true;
+    } else if (n > 24) {
+      text = '当前条件偏宽（' + kw + ' 个关键词 × ' + fd + ' 个字段 = ' + n + ' 段），结果会比较多。';
+    }
+    el.widthHint.hidden = !text;
+    el.widthHint.className = 'ax-hint' + (bad ? ' bad' : '');
+    el.widthHint.textContent = text;
+  }
+
   function renderStatus() {
     if (!el.status) return;
     if (!st || !st.config) {
@@ -189,6 +209,7 @@
     renderChips();
     renderFields();
     renderMatch();
+    renderWidthHint();
     renderStatus();
     renderQuery();
     var c = (st && st.config) || {};
@@ -460,6 +481,7 @@
       kwAdd: $('axKwAdd'),
       kwHint: $('axKwHint'),
       fields: $('axFields'),
+      widthHint: $('axWidthHint'),
       match: $('axMatch'),
       matchHint: $('axMatchHint'),
       enabled: $('axEnabled'),

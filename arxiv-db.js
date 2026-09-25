@@ -16,7 +16,8 @@ const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const ARXIV = require('./arxiv');
 
-const MAX_KEYWORDS = 5;            // 需求：关键词最多 5 个（也防止查询串过长）
+const MAX_KEYWORDS = 10;           // 用户要的上限（原来按需求文档是 5，放宽到 10）
+const WIDE_ATOMS = 40;             // 关键词 × 字段 超过这个数就在界面上提醒「条件太宽」
 const PAPERS_KEEP = 800;           // 库里最多留这么多篇，多了删最老的
 
 /* 默认配置：装了就能用（关键词留空，等用户去界面里加） */
@@ -271,6 +272,7 @@ function arxivDbPath(userDataDir) {
 
 module.exports = {
   MAX_KEYWORDS: MAX_KEYWORDS,
+  WIDE_ATOMS: WIDE_ATOMS,
   PAPERS_KEEP: PAPERS_KEEP,
   DEFAULT_CONFIG: DEFAULT_CONFIG,
   normalizeConfig: normalizeConfig,
