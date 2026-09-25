@@ -69,7 +69,7 @@ const DIAG = (function () {
     m = /^--diag-petskin=(.+)$/.exec(a);
     if (m) out.petskin = m[1];
     /* --diag-tab=home|todo|settings：自检时切到指定页再截图 */
-    m = /^--diag-tab=(home|todo|diary|settings)$/.exec(a);
+    m = /^--diag-tab=(home|todo|diary|arxiv|settings)$/.exec(a);
     if (m) out.tab = m[1];
     /* --diag-wait=<ms>：截图前多等一会儿，用来测异步的东西
        （比如启动 8 秒后才会跑的「自动检查更新」） */
@@ -3038,6 +3038,21 @@ function createWindow() {
               'var pm=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--page-min-h"))||0;' +
               'return {待办页高:p?p.offsetHeight:0, 窗口设计高:pv, minH变量:pm, ' +
               '装得下:(p?p.offsetHeight:0)<=pv+2};})()', true));
+
+            /* 新加的「科研动态」页是同样两列结构，也要确认装得下、右列不溢出 */
+            await win.webContents.executeJavaScript(
+              'document.getElementById("tabArxiv").click(); true;', true);
+            await new Promise(function (r) { setTimeout(r, 800); });
+            diagLog('fit-arxiv', await win.webContents.executeJavaScript(
+              '(function(){var p=document.getElementById("pageArxiv");' +
+              'var pv=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--page-view-h"))||0;' +
+              'var list=document.getElementById("arxivList");' +
+              'var cfg=document.querySelector("#pageArxiv .arxiv-col:last-child");' +
+              'var m=/scale\\(([0-9.]+)\\)/.exec((document.getElementById("view")||{}).style.transform||"");' +
+              'return {科研页高:p?p.offsetHeight:0, 窗口设计高:pv, 装得下:(p?p.offsetHeight:0)<=pv+2,' +
+              ' 左列可视高:list?list.clientHeight:0, 右列高:cfg?cfg.offsetHeight:0,' +
+              ' 右列滚动高:cfg?cfg.scrollHeight:0, 右列溢出:cfg?cfg.scrollHeight>cfg.clientHeight+2:null,' +
+              ' 缩放比:m?parseFloat(m[1]):0};})()', true));
           }
           /* 连击摸鱼自检：真的装钩子 → 注入 3 下 Ctrl → 应该真的摸鱼
              → 还原 → 关掉 → 钩子进程必须被收掉（不能留幽灵进程） */
