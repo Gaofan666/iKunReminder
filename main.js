@@ -65,6 +65,8 @@ const DIAG = (function () {
     if (a === '--diag-arxiv') out.arxiv = true;
     /* --diag-arxiv-hold：自检时把程序留着不退出（配合外面用真鼠标点气泡） */
     if (a === '--diag-arxiv-hold') { out.arxiv = true; out.arxivHold = true; }
+    /* --diag-alertmusic：弹一次休息提醒，点「我休息了」之后音乐就该停（用户报的 bug） */
+    if (a === '--diag-alertmusic') out.alertmusic = true;
     /* --diag-petskin=<id>：自检时指定桌面宠物用哪个形象（用来肉眼确认某个皮肤画得对不对） */
     m = /^--diag-petskin=(.+)$/.exec(a);
     if (m) out.petskin = m[1];
@@ -1747,6 +1749,64 @@ function createWindow() {
                 diagLog('arxiv-hold', info);
               }
             }
+          }
+          /* ============ 提醒音乐：点了「我休息了」还响（--diag-alertmusic） ============ */
+          if (DIAG.alertmusic) {
+            const w9 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const js9 = function (c) { return win.webContents.executeJavaScript(c, true); };
+            const au = function (tag) {
+              return js9('(function(){var a=document.getElementById("alertMusic");var o=document.getElementById("overlay");' +
+                'var sp=window.speechSynthesis||{};' +
+                'return {第几秒:' + JSON.stringify(String(tag)) + ', 弹窗还开着:!!o&&!o.hidden,' +
+                ' 音频在放:!a.paused, 播到:a.currentTime.toFixed(2),' +
+                ' 语音在说:!!sp.speaking, 语音排队:!!sp.pending};})()');
+            };
+            const clickDone = function () {
+              return js9('(function(){var b=document.getElementById("alertDone");if(!b)return "没找到按钮";' +
+                'var t=b.textContent;b.click();return "点的是：" + t;})()');
+            };
+            /* 等音乐真的开始放（轮询，最多 15 秒），返回等了多久 */
+            const waitMusic = async function (maxMs) {
+              const t0 = Date.now();
+              while (Date.now() - t0 < maxMs) {
+                const st = await js9('(function(){var a=document.getElementById("alertMusic");return a?(!a.paused):false;})()');
+                if (st) return Date.now() - t0;
+                await w9(400);
+              }
+              return -1;
+            };
+
+            /* ---------- 场景 A：语音还在说的时候就点「我休息了」 ---------- */
+            send('tray-alert', 'rest');
+            await w9(1500);
+            diagLog('amA-1-弹出来 1.5 秒', await au('A1'));
+            diagLog('amA-2-这时候点', await clickDone());
+            const aMusic = await waitMusic(15000);
+            diagLog('amA-3-点完之后音乐有没有自己响起来', {
+              点完之后音乐开始了吗: aMusic >= 0,
+              过了多久开始: aMusic >= 0 ? (aMusic + 'ms') : '（15 秒内始终没响）',
+              当前状态: await au('A3')
+            });
+            await w9(1200);
+
+            /* ---------- 场景 B：等音乐真的响起来，再点「我休息了」 ---------- */
+            await js9('(function(){var a=document.getElementById("alertMusic");try{a.pause();a.currentTime=0;}catch(e){}return true;})()');
+            send('tray-alert', 'rest');
+            await w9(800);
+            const bStart = await waitMusic(15000);
+            diagLog('amB-1-音乐响起来了', { 等了: bStart + 'ms', 状态: await au('B1') });
+            diagLog('amB-2-这时候点', await clickDone());
+            await w9(1000);
+            diagLog('amB-3-点完 1 秒', await au('B3'));
+            diagLog('amB-3b-点完之后还有没有声音', await js9(
+              '(function(){var sp=window.speechSynthesis||{};' +
+              'var snd=(window.kunkunPet&&window.kunkunPet.Sound)||null;' +
+              'return {语音还在说:!!sp.speaking,' +
+              ' 小旋律的音频上下文:(snd&&snd.ctx)?snd.ctx.state:"(还没建过)"};})()'));
+            await w9(3000);
+            diagLog('amB-4-点完 4 秒（还响就是 bug）', await au('B4'));
+            await w9(4000);
+            diagLog('amB-5-点完 8 秒', await au('B5'));
           }
           /* 重复待办自检：全部走真实弹窗 + 真实的「点勾完成」，看下一期排到哪天 */
           if (DIAG.repeat) {

@@ -408,6 +408,9 @@
   let speechEndCb = null;
   let musicTimer = null;
   let musicFellBack = false;      // 自选音乐读不出来、已经退回自带（用来给设置里那行小字加说明）
+  /* 每次「停掉音乐」都把它 +1。播放在落地之前都要再核对一次这个号 ——
+     这样「点了完成之后，迟到的播放/换歌重放把音乐又放出来」就不会发生了。 */
+  let musicSeq = 0;
 
   /* 本地绝对路径 → file:// 地址（中文、空格、# 之类都要转义） */
   function musicFileUrl(p) {
@@ -489,6 +492,7 @@
   }
 
   function stopAlertMusic() {
+    musicSeq++;                      // 作废所有还没落地的播放（定时器里的、play 回调里的）
     if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
     const a = el.alertMusic;
     if (a) { try { a.pause(); a.currentTime = 0; } catch (e) { } }
@@ -499,11 +503,13 @@
     stopAlertMusic();
     speechEndCb = null;
     if (!settings.music) return;
+    const mySeq = musicSeq;          // 记住这一轮的号
     speechEndCb = function () {
       if (musicTimer) clearTimeout(musicTimer);
       musicTimer = setTimeout(function () {
         musicTimer = null;
-        if (!settings.music || !rt.alertId) return;      // 期间关掉了/提醒没了就别放
+        if (mySeq !== musicSeq) return;                  // 期间被停过（点了完成/稍后）→ 不放
+        if (!settings.music || !rt.alertId) return;      // 提醒没了 / 关了音乐
         const a = el.alertMusic;
         if (!a) return;
         try {
@@ -511,12 +517,18 @@
           const pr = a.play();
           if (pr && pr.catch) {
             pr.catch(function () {
-              /* 自选文件放不出来（被删/格式不支持）→ 当场退回自带音乐再放一次 */
+              /* 自选文件放不出来（被删了/格式不支持）→ 退回自带音乐再放一次。
+                 但必须先确认提醒还开着、这一轮没被停过，否则就变成
+                 「点了休息了之后音乐自己响起来」了。 */
+              if (mySeq !== musicSeq) return;
+              if (!settings.music || !rt.alertId) return;
               if (!settings.musicSrc) return;
               if (typeof diagLog === 'function') diagLog('music-custom-fail', { src: settings.musicSrc });
               settings.musicSrc = '';
               saveSettings();
               applyMusicSrc();
+              if (mySeq !== musicSeq) return;
+              if (!settings.music || !rt.alertId) return;
               try { a.play(); } catch (e) { }
             });
           }
@@ -1086,6 +1098,12 @@
     alertMulti = null;
     speechEndCb = null;              // 关掉提醒就不再排队放音乐
     stopAlertMusic();
+    /* 点了「我休息了 / 我喝了」之后，不该还有任何声音在响：
+       · 语音播报可能还没说完 → 直接掐掉
+       · 提醒那串 8-bit 小旋律是用 Web Audio 排的（alert() 一次排好几个音），
+         它没法单独停 → 把整个音频上下文挂起（下次发声时会自动 resume） */
+    try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { }
+    try { Sound.silence(); } catch (e) { }
     el.overlay.hidden = true;
     el.floatWords.innerHTML = '';
     if (el.alertMore) el.alertMore.hidden = true;
@@ -2617,7 +2635,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v3.9.8 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v3.9.9 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }

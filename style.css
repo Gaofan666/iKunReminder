@@ -738,7 +738,9 @@ kbd{
 .ring-fg{
   fill:none;stroke:var(--accent);stroke-width:9;stroke-linecap:round;
   stroke-dasharray:326.73;stroke-dashoffset:0;
-  filter:drop-shadow(0 0 7px var(--accent));
+  /* 这里本来有个 drop-shadow 光晕，但 CSS 滤镜的滤镜区域是元素的方形外框
+     （SVG 是 132×132 的方框），所以那一圈光看起来是「正方形的荧光」——
+     用户报过，去掉。 */
   transition:stroke-dashoffset .3s linear;
 }
 .ring-text{

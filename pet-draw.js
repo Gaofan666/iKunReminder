@@ -130,6 +130,11 @@
       if (!this.ctx) return;
       this.tone(880, 0, 0.06, 'square', 0.045);
       this.tone(1320, 0.05, 0.06, 'square', 0.03);
+    },
+    /* 立刻掐掉所有还在响的音（提醒里那串小旋律是一次排好几个音，单独停不了，
+       所以直接把音频上下文挂起 —— 下次 tone() 里的 ensure() 会自动 resume） */
+    silence() {
+      try { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); } catch (e) { }
     }
   };
 
