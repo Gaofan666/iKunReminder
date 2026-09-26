@@ -67,6 +67,10 @@ const DIAG = (function () {
     if (a === '--diag-arxiv-hold') { out.arxiv = true; out.arxivHold = true; }
     /* --diag-alertmusic：弹一次休息提醒，点「我休息了」之后音乐就该停（用户报的 bug） */
     if (a === '--diag-alertmusic') out.alertmusic = true;
+    /* --diag-alertshot[=skin]：开着提醒弹窗截图（看跳舞那几帧会不会被切头） */
+    if (a === '--diag-alertshot') { out.alertshot = true; out.setskin = 'leidaxiaomao'; }
+    m = /^--diag-alertshot=(.+)$/.exec(a);
+    if (m) { out.alertshot = true; out.setskin = m[1]; }
     /* --diag-petskin=<id>：自检时指定桌面宠物用哪个形象（用来肉眼确认某个皮肤画得对不对） */
     m = /^--diag-petskin=(.+)$/.exec(a);
     if (m) out.petskin = m[1];
@@ -1807,6 +1811,33 @@ function createWindow() {
             diagLog('amB-4-点完 4 秒（还响就是 bug）', await au('B4'));
             await w9(4000);
             diagLog('amB-5-点完 8 秒', await au('B5'));
+          }
+          /* ============ 提醒弹窗里看皮肤（--diag-alertshot） ============
+             先把「宠物形象」写成指定皮肤（要重载页面才生效），再弹一次休息提醒、
+             不关它，最后那张截图就能看到提醒舞台上的动作有没有被切掉。 */
+          if (DIAG.alertshot) {
+            if (!win.webContents.__alertShotStage) win.webContents.__alertShotStage = 0;
+            const stage = win.webContents.__alertShotStage;
+            if (stage === 0) {
+              win.webContents.__alertShotStage = 1;
+              await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+                'raw.skin=' + JSON.stringify(DIAG.setskin || 'leidaxiaomao') + ';' +
+                'localStorage.setItem("kunkun.settings.v1",JSON.stringify(raw));return true;})()', true);
+              win.webContents.reload();
+              const stop = new Error('diag-restart');
+              stop.diagRestart = true;
+              throw stop;
+            }
+            /* 第二轮：皮肤已经生效，弹提醒并停在这儿等截图 */
+            await new Promise(function (r) { setTimeout(r, 1500); });
+            send('tray-alert', 'rest');
+            await new Promise(function (r) { setTimeout(r, 3500); });   // 让它跳到跳舞那一段
+            diagLog('alertshot-就绪', await win.webContents.executeJavaScript(
+              '(function(){var o=document.getElementById("overlay");var c=document.getElementById("alertStage");' +
+              'var cv=c?c.getBoundingClientRect():null;' +
+              'return {弹窗开着:!!o&&!o.hidden, 舞台宽高:cv?Math.round(cv.width)+"x"+Math.round(cv.height):null,' +
+              ' 当前形象:window.kunkunArxivUI?"(页面正常)":"(页面正常)"};})()', true));
           }
           /* 重复待办自检：全部走真实弹窗 + 真实的「点勾完成」，看下一期排到哪天 */
           if (DIAG.repeat) {

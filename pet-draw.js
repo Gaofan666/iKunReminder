@@ -239,7 +239,8 @@
       PLAIN = !!this.plain;
 
       /* 选了自定义皮肤就用皮肤精灵图；没选或还没加载好就走代码手绘 */
-      if (!drawSkin(ctx, t, mood)) {
+      const availLocal = (baseY > 0 && s > 0) ? (baseY / s) : 310;
+      if (!drawSkin(ctx, t, mood, availLocal)) {
         if (!this.plain) this.drawGround(ctx, t, mood);
         drawFigure(ctx, t, mood, energy);
         if (!this.plain) this.drawOrbits(ctx, t, mood);
@@ -305,8 +306,11 @@
     return m.animations[mood] || m.animations.idle || null;
   }
 
-  /* 返回 true 表示这一帧由皮肤画掉了；false 表示该走代码手绘 */
-  function drawSkin(ctx, t, mood) {
+  /* 返回 true 表示这一帧由皮肤画掉了；false 表示该走代码手绘。
+     availLocal：原点往上还有多少「本地单位」可用（= 画布上方的空间 ÷ 当前缩放）。
+     提醒弹窗那个舞台 fit 只有 300，而皮肤是按 310 画的 —— 不给它让一让，
+     抬手那几帧的头顶就会被裁掉（用户报过）。 */
+  function drawSkin(ctx, t, mood, availLocal) {
     if (!P.skin.ready || !P.skin.img || !P.skin.meta) return false;
     const m = P.skin.meta;
     const a = skinAnimFor(mood);
@@ -317,11 +321,10 @@
     const fps = a.fps || m.fps || 10;
     const idx = Math.floor(t * fps) % count;
     const row = a.row || 0;
-    /* 与手绘角色对齐：底边落在原点、横向居中，整体高度约 278 个本地单位 */
-    /* 帧高映射成多少本地单位。调大 = 宠物在界面上更大。
-     之前缩小下边界的做法是让内容下移，视觉上宠物反而往下跑了；
-     正确做法是把它整体放大，下边界的占比自然就小了。 */
-    const k = 310 / fh;
+    /* 帧高映射成多少本地单位。正常是 310（和手绘角色一样高）；
+       放不下就按可用高度缩下来，宁可小一点也不切头。 */
+    const cap = (availLocal > 40 && availLocal < 310) ? availLocal : 310;
+    const k = cap / fh;
     const dw = fw * k, dh = fh * k;
     try {
       ctx.drawImage(P.skin.img, idx * fw, row * fh, fw, fh, -dw / 2, -dh, dw, dh);

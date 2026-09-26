@@ -2,25 +2,25 @@
   "name": "雷达观察员小猫",
   "author": "自定义",
   "frame": {
-    "w": 256,
-    "h": 256
+    "w": 239,
+    "h": 263
   },
   "fps": 6,
   "sheet": "leidaxiaomao.png",
-  "bottomGap": 7,
+  "bottomGap": 3,
   "animations": {
     "idle": {
-      "row": 1,
+      "row": 0,
       "count": 6,
       "fps": 4
     },
     "dance": {
-      "row": 2,
+      "row": 1,
       "count": 6,
       "fps": 6
     },
     "cheer": {
-      "row": 3,
+      "row": 2,
       "count": 6,
       "fps": 6
     }
