@@ -1,20 +1,20 @@
 {
-  "version": "3.9.9",
-  "releaseDate": "2026-09-26T04:29:35.315Z",
-  "notes": "## iKunReminder v3.9.9\n\n1. 🔇 **修：点了「我休息了 / 我喝了」之后还有声音**\n   以前有几路声音可能在点了按钮之后才响起来：语音还没播完、提醒音乐刚要接上、自选音乐放不出来要退回自带音乐时。现在点完立刻全静音：\n   · 提醒音乐马上停\n   · 没说完的语音播报直接掐掉\n   · 提醒那串小旋律也停掉\n   · 迟到的播放一律作废（不会再「自己又响一声」）\n\n2. ✨ **修：主界面倒计时圆圈外面那圈方形荧光** —— 那是加在圆环上的发光效果，因为圆环所在的外框是方的，看起来就是一圈方的光。已经去掉，现在只有干净的圆环。\n\n3. 🐱 **新增内置形象「雷达观察员小猫」**（朋友画的，坐在雷达台前那只），主界面「🎨 宠物形象」里直接选，桌面宠物也跟着能换。\n\n**下载**：`iKunReminder-setup-v3.9.9.exe`（约 117 MB，Windows x64，双击安装）\n",
-  "size": 122339252,
-  "sha512": "+1I/5zGEliNeNI7h0iYgAeGSN5kD4AGMSyCpSZsErJy00Ttvv43zsXuRFYWoZbBk5yGyahva3edvqMWN59kL9A==",
+  "version": "3.9.10",
+  "releaseDate": "2026-09-26T07:49:15.888Z",
+  "notes": "## iKunReminder v3.9.10\n\n1. 🐱 **修「雷达观察员小猫」形象的两个问题**\n   · **左边总有多余元素**：这张精灵图里每一帧左边都粘着一点相邻动作的碎片（原图第 0～8 列），而且各帧没有对齐。已经按主体重新裁了一遍：碎片去掉、所有帧统一居中并**底部对齐**，动画不会再左右跳，脚也永远踩在地上。\n   · **弹休息提醒时头顶被切**：提醒弹窗那个舞台比主界面小一点，而形象是按固定高度画的，抬手那几帧的头顶会超出画面。现在会按可用高度自动缩一点，**完整显示**，不再切头（对所有自定义形象都生效）。\n\n2. 🐱 内置形象数量不变，仍是「🎨 宠物形象」里选；这一版只动了这张图和新皮肤的配置。\n\n**下载**：`iKunReminder-setup-v3.9.10.exe`（约 116 MB，Windows x64，双击安装）\n",
+  "size": 121816022,
+  "sha512": "nNhwt9t9FFEf8C5amsDR4dfWejjKtsBkfKLhEbcni1YBa7mEQ4HzmkgR41Skyx1md9yFC1OPVneVM4bmva9WeA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.9/iKunReminder-setup-v3.9.9.exe.part1",
-      "size": 61169626,
-      "sha512": "rh3dmZMZRZ5xDuvkV0+BItaEz3GwUpT3CzbGAOLRcQPYgTxiUdVAr0CQnvd6uDfH898luOn3ML/A7iyBcILBvQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.10/iKunReminder-setup-v3.9.10.exe.part1",
+      "size": 60908011,
+      "sha512": "ZWKkl8XMTNxmW9CWxFpGH+XOv1KWApjC99rxL89e5rswSK2NeTZWikzrY7o0skTFzimamQpw1f/2Geu4cppH6g==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.9/iKunReminder-setup-v3.9.9.exe.part2",
-      "size": 61169626,
-      "sha512": "Lj91Omtt/0edaL/XaEEIJf3qKglnkfhooOKamndWjemgoviyphXQ1bBoO65PMqWr7kTSwIQclFWfKsk3+0KaVQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.10/iKunReminder-setup-v3.9.10.exe.part2",
+      "size": 60908011,
+      "sha512": "m7vtS+zSVzDuOX3G7iziJfe9ZIGn4F3ioU+as5/GAgwHJ5UVuYLGy5SiWuXh/9dWBmK1Sq4/5lnjFcesY6t1BA==",
       "index": 2
     }
   ]
