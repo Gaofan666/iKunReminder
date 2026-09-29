@@ -1,20 +1,20 @@
 {
-  "version": "4.0.0",
-  "releaseDate": "2026-09-29T08:52:31.421Z",
-  "notes": "## iKunReminder v4.0\n\n1. 🔄 **修「老版本只能一个版本一个版本地升」**\n   自动更新现在除了读仓库里那份更新清单，还会**直接问 GitHub / Gitee 的「最新发行版」接口**，两边取更新的那个当提示。\n   以前只认仓库清单，而那份清单是可能被 CDN 缓存住的（停留在上一个版本），老用户就会看到「只提示下一个版本」，只能一个个版本升上去。现在**即使清单是旧的，也会按接口给出的真正最新版提示**，一步到位。\n   另外更新那一栏多了一个 **「🌐 打开发布页」** 按钮：万一自动下载这条路走不通（版本太老、网络特殊），点一下直接用浏览器打开最新版下载页，手动下最新安装包覆盖安装即可。\n\n2. 🔢 **版本号改成 x.x（前面大改动、后面小改动）**\n   从这一版起：**4.0 → 4.1 → 5.0**……这样。\n   说明一下：安装包文件名和更新清单内部仍然是三段（如 `4.0.0`），因为更新器的版本比较只认标准三段版本号，写 `4.0` 会失效；**界面、标题栏、标签都按 x.x 显示**。\n\n3. 🧰 这一版同时包含 v3.11.0 的全部内容（科研动态 + 备忘录升级 + 前面那批修复），没装过 3.11 的直接装这个就行。\n\n**下载**：`iKunReminder-setup-v4.0.0.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121826144,
-  "sha512": "yPYWUBJ9PDWDSS794Orw6hwiaNA65TBmWKO5kSzTWrzOll099kkxRPIX0CyjS68XOBB5AhvQYSo9wuNsuNVGJw==",
+  "version": "4.1.0",
+  "releaseDate": "2026-09-29T09:48:02.809Z",
+  "notes": "## iKunReminder v4.1\n\n1. 🔔 **提示音可以自己指定了**（喝水、休息、待办都能各用各的）\n   · **提醒事项卡片**：右上角多了一个 **🔔** 按钮（在「编辑」旁边），点一下挑一个你电脑里的音乐文件（mp3 / wav / ogg / m4a / flac 等常见格式），以后这条提醒到点就放它。\n     再点一次 🔔 可以换一个；弹出来的提示里点「取消」就是**改回默认提示音**。\n   · **待办卡片**：「＋ 新增待办」**左边**多了 **「🔔 提示音」** 按钮（设过之后会显示成「🔔 自定义提示音」），一次给所有待办到点用同一个提示音（备忘到点提醒也跟着它）。\n   · 没指定提示音的，还是原来的内置小旋律，跟以前一模一样。\n   · 指定的文件被删掉或格式放不出来时，会自动退回内置提示音 —— **不会到点了没声音**。\n   · 这个「提示音」和设置里那个「提醒音乐」是两回事：提示音是到点那一下的，提醒音乐是语音播报结束后才放的那段，两边互不影响。\n\n2. 🧰 上一版（v4.0）的更新修复也都在：检查更新会用发布页接口核对最新版本，老版本也能一步升到最新；更新那栏有「🌐 打开发布页」兜底。\n\n**下载**：`iKunReminder-setup-v4.1.0.exe`（约 116 MB，Windows x64，双击安装）\n",
+  "size": 121826769,
+  "sha512": "rICEP9UKgJ+Q8AXj6fxDY2nsal6d4q1tHD6mpAIVHIfQodhEgAvmzac7GntwzNqxvGpArBqfXCUHDY5SIfXDhg==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.0/iKunReminder-setup-v4.0.0.exe.part1",
-      "size": 60913072,
-      "sha512": "X9/JP6kt/zZT+Ejbj3pSStJgZhrX8nGtMt1aSV8byrcqAZI53Fd9vW4ixLl7ZJ9aIiDAbZW6ddMjKpMFNjS29Q==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.1/iKunReminder-setup-v4.1.0.exe.part1",
+      "size": 60913385,
+      "sha512": "C7LaPhbzykbXS0d1MGB47Fty28/VGwYxy4QN2wQ8qku9KMM4TGWeKaXFTvTqZmWfY3fVWbUwaaf8yb1/nPov3Q==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.0/iKunReminder-setup-v4.0.0.exe.part2",
-      "size": 60913072,
-      "sha512": "yvrwZzytS7xsE8RJPXckdJ1mGrsyCY19XtcSeQszfJfMWoURMfHkAs74BkG5YzBMyW1tZn8REnGycwtnowHkHA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.1/iKunReminder-setup-v4.1.0.exe.part2",
+      "size": 60913384,
+      "sha512": "1OIacj2kk6CZZo6EtMpODXj+dAMWrHtnDcgZHU0wFbDTzacg70nG9Ij4kHhJUD617MdqfJCNcoRyQIWdF/Rumg==",
       "index": 2
     }
   ]
