@@ -1173,23 +1173,20 @@
   let memoLateOpen = false;        // 延期统计明细展开着吗
   let lateFillId = null;           // 正在补填延期原因的备忘 id
 
-  /* 完成一条备忘：延期过就顺手记一笔（次数 + 到完成为止一共拖了多久）。
-     why 有值就当作这次的原因；没有也照记，原因允许事后补。 */
+  /* 完成一条备忘。逾期的那一笔交给 recordMemoLate 去记（同一回合不会重复记），
+     why 有值就当作这次的原因；没写也照记，原因允许事后补。 */
   function completeMemo(m, why) {
     if (!m) return false;
     const now = Date.now();
     const reason = String(why || '').trim().slice(0, 60);
-    if (!m.done && m.dueAt && now > m.dueAt) {
-      m.lateCount = (+m.lateCount || 0) + 1;
-      m.lateMs = Math.max(0, now - m.dueAt);
-      if (!Array.isArray(m.lateLog)) m.lateLog = [];
-      m.lateLog.push({ at: now, ms: m.lateMs, text: reason });
-      if (m.lateLog.length > 20) m.lateLog = m.lateLog.slice(-20);
+    if (!m.done) {
+      if (m.dueAt && now > m.dueAt) recordMemoLate(m, reason);
+      else if (reason) m.lateReason = reason;
     }
-    if (reason) m.lateReason = reason;
     m.done = true;
     m.doneAt = now;
     m.remindAt = 0;
+    m.lateOpen = false;      // 这一回合结束：以后再逾期就是新的一回合，重新记一次
     saveTodoStore();
     renderMemos();
     return true;
@@ -1307,17 +1304,35 @@
     lateChipPaint();
   }
 
-  /* 把这次「逾期处理」记到备忘上：次数 +1、延期时长刷新、原因留档 */
-  function recordMemoLate(m) {
-    if (!m || !m.dueAt) return;
+  /* 弹窗那个「延期原因」输入框现在填的是什么 */
+  function lateInputVal() {
+    return String((el.lateInput && el.lateInput.value) || '').trim().slice(0, 60);
+  }
+
+  /* 记一次「延期」。一次逾期只记一次：在逾期提醒里处理（我知道了 / 10 分钟后再说）时记，
+     或者最后完成时记 —— 谁先来算谁的。同一回合后面再处理，只把「拖了多久」和原因
+     刷新到最新，不再加次数。why 不传就从提醒弹窗那个输入框取。 */
+  function recordMemoLate(m, why) {
+    if (!m || !m.dueAt) return false;
+    if (why === undefined) why = lateInputVal();
+    const reason = String(why || '').trim().slice(0, 60);
     const now = Date.now();
-    m.lateCount = (+m.lateCount || 0) + 1;
-    m.lateMs = Math.max(0, now - m.dueAt);          // 到这次处理为止一共拖了多久
-    const why = (el.lateInput && el.lateInput.value || '').trim().slice(0, 60);
-    if (why) m.lateReason = why;
+    const ms = Math.max(0, now - m.dueAt);
     if (!Array.isArray(m.lateLog)) m.lateLog = [];
-    m.lateLog.push({ at: now, ms: m.lateMs, text: why });
+    if (reason) m.lateReason = reason;
+    if (m.lateOpen) {
+      /* 这一回合已经记过了：不加次数，只把时长/原因更新到最新 */
+      m.lateMs = Math.max(+m.lateMs || 0, ms);
+      const last = m.lateLog[m.lateLog.length - 1];
+      if (last) { last.ms = m.lateMs; if (reason) last.text = reason; }
+      return false;
+    }
+    m.lateOpen = true;                          // 这一回合开始：之后不再重复记
+    m.lateCount = (+m.lateCount || 0) + 1;
+    m.lateMs = ms;
+    m.lateLog.push({ at: now, ms: ms, text: reason });
     if (m.lateLog.length > 20) m.lateLog = m.lateLog.slice(-20);
+    return true;
   }
 
   /* 延期统计：只算已经记过延期（处理过逾期提醒）的备忘 */
@@ -2002,6 +2017,7 @@
             lateCount: +m.lateCount || 0,
             lateMs: +m.lateMs || 0,
             lateReason: String(m.lateReason || ''),
+            lateOpen: !!m.lateOpen,
             lateLog: Array.isArray(m.lateLog) ? m.lateLog.slice(-20) : []
           };
         });
@@ -2917,6 +2933,8 @@
       const m = memoById(editingMemoId);
       if (m) {
         m.text = text.slice(0, 500);
+        /* 改了截止时间 = 上一回合结束：之后再逾期算新的一回合，重新记一次 */
+        if (m.dueAt !== dueAt) m.lateOpen = false;
         m.dueAt = dueAt;
         m.remindBefore = remindBefore;
         m.remindEvery = remindEvery;

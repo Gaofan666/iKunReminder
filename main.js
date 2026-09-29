@@ -1141,7 +1141,12 @@ function createWindow() {
               'if(t)t.click();return true;})()');
             await jsw('document.getElementById("lateFillSave").click(); true');
             await waitW(400);
-            out['1-完成时补填'] = { 接手时: ackC, 补填弹窗: modalC, 保存后: await jsw(readM(T_C)) };
+            const doneC = await jsw(readM(T_C));
+            out['1-完成时补填'] = {
+              接手时: ackC, 补填弹窗: modalC, 保存后: doneC,
+              /* 关键：「我知道了」已经记过一次，完成时不能再记第二次 */
+              次数没重复加: ackC.延期次数 === doneC.延期次数
+            };
 
             /* ② 逾期 → 我知道了 → 勾完成时「跳过」→ 卡片上冒「补原因」→ 补一句 */
             await jsw(mk(T_D, 1));
@@ -1161,9 +1166,12 @@ function createWindow() {
               'i.dispatchEvent(new Event("input"));return true;})()');
             await jsw('document.getElementById("lateFillSave").click(); true');
             await waitW(400);
+            const fixD = await jsw(readM(T_D));
             out['2-跳过与事后补'] = {
               完成时弹窗: modalD, 跳过后: skipD, 卡片按钮点开了: openedD,
-              事后弹窗: modalD2, 补完后: await jsw(readM(T_D))
+              事后弹窗: modalD2, 补完后: fixD,
+              /* 跳过完成、之后再补原因，都不该再加次数 */
+              次数还是一: skipD.延期次数 === fixD.延期次数
             };
 
             /* ③ 没延期的（截止在未来）勾完成：直接完成，不许弹补填 */
