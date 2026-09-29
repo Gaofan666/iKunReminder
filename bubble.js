@@ -13,7 +13,10 @@
     next: document.getElementById('next'),
     todos: document.getElementById('todos'),
     todoHead: document.getElementById('todoHead'),
-    todoList: document.getElementById('todoList')
+    todoList: document.getElementById('todoList'),
+    memos: document.getElementById('memos'),
+    memoHead: document.getElementById('memoHead'),
+    memoList: document.getElementById('memoList')
   };
 
   /* 今日待办那一块：没有就整块藏起来（气泡窗会按 main.js 算的高度显示） */
@@ -47,6 +50,36 @@
     }
   }
 
+  /* 备忘截止那一块：截止在今天 / 已过期还没完成的备忘（📌），没内容就整块藏起来 */
+  function paintMemos(md) {
+    if (!el.memos) return;
+    var items = (md && md.items) || [];
+    if (!items.length) { el.memos.hidden = true; el.memoList.innerHTML = ''; return; }
+    el.memos.hidden = false;
+    el.memoHead.textContent = '📌 备忘截止 ' + md.total + ' 条' +
+      (md.left > 0 ? '（' + md.left + ' 条没做完）' : '');
+    el.memoList.innerHTML = '';
+    items.forEach(function (it) {
+      var row = document.createElement('div');
+      row.className = 'pb-todo-row';
+      var t = document.createElement('span');
+      t.className = 't';
+      t.textContent = it.time || '';
+      var x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '· ' + (it.text || '');
+      row.appendChild(t);
+      row.appendChild(x);
+      el.memoList.appendChild(row);
+    });
+    if (md.more > 0) {
+      var m = document.createElement('div');
+      m.className = 'pb-todo-more';
+      m.textContent = '…还有 ' + md.more + ' 条，点「备忘」看全部';
+      el.memoList.appendChild(m);
+    }
+  }
+
   /* 这个气泡点下去要干什么（'' = 不可点，鼠标整块穿透过去） */
   var bodyClick = '';
 
@@ -57,6 +90,7 @@
     el.tip.textContent = d.tip || '';
     el.next.textContent = d.next || '';
     paintTodos(d.todos);
+    paintMemos(d.todos && d.todos.memos);
     /* 空行直接收掉：不留空盒子、也不留下那条分隔线（科研推送只发一行字） */
     el.mer.hidden = !el.mer.textContent;
     el.tip.hidden = !el.tip.textContent;

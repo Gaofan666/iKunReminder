@@ -203,7 +203,11 @@
   let moodTimer = null;
 
   /* ------------------------------------------------ 备忘 / 待办 / 界面偏好
-     memos：{ id, text, done, at }
+     memos：{ id, text, done, at, dueAt, remindBefore, remindEvery, remindAt }
+       dueAt        截止时间（毫秒时间戳）；0 = 无限期（不提醒）
+       remindBefore 截止前提前多久开始提醒（毫秒）
+       remindEvery  开始后每隔多久提醒一次（毫秒）；0 = 只在开始点提醒一次
+       remindAt     下次该提醒的时间（毫秒）；0 = 不再提醒
      todos：{ id, text, done, at, dueAt, notify, remindAt, prio }
        dueAt    用户设的提醒时间（毫秒时间戳）
        remindAt 下次该弹提醒的时间；snooze 会把它往后推，程序重开时它可能已经过期
@@ -348,13 +352,15 @@
     todoGrabFront: true,       // 待办到点是否抢前台
     todoCatchUp: true          // 重开程序时是否补提醒过期待办
   };
-  /* 提醒弹层当前弹的是哪一类：'item'（喝水/休息那种循环提醒）或 'todo' */
+  /* 提醒弹层当前弹的是哪一类：'item'（喝水/休息那种循环提醒）/'todo'/'memo'（备忘截止） */
   let alertKind = 'item';
   let alertMulti = null;          // 合并弹窗里的待办 id 列表（alertKind === 'todos' 时有效）
   let todoSeqQueue = [];          // 「逐条看」排下的队：按这个顺序一条条弹
   const MULTI_ID = '__multi';     // 合并弹窗占着提醒位时 rt.alertId 的值（不是真待办 id）
   let alertTodoId = null;
   let alertTodo = null;
+  let alertMemoId = null;
+  let alertMemo = null;
 
   /* --------------------------------------------------------------- 小工具 */
   const $ = (s, root) => (root || document).querySelector(s);
@@ -555,6 +561,7 @@
     alertTitle: $('#alertTitle'),
     alertDesc: $('#alertDesc'),
     alertDone: $('#alertDone'),
+    alertAck: $('#alertAck'),
     alertSnooze: $('#alertSnooze'),
     overlayCard: $('#overlayCard'),
     alertMusic: $('#alertMusic'),
@@ -616,6 +623,14 @@
     memoSave: $('#memoSave'),
     memoCancel: $('#memoCancel'),
     memoClose: $('#memoClose'),
+    memoDueOn: $('#memoDueOn'),
+    memoDueHint: $('#memoDueHint'),
+    memoDueRow: $('#memoDueRow'),
+    memoDueDate: $('#memoDueDate'),
+    memoDueTime: $('#memoDueTime'),
+    memoRemindRow: $('#memoRemindRow'),
+    memoRemindBefore: $('#memoRemindBefore'),
+    memoRemindEvery: $('#memoRemindEvery'),
     todoOverlay: $('#todoOverlay'),
     tdTitle: $('#tdTitle'),
     tdText: $('#tdText'),
@@ -968,6 +983,7 @@
     el.alertDesc.textContent = info.desc || it.desc || '';
     el.alertDone.textContent = info.done || it.done || '我完成了';
     el.alertSnooze.textContent = '5 分钟后再说';
+    if (el.alertAck) el.alertAck.hidden = true;
     el.overlay.style.setProperty('--accent', it.color || '#4A9BD4');
     el.overlay.hidden = false;
 
@@ -1003,6 +1019,7 @@
     el.alertDone.textContent = '完成 ✓';
     el.alertSnooze.textContent = '10 分钟后再说';
     if (el.alertOneByOne) el.alertOneByOne.hidden = true;
+    if (el.alertAck) el.alertAck.hidden = true;
     el.overlay.style.setProperty('--accent', '#D9A15F');
     el.overlay.hidden = false;
 
@@ -1043,6 +1060,7 @@
     el.alertDone.textContent = '全部完成 (' + list.length + ')';
     el.alertSnooze.textContent = '全部 10 分钟后再说';
     if (el.alertOneByOne) el.alertOneByOne.hidden = false;
+    if (el.alertAck) el.alertAck.hidden = true;
     el.overlay.style.setProperty('--accent', '#D9A15F');
     el.overlay.hidden = false;
     if (el.alertMore) el.alertMore.hidden = true;      // 合并弹窗本身就是"全部"，不用再提示还有几条
@@ -1062,10 +1080,48 @@
     try { el.alertDone.focus(); } catch (e) { }
   }
 
+  /* 备忘到截止时间（或到了提前提醒的点）→ 全屏弹窗，和待办同一套 */
+  function fireMemoAlert(m, late) {
+    if (rt.alertId) return;
+    if (!m) return;
+    rt.alertId = m.id;
+    alertKind = 'memo';
+    alertMemoId = m.id;
+    alertMemo = m;
+    alertMulti = null;
+
+    const title = late ? '这条备忘已经到截止时间啦' : '备忘快到截止时间啦';
+    el.alertTitle.textContent = title;
+    el.alertTitle.dataset.text = title;
+    el.alertDesc.textContent = m.text + '\n截止时间：' + fmtTodoTime(m.dueAt) +
+      (late ? '（已过期）' : '（' + fmtFromNow(m.dueAt) + '）');
+    el.alertDone.textContent = '完成 ✓';
+    el.alertSnooze.textContent = '10 分钟后再说';
+    if (el.alertOneByOne) el.alertOneByOne.hidden = true;
+    if (el.alertAck) el.alertAck.hidden = false;
+    el.overlay.style.setProperty('--accent', '#D9A15F');
+    el.overlay.hidden = false;
+
+    alertStage.setMood('dance');
+    alertStage.resize();
+    spawnWords();
+    stage.setMood('dance');
+    setCaption('<b>⏰ 备忘提醒：' + escapeHtml(m.text) + '</b>');
+
+    Sound.alert();
+    armAlertMusic();
+    speak(late ? '有一条备忘到截止时间了' : '有一条备忘快到截止时间了');
+    notify(title, m.text);
+    flashTitle(true);
+    if (native && ui.todoGrabFront) native.alert(m.id);
+    try { el.alertDone.focus(); } catch (e) { }
+    updateAlertMore();
+  }
+
   /* 弹窗正显示时，告诉用户后面还排着几条待办（每 250ms 的 tick 会刷新它） */
   function updateAlertMore() {
     if (!el.alertMore) return;
-    if (!rt.alertId || alertKind === 'todos') { el.alertMore.hidden = true; return; }
+    if (!rt.alertId || alertKind === 'todos' || alertKind === 'memo') { el.alertMore.hidden = true; return; }
     const n = pendingTodoAlerts().filter(function (t) { return t.id !== rt.alertId; }).length;
     if (n > 0) {
       el.alertMore.textContent = '还有 ' + n + ' 条待办也到点了 —— 处理完这条会接着弹';
@@ -1095,6 +1151,8 @@
     alertKind = 'item';
     alertTodoId = null;
     alertTodo = null;
+    alertMemoId = null;
+    alertMemo = null;
     alertMulti = null;
     speechEndCb = null;              // 关掉提醒就不再排队放音乐
     stopAlertMusic();
@@ -1108,6 +1166,7 @@
     el.floatWords.innerHTML = '';
     if (el.alertMore) el.alertMore.hidden = true;
     if (el.alertOneByOne) el.alertOneByOne.hidden = true;
+    if (el.alertAck) el.alertAck.hidden = true;
     flashTitle(false);
     if (native) native.dismiss();
     setMood('cheer', 2200);
@@ -1131,6 +1190,20 @@
       markTodoDone(id);
       todoSeqQueue = todoSeqQueue.filter(function (x) { return x !== id; });
       closeAlert();
+      return;
+    }
+    /* 备忘：勾掉完成，提醒位清掉 */
+    if (alertKind === 'memo') {
+      const mm = memoById(id);
+      if (mm) {
+        mm.done = true;
+        mm.doneAt = Date.now();
+        mm.remindAt = 0;
+      }
+      saveTodoStore();
+      renderMemos();
+      closeAlert();
+      if (mm) setCaption('备忘已完成：<b>' + escapeHtml(mm.text) + '</b>');
       return;
     }
     if (stats.date !== todayKey()) stats = { date: todayKey(), counts: {} };
@@ -1173,12 +1246,45 @@
       closeAlert();
       return;
     }
+    /* 备忘：往后推 10 分钟（期间到截止也不怕，反正下次还弹） */
+    if (alertKind === 'memo') {
+      const mm = memoById(id);
+      if (mm) {
+        mm.remindAt = Date.now() + 10 * 60 * 1000;
+        saveTodoStore();
+        renderMemos();
+        setCaption('备忘 <b>' + escapeHtml(mm.text) + '</b> 已延后 10 分钟');
+      }
+      closeAlert();
+      return;
+    }
     const t = rt.timers[id] || { total: SNOOZE_SEC };
     rt.timers[id] = { remaining: SNOOZE_SEC, total: Math.max(t.total, SNOOZE_SEC) };
     const it = itemById(id);
     closeAlert();
     if (it) setCaption('<b>' + it.name + '</b>提醒已延后 5 分钟');
     render();
+  }
+
+  /* 「我知道了」：备忘提醒专用 —— 不标完成、也不打断周期。
+     弹窗弹出时 checkMemoDue 已经调过 advanceMemoRemind，remindAt 已排到下一个
+     周期点（一次性提醒则置 0 = 不再提醒），所以这里只关弹窗、不动数据。 */
+  function ackAlert() {
+    const id = rt.alertId;
+    if (!id) return;
+    if (alertKind === 'memo') {
+      const mm = memoById(id);
+      closeAlert();
+      if (mm) {
+        if (mm.remindAt && mm.remindAt > 0) {
+          setCaption('好的，备忘 <b>' + escapeHtml(mm.text) + '</b> 知道了，按设定周期继续提醒');
+        } else {
+          setCaption('好的，备忘 <b>' + escapeHtml(mm.text) + '</b> 知道了，不再提醒');
+        }
+      }
+      return;
+    }
+    closeAlert();   // 非备忘误触：只关弹窗，不改变任何数据
   }
 
   function setMood(m, ms) {
@@ -1194,18 +1300,65 @@
      时间恢复流动后自动解除；电源事件触发的暂停只能由 resume / unlock 解除。 */
   let gapPause = false;
 
-  function setSleepPause(on) {
-    if (rt.sleeping === on) return;
+  /* 睡眠/息屏 ≥ 5 分钟 = 算休息过了：唤醒后把「休息」计时重置为完整间隔，
+     重新开始下一次计时（人确实歇过了，不该接着上次没数完的继续）。 */
+  const REST_RESET_AFTER_MS = 5 * 60 * 1000;
+  let sleepAt = 0;        // 进入睡眠的时刻（电源事件路径）
+  let sleepGapMs = 0;     // tick 推断路径已知的睡眠时长（毫秒）
+  let lastWakeReset = false;   // 最近一次唤醒是否重置了「休息」（自检钩子读它）
+
+  function setSleepPause(on, gapMs) {
+    if (rt.sleeping === on) {
+      /* 已处于目标状态：tick 推断路径可能补一个已知时长，收下更大的那个 */
+      if (on && gapMs > sleepGapMs) sleepGapMs = gapMs;
+      return;
+    }
     rt.sleeping = on;
     last = Date.now();                 // 不管暂停还是恢复，都把基准时间拉到现在
     if (on) {
+      sleepAt = Date.now();
+      if (gapMs) sleepGapMs = gapMs;
       setCaption('<b>电脑睡眠 / 息屏中</b> · 计时已自动暂停');
       stage.setMood('idle');
     } else {
-      setCaption('电脑已唤醒 · 计时继续');
+      /* 醒来：算这次睡了多久（电源路径用起止时刻，tick 推断路径用已知间隔，取大者兜底） */
+      const elapsed = Date.now() - (sleepAt || Date.now());
+      const slept = Math.max(elapsed, sleepGapMs);
+      sleepAt = 0;
+      sleepGapMs = 0;
+      lastWakeReset = slept >= REST_RESET_AFTER_MS && restResetIfNeeded();
+      if (lastWakeReset) {
+        setCaption('电脑已唤醒 · 休息超过 ' + (REST_RESET_AFTER_MS / 60000) +
+          ' 分钟算休息过，「休息」计时已重新开始');
+      } else {
+        setCaption('电脑已唤醒 · 计时继续');
+      }
     }
     render();
   }
+
+  /* 睡眠/息屏超阈值 = 算休息过了：把「休息」项重置为完整间隔。
+     计时器被用户手动暂停时不自动重置（尊重手动暂停）。返回 true 表示重置了。 */
+  function restResetIfNeeded() {
+    if (!rt.running) return false;
+    let hit = false;
+    settings.items.forEach(function (it) {
+      if (it.id === 'rest' && it.enabled) { resetTimer(it.id); hit = true; }
+    });
+    return hit;
+  }
+
+  /* 自检专用钩子（只有 --diag-* 跑的时候被主进程调，正常使用不会碰它）：
+     模拟一次「睡眠-唤醒」，sleptMs 指定睡了多久（毫秒），返回休息/喝水当前剩余秒数。 */
+  window.__simSleepResume = function (sleptMs) {
+    setSleepPause(true);
+    sleepAt = Date.now() - (sleptMs || 0);
+    lastWakeReset = false;
+    setSleepPause(false);
+    const t = rt.timers['rest'];
+    const w = rt.timers['water'];
+    return { rest: t ? t.remaining : -1, water: w ? w.remaining : -1, reset: lastWakeReset };
+  };
 
   /* ---------------------------------------------------------- 系统通知 */
   function notify(title, body) {
@@ -1533,7 +1686,11 @@
             id: String(m.id || newLocalId('m')),
             text: String(m.text).slice(0, 500),
             done: !!m.done,
-            at: +m.at || Date.now()
+            at: +m.at || Date.now(),
+            dueAt: +m.dueAt || 0,
+            remindBefore: +m.remindBefore || 0,
+            remindEvery: +m.remindEvery || 0,
+            remindAt: +m.remindAt || 0
           };
         });
       }
@@ -1578,7 +1735,7 @@
     /* 左边那一栏的备忘录跟着一起推（存盘就推，两边永远一致） */
     if (native.calMemos) {
       native.calMemos(memos.map(function (m) {
-        return { id: m.id, text: m.text, done: !!m.done, at: m.at || 0 };
+        return { id: m.id, text: m.text, done: !!m.done, at: m.at || 0, dueAt: m.dueAt || 0 };
       }));
     }
   }
@@ -2085,10 +2242,13 @@
   function memoById(id) { return memos.filter(m => m.id === id)[0] || null; }
   function todoById(id) { return todos.filter(t => t.id === id)[0] || null; }
 
-  /* 排序：未完成在前；待办再按提醒时间升序（过期的排最前面，最扎眼） */
+  /* 排序：未完成在前；有截止时间的排前面（截止早的/过期的最扎眼），无限期按新增倒序 */
   function sortedMemos() {
     return memos.slice().sort(function (a, b) {
       if (a.done !== b.done) return a.done ? 1 : -1;
+      const ad = a.dueAt || 0, bd = b.dueAt || 0;
+      if (!!ad !== !!bd) return ad ? -1 : 1;
+      if (ad && bd) return ad - bd;
       return b.at - a.at;
     });
   }
@@ -2123,7 +2283,15 @@
           '<button data-role="del" class="del" title="删除">删除</button>' +
         '</div>';
       row.querySelector('.item-text').textContent = m.text;
-      row.querySelector('.item-meta').textContent = '记于 ' + fmtTodoTime(m.at);
+      const meta = row.querySelector('.item-meta');
+      if (m.dueAt) {
+        const late = !m.done && m.dueAt < Date.now();
+        meta.innerHTML = '⏰ 截止 <b></b> <span class="' + (late ? 'late' : '') + '"></span>';
+        meta.querySelector('b').textContent = fmtTodoTime(m.dueAt);
+        meta.querySelector('span').textContent = m.done ? '（已完成）' : fmtFromNow(m.dueAt);
+      } else {
+        meta.textContent = '记于 ' + fmtTodoTime(m.at);
+      }
       el.memoList.appendChild(row);
     });
   }
@@ -2176,11 +2344,68 @@
   /* ------------------------------------------------------------ 备忘弹层 */
   let editingMemoId = null;
 
+  /* 备忘截止提醒的默认值 / 宽限（和待办一样：过期超过 12 小时不再打扰） */
+  const DEFAULT_MEMO_REMIND_BEFORE = 24 * 3600 * 1000;   // 默认提前 1 天开始提醒
+  const DEFAULT_MEMO_REMIND_EVERY = 24 * 3600 * 1000;    // 默认每 1 天提醒一次
+  const MEMO_LATE_GRACE = 12 * 60 * 60 * 1000;
+
+  /* 备忘的提醒点：截止前 remindBefore 开始，之后每 remindEvery 一次，最后一击落在截止时间。
+     返回「下一次该提醒的时间」；0 = 不需要提醒了。 */
+  function nextMemoRemind(m) {
+    if (!m || m.done || !m.dueAt) return 0;
+    const now = Date.now();
+    const start = m.dueAt - (m.remindBefore || 0);
+    if (now < start) return start;                       // 还没到开始点，先等着
+    if (!(m.remindEvery > 0)) return start;              // 只提醒一次：已到/过了开始点就立即弹
+    if (now >= m.dueAt) return m.dueAt;                  // 已经过了截止：立即弹一次「已过期」
+    /* 从开始点往后找最近一个 >= now 的提醒点（不超过截止） */
+    let t = start + Math.ceil((now - start) / m.remindEvery) * m.remindEvery;
+    if (t > m.dueAt) t = m.dueAt;
+    return t;
+  }
+
+  /* 弹完这一次后排下一次；已经错过的点（<= now）不补排，避免连弹。
+     返回 true 表示数据有变动（调用方要存盘 + 重画）。 */
+  function advanceMemoRemind(m) {
+    if (!m || m.done || !m.dueAt) { if (m) m.remindAt = 0; return true; }
+    if (!(m.remindEvery > 0)) { m.remindAt = 0; return true; }   // 只提醒一次的，弹完就停
+    const now = Date.now();
+    let next = m.remindAt + m.remindEvery;
+    if (next > m.dueAt) next = m.dueAt;                  // 最后一击落在截止时间
+    if (next <= now) { m.remindAt = 0; return true; }    // 已经错过就不补
+    m.remindAt = next;
+    return true;
+  }
+
+  /* 弹窗里「设截止时间」开关：联动日期/时间/提醒周期几行的显隐与提示 */
+  function paintMemoDueUI(on) {
+    if (!el.memoDueRow) return;
+    el.memoDueRow.hidden = !on;
+    el.memoRemindRow.hidden = !on;
+    if (el.memoDueHint) {
+      el.memoDueHint.textContent = on ? '截止前会按你选的周期提醒' : '无限期 · 不提醒';
+    }
+    if (!on && el.memoRemindBefore) el.memoRemindBefore.value = String(DEFAULT_MEMO_REMIND_BEFORE);
+  }
+
   function openMemoModal(id) {
     editingMemoId = id || null;
     const m = id ? memoById(id) : null;
     el.memoTitle.textContent = m ? '修改备忘' : '新增备忘';
     el.memoText.value = m ? m.text : '';
+    /* 截止时间 + 提醒周期 */
+    const hasDue = !!(m && m.dueAt);
+    if (el.memoDueOn) el.memoDueOn.checked = hasDue;
+    const due = hasDue ? new Date(m.dueAt) : (function () {
+      const d = new Date(Date.now() + 24 * 3600 * 1000);   // 默认「明天这个点」
+      d.setSeconds(0, 0);
+      return d;
+    })();
+    if (el.memoDueDate) el.memoDueDate.value = localDateValue(due);
+    if (el.memoDueTime) el.memoDueTime.value = localTimeValue(due);
+    if (el.memoRemindBefore) el.memoRemindBefore.value = String((m && m.remindBefore) || DEFAULT_MEMO_REMIND_BEFORE);
+    if (el.memoRemindEvery) el.memoRemindEvery.value = String((m && m.remindEvery) || DEFAULT_MEMO_REMIND_EVERY);
+    paintMemoDueUI(hasDue);
     el.memoOverlay.hidden = false;
     setTimeout(function () { try { el.memoText.focus(); } catch (e) { } }, 50);
   }
@@ -2189,17 +2414,54 @@
   function saveMemoModal() {
     const text = el.memoText.value.trim();
     if (!text) { try { el.memoText.focus(); } catch (e) { } return; }
+    let dueAt = 0, remindBefore = 0, remindEvery = 0, remindAt = 0;
+    if (el.memoDueOn && el.memoDueOn.checked) {
+      const dv = el.memoDueDate.value, tv = el.memoDueTime.value || '09:00';
+      const parts = dv.split('-');
+      if (parts.length !== 3) { try { el.memoDueDate.focus(); } catch (e) { } return; }
+      const hm = tv.split(':');
+      const due = new Date(+parts[0], +parts[1] - 1, +parts[2], +hm[0] || 0, +hm[1] || 0, 0, 0);
+      dueAt = due.getTime();
+      if (!isFinite(dueAt)) return;
+      remindBefore = +el.memoRemindBefore.value || 0;
+      remindEvery = +el.memoRemindEvery.value || 0;
+      remindAt = nextMemoRemind({ dueAt: dueAt, remindBefore: remindBefore, remindEvery: remindEvery, done: false });
+    }
     if (editingMemoId) {
       const m = memoById(editingMemoId);
-      if (m) m.text = text.slice(0, 500);
+      if (m) {
+        m.text = text.slice(0, 500);
+        m.dueAt = dueAt;
+        m.remindBefore = remindBefore;
+        m.remindEvery = remindEvery;
+        m.remindAt = remindAt;
+        /* 改了截止时间就重新变回未完成（不然勾掉完成还挂个截止时间会很怪） */
+        if (m.done) { m.done = false; m.doneAt = 0; }
+      }
     } else {
-      memos.unshift({ id: newLocalId('m'), text: text.slice(0, 500), done: false, at: Date.now() });
+      memos.unshift({
+        id: newLocalId('m'),
+        text: text.slice(0, 500),
+        done: false, at: Date.now(),
+        dueAt: dueAt,
+        remindBefore: remindBefore,
+        remindEvery: remindEvery,
+        remindAt: remindAt
+      });
     }
     saveTodoStore();
     renderMemos();
     closeMemoModal();
     Sound.click();
     requestFit();
+    if (dueAt) {
+      const now = Date.now();
+      if (dueAt >= now) setCaption('备忘已保存，截止前会按周期提醒你');
+      else if ((now - dueAt) <= MEMO_LATE_GRACE) setCaption('备忘已保存（截止时间已过，马上会提醒你）');
+      else setCaption('备忘已保存（截止时间已过很久，不再提醒）');
+    } else {
+      setCaption('备忘已保存');
+    }
   }
 
   function deleteMemo(id) {
@@ -2506,6 +2768,27 @@
     if (live.length >= 2) { fireTodoMulti(live); return; }
     const t = live[0];
     fireTodo(t, !!(t.dueAt && t.dueAt < now - 60000));
+  }
+
+  /* ------------------------------------------------------- 备忘截止调度 */
+  /* 每轮 tick 调一次：到提醒点的备忘弹提醒，一次只弹一条。
+     和待办各自独立 —— 备忘的提醒是「截止前的周期提醒」，不跟待办合并。 */
+  function checkMemoDue() {
+    if (rt.alertId) return;                      // 已有提醒在进行
+    const now = Date.now();
+    let changed = false;
+    for (let i = 0; i < memos.length; i++) {
+      const m = memos[i];
+      if (m.done || !m.dueAt || !m.remindAt) continue;
+      if (m.remindAt > now) continue;
+      /* 过期太久（超过 12 小时）就不再弹，只留在列表里标过期 */
+      if ((now - m.dueAt) > MEMO_LATE_GRACE) { m.remindAt = 0; changed = true; continue; }
+      const late = m.dueAt < now - 60000;
+      fireMemoAlert(m, late);
+      if (advanceMemoRemind(m)) changed = true;
+      break;                                     // 一次只弹一条，其余下一轮再说
+    }
+    if (changed) { saveTodoStore(); renderMemos(); }
   }
 
   /* 启动时补提醒：程序没开的时候错过的那些（用户可在设置里关掉） */
@@ -3230,6 +3513,7 @@
     if (el.memoSave) el.memoSave.addEventListener('click', saveMemoModal);
     if (el.memoCancel) el.memoCancel.addEventListener('click', closeMemoModal);
     if (el.memoClose) el.memoClose.addEventListener('click', closeMemoModal);
+    if (el.memoDueOn) el.memoDueOn.addEventListener('change', function () { paintMemoDueUI(el.memoDueOn.checked); });
     if (el.memoOverlay) el.memoOverlay.addEventListener('click', function (e) {
       if (e.target === el.memoOverlay) closeMemoModal();
     });
@@ -3582,9 +3866,25 @@
      这里只留下供它使用的一句话文案。 */
 
   /* 最近要到的提醒，作为气泡最后一行 */
-  /* 气泡里附带「今日待办」：今天到点的那些（没做完的排前面），最多给 3 条，
-     多了就写「还有 N 条」。一条都没有就返回 null —— 主进程据此决定气泡长不长高。 */
+  /* 气泡里附带「今日要处理」：① 今天到点的待办（没做完的排前面），
+     ② 截止在今天、或已经过期但还没完成的备忘（📌）。各最多给 3 条，多了写「还有 N 条」。
+     两边都没有就返回 null —— 主进程据此决定气泡长不长高。 */
   const BUBBLE_TODO_MAX = 3;
+  function bubbleMemoDeadlines(now, sameDay) {
+    const list = memos.filter(function (m) {
+      return m && !m.done && m.dueAt && (sameDay(m.dueAt) || m.dueAt <= now.getTime());
+    }).sort(function (a, b) { return a.dueAt - b.dueAt; });
+    if (!list.length) return null;
+    const shown = list.slice(0, BUBBLE_TODO_MAX);
+    return {
+      total: list.length,
+      left: list.filter(function (m) { return !m.done; }).length,
+      items: shown.map(function (m) {
+        return { time: localTimeValue(new Date(m.dueAt)), text: m.text, done: false };
+      }),
+      more: Math.max(0, list.length - shown.length)
+    };
+  }
   function bubbleTodos() {
     const now = new Date();
     const y = now.getFullYear(), mo = now.getMonth(), da = now.getDate();
@@ -3597,7 +3897,8 @@
         if (a.done !== b.done) return a.done ? 1 : -1;   // 没做完的排前面
         return a.dueAt - b.dueAt;
       });
-    if (!list.length) return null;
+    const md = bubbleMemoDeadlines(now, sameDay);
+    if (!list.length && !md) return null;
     const shown = list.slice(0, BUBBLE_TODO_MAX);
     return {
       total: list.length,
@@ -3605,7 +3906,8 @@
       items: shown.map(function (t) {
         return { time: localTimeValue(new Date(t.dueAt)), text: t.text, done: !!t.done };
       }),
-      more: Math.max(0, list.length - shown.length)
+      more: Math.max(0, list.length - shown.length),
+      memos: md
     };
   }
 
@@ -3835,7 +4137,7 @@
 
     /* 两次 tick 之间隔了很久 —— 电脑睡过 / 息屏过，这段时间不计入倒计时 */
     if (dt > 30) {
-      if (!rt.sleeping) { gapPause = true; setSleepPause(true); }
+      if (!rt.sleeping) { gapPause = true; setSleepPause(true, dt * 1000); }
       dt = 0;
     } else if (rt.sleeping && gapPause) {
       /* 时间又正常流动了，说明机器已经醒着（这条只对「推测出来的暂停」生效） */
@@ -3868,6 +4170,7 @@
        不受「暂停计时」「睡眠暂停」影响 —— 约了几点就是几点） */
     if (!rt.alertId) {
       checkTodoDue();
+      checkMemoDue();
       /* 待办到点时如果正开着列表，顺手刷新一下「还有多久 / 已过期」 */
       if (todoViewOpen()) renderTodos();
     } else {
@@ -4293,6 +4596,7 @@
         setCaption('还有 ' + ids.length + ' 条待办，逐条看吧');
       });
     }
+    if (el.alertAck) el.alertAck.addEventListener('click', ackAlert);
     el.alertClose.addEventListener('click', snoozeAlert);
     /* ⚠️ 提醒弹窗【只能靠按钮关掉】：以前点弹窗外面（背景）也会当成「稍后再说」把它关掉，
        用户明确要求改成「必须点按钮」—— 所以这里不再监听背景点击了。
