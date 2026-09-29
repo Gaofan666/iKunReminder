@@ -2635,7 +2635,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v3.9.10 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v3.9.11 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -4294,7 +4294,10 @@
       });
     }
     el.alertClose.addEventListener('click', snoozeAlert);
-    el.overlay.addEventListener('click', function (e) { if (e.target === el.overlay) snoozeAlert(); });
+    /* ⚠️ 提醒弹窗【只能靠按钮关掉】：以前点弹窗外面（背景）也会当成「稍后再说」把它关掉，
+       用户明确要求改成「必须点按钮」—— 所以这里不再监听背景点击了。
+       能关掉它的只有三个按钮：我喝了/我休息了、5 分钟后再说、右上角 ✕（也是稍后）。
+       其它弹层（添加事项、十二时辰、日记编辑）不在此列，点外面照旧关。 */
 
     /* 主进程发来的指令 */
     if (native) {
@@ -4341,7 +4344,8 @@
       if (k === 'escape') {
         if (!el.itemOverlay.hidden) { closeItemModal(); return; }
         if (!el.scOverlay.hidden) { closeShichen(); return; }
-        if (rt.alertId) { snoozeAlert(); return; }
+        /* 提醒弹窗不吃 Esc：用户要求「必须点按钮」才能关（按 Esc 一律忽略） */
+        if (rt.alertId) return;
       }
       if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
       if (e.code === 'Space') {

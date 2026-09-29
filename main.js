@@ -71,6 +71,8 @@ const DIAG = (function () {
     if (a === '--diag-alertshot') { out.alertshot = true; out.setskin = 'leidaxiaomao'; }
     m = /^--diag-alertshot=(.+)$/.exec(a);
     if (m) { out.alertshot = true; out.setskin = m[1]; }
+    /* --diag-alertlock：提醒弹窗只能靠按钮关（点外面 / 按 Esc 都不该关掉） */
+    if (a === '--diag-alertlock') out.alertlock = true;
     /* --diag-petskin=<id>：自检时指定桌面宠物用哪个形象（用来肉眼确认某个皮肤画得对不对） */
     m = /^--diag-petskin=(.+)$/.exec(a);
     if (m) out.petskin = m[1];
@@ -1838,6 +1840,38 @@ function createWindow() {
               'var cv=c?c.getBoundingClientRect():null;' +
               'return {弹窗开着:!!o&&!o.hidden, 舞台宽高:cv?Math.round(cv.width)+"x"+Math.round(cv.height):null,' +
               ' 当前形象:window.kunkunArxivUI?"(页面正常)":"(页面正常)"};})()', true));
+          }
+          /* ============ 提醒弹窗只能点按钮关（--diag-alertlock） ============ */
+          if (DIAG.alertlock) {
+            const wl = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const jl = function (c) { return win.webContents.executeJavaScript(c, true); };
+            const st = function () {
+              return jl('(function(){var o=document.getElementById("overlay");' +
+                'return {弹窗还开着:!!o&&!o.hidden, 还剩几条待办:document.querySelectorAll("#floatWords .fw").length};})()');
+            };
+            send('tray-alert', 'rest');
+            await wl(1300);
+            diagLog('lock-1-弹窗出来了', await st());
+            /* 点弹窗外面（背景）—— 以前这一下就关掉了 */
+            await jl('(function(){var o=document.getElementById("overlay");' +
+              'o.dispatchEvent(new MouseEvent("click",{bubbles:true}));return true;})()');
+            await wl(700);
+            diagLog('lock-2-点了弹窗外面（应该还开着）', await st());
+            /* 按 Esc —— 以前也会关掉 */
+            await jl('document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true})); true;');
+            await wl(700);
+            diagLog('lock-3-按了 Esc（应该还开着）', await st());
+            /* 点右上角 ✕（那是按钮，等于稍后）→ 应该关掉 */
+            await jl('document.getElementById("alertClose").click(); true;');
+            await wl(900);
+            diagLog('lock-4-点了 ✕ 按钮（应该关掉）', await st());
+            /* 再来一次，改点「我休息了」→ 也应该关掉 */
+            send('tray-alert', 'rest');
+            await wl(1300);
+            diagLog('lock-5-又弹出来了', await st());
+            await jl('document.getElementById("alertDone").click(); true;');
+            await wl(900);
+            diagLog('lock-6-点了「我休息了」（应该关掉）', await st());
           }
           /* 重复待办自检：全部走真实弹窗 + 真实的「点勾完成」，看下一期排到哪天 */
           if (DIAG.repeat) {
