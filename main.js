@@ -6222,6 +6222,11 @@ async function checkUpdate(manual) {
       updateLastGood = p.id;
       saveUpdatePref();
       diagLog('update-source', { used: p.id, probes: updateSourceTried });
+      /* 3) 再用「发布页 API」核一遍最新版本号，取两者里更新的那个。
+         为什么非要这一步：仓库里那份 update/latest.json 是给 Gitee 源用的，
+         可能被 CDN 缓存住；万一缓存停留在上一个版本，用户就会觉得
+         「只能一个版本一个版本地升」。API 给的是实时的最新 tag，不会被缓存骗。 */
+      await crossCheckLatestTag();
       return updateSnapshot();
     } catch (e) {
       lastErr = e;
@@ -6236,6 +6241,76 @@ async function checkUpdate(manual) {
   updateError = String((lastErr && lastErr.message) || lastErr || '所有更新源都失败了').slice(0, 300);
   pushUpdate();
   return updateSnapshot();
+}
+
+/* ------------------------------------------------- 发布页 API：查最新版本号
+   两个源的「latest」接口都是实时数据（不像 raw 文件会被 CDN 缓存），
+   所以拿它给版本号兜底：只要 API 说最新是 X，就一定让用户看到 X，
+   而不是「上一个版本」。用户报过「老版本只能一个版本一个版本升」，
+   根子就在这里 —— 清单被缓存住时，界面只会提示上一个版本。 */
+const RELEASE_APIS = [
+  {
+    id: 'github',
+    label: 'GitHub',
+    url: 'https://api.github.com/repos/Gaofan666/iKunReminder/releases/latest',
+    page: 'https://github.com/Gaofan666/iKunReminder/releases/latest'
+  },
+  {
+    id: 'gitee',
+    label: 'Gitee',
+    url: 'https://gitee.com/api/v5/repos/gaofan666/iKunReminder/releases/latest',
+    page: 'https://gitee.com/gaofan666/iKunReminder/releases/latest'
+  }
+];
+
+async function fetchLatestTags() {
+  const out = [];
+  for (const api of RELEASE_APIS) {
+    try {
+      const r = await httpGetText(api.url, 8000);
+      let j = null;
+      try { j = JSON.parse(String(r.text || '').replace(/^\uFEFF/, '')); } catch (e) { j = null; }
+      const tag = j && (j.tag_name || j.tag || '');
+      const ver = String(tag || '').replace(/^v/i, '').trim();
+      if (ver) out.push({ id: api.id, label: api.label, version: ver, page: api.page });
+    } catch (e) {
+      /* 一个源失败不影响另一个 */
+    }
+  }
+  return out;
+}
+
+/* 把 API 查到的最新版本和当前「已知最新」比一下，谁新用谁 */
+async function crossCheckLatestTag() {
+  try {
+    const tags = await fetchLatestTags();
+    if (!tags.length) return;
+    let best = tags[0];
+    tags.forEach(function (t) { if (cmpVersion(t.version, best.version) > 0) best = t; });
+    const cur = updateInfo && updateInfo.version ? updateInfo.version : '';
+    diagLog('update-latest-tag', {
+      'API查到的最新': best.version,
+      清单里写的: cur || '(没有新版本)',
+      API: tags.map(function (t) { return t.id + ':' + t.version; }).join(' ')
+    });
+    if (cmpVersion(best.version, app.getVersion()) <= 0) return;      // 没比现在新，不用管
+    if (cur && cmpVersion(cur, best.version) >= 0) return;            // 清单已经是最新的，不用管
+    /* 清单落后了（多半是缓存）：按 API 的版本号提示用户，
+       下载入口给「打开发布页」—— 拿不到分卷清单就不硬塞一个下不动的按钮 */
+    updateInfo = {
+      version: best.version,
+      releaseNotes: (updateInfo && updateInfo.releaseNotes) || '',
+      releaseDate: (updateInfo && updateInfo.releaseDate) || '',
+      page: best.page,
+      direct: true
+    };
+    updateState = 'available';
+    updatePercent = 0;
+    updateError = '';
+    pushUpdate();
+  } catch (e) {
+    diagLog('update-latest-tag-fail', { message: String((e && e.message) || e) });
+  }
 }
 
 function downloadUpdate() {
@@ -6300,6 +6375,20 @@ function scheduleUpdateCheck() {
 
 ipcMain.handle('update-get-state', () => updateSnapshot());
 ipcMain.handle('update-check', () => checkUpdate(true));
+/* 打开发布页：自动更新这条路走不通时（老版本、缓存、网络特殊），
+   给用户一个总能用的出口 —— 用默认浏览器打开最新版下载页 */
+ipcMain.handle('open-update-page', () => {
+  let url = 'https://github.com/Gaofan666/iKunReminder/releases/latest';
+  try {
+    if (updateInfo && updateInfo.page) url = updateInfo.page;
+    else if (updateInfo && updateInfo.version) {
+      url = 'https://github.com/Gaofan666/iKunReminder/releases/tag/v' + updateInfo.version;
+    }
+    require('electron').shell.openExternal(url);
+    diagLog('update-open-page', { url: url });
+    return true;
+  } catch (e) { return false; }
+});
 ipcMain.handle('update-download', () => downloadUpdate());
 ipcMain.handle('update-install', () => installUpdate());
 ipcMain.handle('update-set-auto-check', (e, on) => {

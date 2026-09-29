@@ -707,6 +707,7 @@
     updNoteRow: $('#updNoteRow'),
     btnUpdCheck: $('#btnUpdCheck'),
     btnUpdDownload: $('#btnUpdDownload'),
+    btnUpdPage: $('#btnUpdPage'),
     btnUpdInstall: $('#btnUpdInstall'),
     chkUpdAuto: $('#chkUpdAuto'),
     /* 一键摸鱼 */
@@ -2918,7 +2919,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v3.11.0 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v4.0 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -3039,15 +3040,17 @@
   function renderUpdate(s) {
     if (!s) return;
 
-    if (el.updCur) el.updCur.textContent = 'v' + s.currentVersion;
+    if (el.updCur) el.updCur.textContent = 'v' + String(s.currentVersion || '').replace(/\.0$/, '');
     if (el.chkUpdAuto) el.chkUpdAuto.checked = !!s.autoCheck;
 
     const meta = (s.state === 'unsupported' && s.devMode)
       ? { txt: '开发模式', cls: '' }
       : (UPD_TEXT[s.state] || { txt: s.state, cls: '' });
+    /* 版本号显示：内部是 4.0.0（打包工具要求 x.y.z），界面上显示成 4.0 */
+    const verText = function (v) { return String(v == null ? '' : v).replace(/\.0$/, ''); };
     const withVer = (s.state === 'available' || s.state === 'downloading' || s.state === 'downloaded');
     if (el.updState) {
-      el.updState.textContent = meta.txt + (withVer && s.available ? ' v' + s.available : '');
+      el.updState.textContent = meta.txt + (withVer && s.available ? ' v' + verText(s.available) : '');
       el.updState.className = 'upd-state' + (meta.cls ? ' ' + meta.cls : '');
     }
 
@@ -3080,6 +3083,9 @@
     }
     if (el.btnUpdDownload) el.btnUpdDownload.hidden = (s.state !== 'available');
     if (el.btnUpdInstall) el.btnUpdInstall.hidden = (s.state !== 'downloaded');
+    /* 「打开发布页」：有新版本时一起给出来 —— 万一自动下载这条路不通
+       （老版本、缓存、网络特殊），用户还能一键去下载页手动下最新版 */
+    if (el.btnUpdPage) el.btnUpdPage.hidden = !(s.supported && s.available);
 
     if (el.updDesc) {
       let d = UPD_DEFAULT_DESC;
@@ -3212,6 +3218,14 @@
       el.btnUpdInstall.addEventListener('click', function () {
         setCaption('正在安装新版本，软件马上会自己重新打开…');
         native.updateInstall();
+      });
+    }
+
+    /* 兜底出口：用浏览器打开最新版下载页 */
+    if (el.btnUpdPage) {
+      el.btnUpdPage.addEventListener('click', function () {
+        if (native && native.openUpdatePage) native.openUpdatePage();
+        setCaption('已经在浏览器里打开最新版下载页');
       });
     }
 

@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   updateDownload: () => ipcRenderer.invoke('update-download'),
   updateInstall: () => ipcRenderer.invoke('update-install'),
   updateSetAutoCheck: (on) => ipcRenderer.invoke('update-set-auto-check', !!on),
+  /* 打开发布页（最新版下载页）：自动更新走不通时的兜底出口 */
+  openUpdatePage: () => ipcRenderer.invoke('open-update-page'),
   onUpdateStatus: (cb) => ipcRenderer.on('update-status', (e, s) => cb(s)),
   onUpdateInstalling: (cb) => ipcRenderer.on('update-installing', () => cb()),
 
