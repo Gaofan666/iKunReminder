@@ -385,8 +385,8 @@
   /* --------------------------------------------------------------- 语音播报 */
   function speak(text) {
     if (!settings.speech || !('speechSynthesis' in window)) {
-      /* 没开语音播报：直接把"播报结束"这一步回调出去，好让音乐按时开始 */
-      if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+      /* 没开语音播报：直接报到，好让音乐按提示音那边的进度开始 */
+      alertSoundDone();
       return;
     }
     try {
@@ -396,25 +396,28 @@
       u.rate = 1.05;
       u.pitch = 1.15;
       u.onend = function () {
-        if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+        alertSoundDone();
       };
       u.onerror = function () {
-        if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+        alertSoundDone();
       };
       window.speechSynthesis.speak(u);
     } catch (e) {
-      if (speechEndCb) { const f = speechEndCb; speechEndCb = null; setTimeout(f, 0); }
+      alertSoundDone();
     }
   }
 
   /* ------------------------------------------------ 提醒音乐
-     流程：弹窗出现 → 语音播报 → 播报结束后等 3 秒 → 放一段音乐 → 放完自动停（不循环）。
-     关掉提醒（点完成/稍后）时会立刻停掉音乐、并取消还没开始的那次。 */
+     流程：弹窗出现 → 到点的提示音 + 语音播报 → 两样都放完之后再等 3 秒 → 放一段音乐 →
+     放完自动停（不循环）。关掉提醒（点完成/稍后）时会立刻停掉音乐、并取消还没开始的那次。 */
   const MUSIC_DELAY = 3000;
   const BUILTIN_MUSIC = 'assets/music.mp3';
-  let speechEndCb = null;
   let musicTimer = null;
   let musicFellBack = false;      // 自选音乐读不出来、已经退回自带（用来给设置里那行小字加说明）
+  /* 提示音、语音播报各自结束时报到一次，报到齐了才开始算那 3 秒 —— 谁先结束都行。
+     waitWhat 是这一轮还差几件事没结束，waitSeq 记这份计数属于哪一轮提醒。 */
+  let waitWhat = 0;
+  let waitSeq = -1;
   /* 每次「停掉音乐」都把它 +1。播放在落地之前都要再核对一次这个号 ——
      这样「点了完成之后，迟到的播放/换歌重放把音乐又放出来」就不会发生了。 */
   let musicSeq = 0;
@@ -501,66 +504,95 @@
   /* ------------------------------------------------ 到点那一下的「提示音」
      默认是内置的 8-bit 小旋律（Sound.alert）。用户给某条提醒 / 待办指定了
      自己的音乐文件，这里就放那个文件；放不出来（被删了/格式不支持）就退回默认小旋律。
-     跟「提醒音乐」（播报结束后放的那段）是两回事，各放各的。 */
+     「提醒音乐」要等这里放完（再算上语音播报）才开始，所以放完必须报一次 alertSoundDone()。 */
+  const DEFAULT_TONE_MS = 1100;    // 内置小旋律响多久（Web Audio 排的音，没有 ended 事件，只能估）
+  let toneTimer = null;
+
+  /* 内置小旋律：排完音后按估的时长收尾 */
+  function playDefaultTone() {
+    try { Sound.alert(); } catch (e) { }
+    if (toneTimer) clearTimeout(toneTimer);
+    toneTimer = setTimeout(function () { toneTimer = null; alertSoundDone(); }, DEFAULT_TONE_MS);
+  }
+
   function playAlertTone(path) {
     const a = el.alertTone;
-    if (!path || !a) { try { Sound.alert(); } catch (e) { } return; }
+    if (toneTimer) { clearTimeout(toneTimer); toneTimer = null; }
+    if (!path || !a) { playDefaultTone(); return; }
+    let done = false;
+    const onEnded = function () { finish(false); };
+    const onError = function () { finish(true); };
+    const finish = function (useDefault) {
+      if (done) return; done = true;
+      try { a.removeEventListener('ended', onEnded); a.removeEventListener('error', onError); } catch (e) { }
+      if (useDefault) playDefaultTone(); else alertSoundDone();
+    };
+    a.addEventListener('ended', onEnded);
+    a.addEventListener('error', onError);
     try {
       a.src = musicFileUrl(path);
       a.currentTime = 0;
       const pr = a.play();
-      if (pr && pr.catch) pr.catch(function () { try { Sound.alert(); } catch (e) { } });
-    } catch (e) { try { Sound.alert(); } catch (e2) { } }
+      if (pr && pr.catch) pr.catch(function () { finish(true); });
+    } catch (e) { finish(true); }
   }
   function stopAlertTone() {
     const a = el.alertTone;
+    if (toneTimer) { clearTimeout(toneTimer); toneTimer = null; }
     if (a) { try { a.pause(); a.currentTime = 0; } catch (e) { } }
   }
 
   function stopAlertMusic() {
     musicSeq++;                      // 作废所有还没落地的播放（定时器里的、play 回调里的）
+    waitWhat = 0;                    // 也作废还没报到齐的那两个「等」
     if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
     const a = el.alertMusic;
     if (a) { try { a.pause(); a.currentTime = 0; } catch (e) { } }
   }
 
-  /* 每次弹提醒都调一次：注册"播报结束后启动音乐"的回调 */
+  /* 提示音、语音播报各自结束时叫一次；两边都齐了才开始倒计时放音乐 */
+  function alertSoundDone() {
+    if (waitWhat <= 0) return;
+    waitWhat--;
+    if (waitWhat > 0) return;
+    if (waitSeq !== musicSeq) return;                    // 这一轮已经作废了
+    if (musicTimer) clearTimeout(musicTimer);
+    musicTimer = setTimeout(function () {
+      musicTimer = null;
+      if (waitSeq !== musicSeq) return;                  // 期间被停过（点了完成/稍后）→ 不放
+      if (!settings.music || !rt.alertId) return;        // 提醒没了 / 关了音乐
+      const a = el.alertMusic;
+      if (!a) return;
+      try {
+        a.currentTime = 0;
+        const pr = a.play();
+        if (pr && pr.catch) {
+          pr.catch(function () {
+            /* 自选文件放不出来（被删了/格式不支持）→ 退回自带音乐再放一次。
+               但必须先确认提醒还开着、这一轮没被停过，否则就变成
+               「点了休息了之后音乐自己响起来」了。 */
+            if (waitSeq !== musicSeq) return;
+            if (!settings.music || !rt.alertId) return;
+            if (!settings.musicSrc) return;
+            if (typeof diagLog === 'function') diagLog('music-custom-fail', { src: settings.musicSrc });
+            settings.musicSrc = '';
+            saveSettings();
+            applyMusicSrc();
+            if (waitSeq !== musicSeq) return;
+            if (!settings.music || !rt.alertId) return;
+            try { a.play(); } catch (e) { }
+          });
+        }
+      } catch (e) { }
+    }, MUSIC_DELAY);
+  }
+
+  /* 每次弹提醒都调一次：先作废上一轮，再挂上「提示音 + 播报都结束后放音乐」 */
   function armAlertMusic() {
     stopAlertMusic();
-    speechEndCb = null;
     if (!settings.music) return;
-    const mySeq = musicSeq;          // 记住这一轮的号
-    speechEndCb = function () {
-      if (musicTimer) clearTimeout(musicTimer);
-      musicTimer = setTimeout(function () {
-        musicTimer = null;
-        if (mySeq !== musicSeq) return;                  // 期间被停过（点了完成/稍后）→ 不放
-        if (!settings.music || !rt.alertId) return;      // 提醒没了 / 关了音乐
-        const a = el.alertMusic;
-        if (!a) return;
-        try {
-          a.currentTime = 0;
-          const pr = a.play();
-          if (pr && pr.catch) {
-            pr.catch(function () {
-              /* 自选文件放不出来（被删了/格式不支持）→ 退回自带音乐再放一次。
-                 但必须先确认提醒还开着、这一轮没被停过，否则就变成
-                 「点了休息了之后音乐自己响起来」了。 */
-              if (mySeq !== musicSeq) return;
-              if (!settings.music || !rt.alertId) return;
-              if (!settings.musicSrc) return;
-              if (typeof diagLog === 'function') diagLog('music-custom-fail', { src: settings.musicSrc });
-              settings.musicSrc = '';
-              saveSettings();
-              applyMusicSrc();
-              if (mySeq !== musicSeq) return;
-              if (!settings.music || !rt.alertId) return;
-              try { a.play(); } catch (e) { }
-            });
-          }
-        } catch (e) { }
-      }, MUSIC_DELAY);
-    };
+    waitWhat = 2;                    // 等两件事：到点的提示音、语音播报
+    waitSeq = musicSeq;
   }
 
   /* =========================================================================
@@ -1019,8 +1051,8 @@
     stage.setMood('dance');
     setCaption('<b>' + (it.emoji || '') + ' ' + it.name + ' 时间到了！</b>');
 
+    armAlertMusic();                 // 先挂好「提示音和播报都结束后放音乐」
     playAlertTone(it.sound);
-    armAlertMusic();                 // 先挂好「播报结束后放音乐」，再播报
     speak(info.voice || it.voice || ('该' + it.name + '了'));    notify(title, info.desc || it.desc || '');
     flashTitle(true);
     if (native) native.alert(id);
@@ -1054,8 +1086,8 @@
     stage.setMood('dance');
     setCaption('<b>⏰ 待办到点：' + escapeHtml(todo.text) + '</b>');
 
-    playAlertTone(settings.todoSound);
     armAlertMusic();
+    playAlertTone(settings.todoSound);
         speak(late ? '有一条待办已经过期了' : '待办时间到了');
     notify(title, todo.text);
     flashTitle(true);
@@ -1096,8 +1128,8 @@
     stage.setMood('dance');
     setCaption('<b>⏰ ' + list.length + ' 条待办到点了</b>');
 
-    playAlertTone(settings.todoSound);
     armAlertMusic();
+    playAlertTone(settings.todoSound);
         speak('有 ' + list.length + ' 条待办到点了');
     notify(title, list.map(function (t) { return t.text; }).join('、'));
     flashTitle(true);
@@ -1133,8 +1165,8 @@
     stage.setMood('dance');
     setCaption('<b>⏰ 备忘提醒：' + escapeHtml(m.text) + '</b>');
 
-    playAlertTone(settings.todoSound);
     armAlertMusic();
+    playAlertTone(settings.todoSound);
         speak(late ? '有一条备忘到截止时间了' : '有一条备忘快到截止时间了');
     notify(title, m.text);
     flashTitle(true);
@@ -1179,7 +1211,7 @@
     alertMemoId = null;
     alertMemo = null;
     alertMulti = null;
-    speechEndCb = null;              // 关掉提醒就不再排队放音乐
+    waitWhat = 0;                    // 关掉提醒就不再排队放音乐
     stopAlertMusic();
     /* 点了「我休息了 / 我喝了」之后，不该还有任何声音在响：
        · 语音播报可能还没说完 → 直接掐掉
@@ -2944,7 +2976,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v4.1 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v4.2 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }

@@ -67,6 +67,8 @@ const DIAG = (function () {
     if (a === '--diag-arxiv-hold') { out.arxiv = true; out.arxivHold = true; }
     /* --diag-alertmusic：弹一次休息提醒，点「我休息了」之后音乐就该停（用户报的 bug） */
     if (a === '--diag-alertmusic') out.alertmusic = true;
+    /* --diag-tonemusic：给提醒指定一段 10 秒的提示音，验证「提示音放完 + 3 秒」之后才放提醒音乐 */
+    if (a === '--diag-tonemusic') out.tonemusic = true;
     /* --diag-alertshot[=skin]：开着提醒弹窗截图（看跳舞那几帧会不会被切头） */
     if (a === '--diag-alertshot') { out.alertshot = true; out.setskin = 'leidaxiaomao'; }
     m = /^--diag-alertshot=(.+)$/.exec(a);
@@ -161,6 +163,7 @@ let diagDiarySeeded = false;      // 日记自检：种完「以前的日记」�
 let diagAlertStage = 0;           // 弹窗自检：要重载两次数据，用它记住「重载后从哪继续」
 let diagMusicStage = 0;           // 提醒音乐自检：换成自定义音乐/坏路径/还原各要重载一次
 let diagBubbleStage = 0;          // 气泡自检：种待办 → 重载 → 看气泡里有没有今日待办
+let diagToneStage = 0;            // 「提示音放完才放音乐」自检：塞完提示音要重载一次
 /* 自检产物的落脚点：和 diagLog 一样，打包后 __dirname 在 app.asar 里写不进去，
    依次退回「exe 同级目录」和 userData，保证打包版的自检也能把文件落下来。 */
 function diagFilePath(name) {
@@ -1834,6 +1837,96 @@ function createWindow() {
             diagLog('amB-4-点完 4 秒（还响就是 bug）', await au('B4'));
             await w9(4000);
             diagLog('amB-5-点完 8 秒', await au('B5'));
+          }
+          /* ============ 提示音放完 → 等 3 秒 → 才放提醒音乐（--diag-tonemusic） ============
+             用户报的 bug：自己指定了提示音之后，提示音还没放完，提醒音乐就响了。
+             这里造一段 10 秒的正弦波当提示音塞给「休息」那条提醒 —— 10 秒比
+             「播报说完 + 3 秒」长得多，旧逻辑必然在提示音还在响的时候就把音乐放出来。
+             时间戳在页面里用 performance.now() 记，主进程只负责读回来。 */
+          if (DIAG.tonemusic) {
+            const wt = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            /* 造一段单声道 16 位 PCM 的 WAV（不引第三方库，直接拼头） */
+            const makeWav = function (sec, rate) {
+              rate = rate || 22050;
+              const n = Math.round(sec * rate);
+              const data = Buffer.alloc(n * 2);
+              for (let i = 0; i < n; i++) {
+                data.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 440 * i / rate) * 8000), i * 2);
+              }
+              const head = Buffer.alloc(44);
+              head.write('RIFF', 0);
+              head.writeUInt32LE(36 + data.length, 4);
+              head.write('WAVE', 8);
+              head.write('fmt ', 12);
+              head.writeUInt32LE(16, 16);
+              head.writeUInt16LE(1, 20);          // PCM
+              head.writeUInt16LE(1, 22);          // 单声道
+              head.writeUInt32LE(rate, 24);
+              head.writeUInt32LE(rate * 2, 28);
+              head.writeUInt16LE(2, 32);
+              head.writeUInt16LE(16, 34);
+              head.write('data', 36);
+              head.writeUInt32LE(data.length, 40);
+              return Buffer.concat([head, data]);
+            };
+            if (diagToneStage === 0) {
+              diagToneStage = 1;
+              let wavPath = '';
+              try {
+                wavPath = path.join(app.getPath('temp'), 'kun 提示音 自检.wav');
+                fs.writeFileSync(wavPath, makeWav(10));
+              } catch (e) { diagLog('tonemusic-0-造提示音失败', { message: String(e && e.message || e) }); }
+              diagLog('tonemusic-0-种下提示音', { 文件: wavPath, 秒: 10 });
+              await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+                'raw.music=true;raw.musicSrc="";' +
+                'var its=raw.items||[];' +
+                'for(var i=0;i<its.length;i++){if(its[i].id==="rest")its[i].sound=' + JSON.stringify(wavPath) + ';}' +
+                'localStorage.setItem("kunkun.settings.v1",JSON.stringify(raw));return true;})()', true);
+              win.webContents.reload();
+              const stop = new Error('diag-restart');
+              stop.diagRestart = true;
+              throw stop;
+            }
+            /* 第二轮：提示音已经在设置里了，装好探针再弹提醒 */
+            const probe = await win.webContents.executeJavaScript(
+              '(function(){window.__tm={t0:performance.now(),toneStart:-1,toneEnd:-1,musicStart:-1};' +
+              'var at=document.getElementById("alertTone"),am=document.getElementById("alertMusic");' +
+              'if(!at||!am)return {error:"没找到 audio 元素"};' +
+              'at.addEventListener("playing",function(){if(window.__tm.toneStart<0)window.__tm.toneStart=Math.round(performance.now()-window.__tm.t0);});' +
+              'at.addEventListener("ended",function(){window.__tm.toneEnd=Math.round(performance.now()-window.__tm.t0);});' +
+              'am.addEventListener("playing",function(){if(window.__tm.musicStart<0)window.__tm.musicStart=Math.round(performance.now()-window.__tm.t0);});' +
+              'var snd=null;try{var r=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");' +
+              'var its=r.items||[];for(var i=0;i<its.length;i++)if(its[i].id==="rest")snd=its[i].sound;}catch(e){}' +
+              'return {设置里休息的提示音:snd, 音乐开关:(function(){try{return JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}").music;}catch(e){return null;}})()};})()', true);
+            diagLog('tonemusic-1-探针就绪', probe);
+            await wt(300);
+            send('tray-alert', 'rest');
+            await wt(16000);                    // 10 秒提示音 + 3 秒 + 余量
+            const tm = await win.webContents.executeJavaScript('(function(){return window.__tm;})()', true);
+            const gap = (tm && tm.toneEnd > 0 && tm.musicStart > 0) ? (tm.musicStart - tm.toneEnd) : -1;
+            diagLog('tonemusic-2-时间线（毫秒）', {
+              提示音开始: tm && tm.toneStart,
+              提示音结束: tm && tm.toneEnd,
+              音乐开始: tm && tm.musicStart,
+              提示音时长: (tm && tm.toneEnd > 0 && tm.toneStart > 0) ? (tm.toneEnd - tm.toneStart) + 'ms' : '（量不到）'
+            });
+            diagLog('tonemusic-3-结论', {
+              提示音真的响了10秒吗: !!(tm && tm.toneEnd > 0 && (tm.toneEnd - tm.toneStart) >= 9000),
+              音乐有没有等提示音放完: !!((tm && tm.toneEnd > 0 && tm.musicStart > 0) && tm.musicStart >= tm.toneEnd),
+              音乐比提示音结束晚了: gap >= 0 ? gap + 'ms' : '（量不到）',
+              等够3秒了吗: gap >= 2800,
+              '（旧的错法）音乐早于提示音结束': !!((tm && tm.toneEnd > 0 && tm.musicStart > 0) && tm.musicStart < tm.toneEnd)
+            });
+            /* 收拾：把自检塞进去的提示音从设置里去掉，别留在用户的配置里 */
+            try {
+              await win.webContents.executeJavaScript(
+                '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.settings.v1")||"{}");}catch(e){}' +
+                'var its=raw.items||[];' +
+                'for(var i=0;i<its.length;i++){if(its[i].id==="rest")its[i].sound="";}' +
+                'localStorage.setItem("kunkun.settings.v1",JSON.stringify(raw));return true;})()', true);
+              diagLog('tonemusic-4-已清理自检提示音', { ok: true });
+            } catch (e) { diagLog('tonemusic-4-清理失败', { message: String(e && e.message || e) }); }
           }
           /* ============ 提醒弹窗里看皮肤（--diag-alertshot） ============
              先把「宠物形象」写成指定皮肤（要重载页面才生效），再弹一次休息提醒、
