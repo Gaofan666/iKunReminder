@@ -1,20 +1,20 @@
 {
-  "version": "3.9.10",
-  "releaseDate": "2026-09-26T07:49:15.888Z",
-  "notes": "## iKunReminder v3.9.10\n\n1. 🐱 **修「雷达观察员小猫」形象的两个问题**\n   · **左边总有多余元素**：这张精灵图里每一帧左边都粘着一点相邻动作的碎片（原图第 0～8 列），而且各帧没有对齐。已经按主体重新裁了一遍：碎片去掉、所有帧统一居中并**底部对齐**，动画不会再左右跳，脚也永远踩在地上。\n   · **弹休息提醒时头顶被切**：提醒弹窗那个舞台比主界面小一点，而形象是按固定高度画的，抬手那几帧的头顶会超出画面。现在会按可用高度自动缩一点，**完整显示**，不再切头（对所有自定义形象都生效）。\n\n2. 🐱 内置形象数量不变，仍是「🎨 宠物形象」里选；这一版只动了这张图和新皮肤的配置。\n\n**下载**：`iKunReminder-setup-v3.9.10.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121816022,
-  "sha512": "nNhwt9t9FFEf8C5amsDR4dfWejjKtsBkfKLhEbcni1YBa7mEQ4HzmkgR41Skyx1md9yFC1OPVneVM4bmva9WeA==",
+  "version": "3.9.11",
+  "releaseDate": "2026-09-29T03:26:56.156Z",
+  "notes": "## iKunReminder v3.9.11\n\n1. 🔒 **提醒弹窗改成「必须点按钮才会消失」**\n   以前点弹窗外面（背景），它就当成「5 分钟后再说」关掉了，容易手一滑就把提醒划走。现在：\n   · 点弹窗外面 —— **不再关闭**\n   · 按 Esc —— **也不再关闭**\n   · 只有点按钮才关：**我喝了 / 我休息了 / 完成 ✓**、**5 分钟后再说**、右上角 **✕**（等于稍后）\n   喝水和休息、待办到点，都是这个规则。\n\n**下载**：`iKunReminder-setup-v3.9.11.exe`（约 116 MB，Windows x64，双击安装）\n",
+  "size": 121816614,
+  "sha512": "fd6FgzLI0ivvhEH57IfOXxLxvDT6r21sUZBcp3ajYUjNaUJMG9q1iztJlmwe4IAT5yDslPNGyEujY4ckgcWDGQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.10/iKunReminder-setup-v3.9.10.exe.part1",
-      "size": 60908011,
-      "sha512": "ZWKkl8XMTNxmW9CWxFpGH+XOv1KWApjC99rxL89e5rswSK2NeTZWikzrY7o0skTFzimamQpw1f/2Geu4cppH6g==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.11/iKunReminder-setup-v3.9.11.exe.part1",
+      "size": 60908307,
+      "sha512": "GrLONpjt1ehMjKPNXohEewql5gyVyGlvhZtBHvBuqChm4UOTJI4+RVBkz6JWHcpZb/OhxHExkfWxWm3pOirSTA==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.10/iKunReminder-setup-v3.9.10.exe.part2",
-      "size": 60908011,
-      "sha512": "m7vtS+zSVzDuOX3G7iziJfe9ZIGn4F3ioU+as5/GAgwHJ5UVuYLGy5SiWuXh/9dWBmK1Sq4/5lnjFcesY6t1BA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.11/iKunReminder-setup-v3.9.11.exe.part2",
+      "size": 60908307,
+      "sha512": "nbKdcSeF8Nf6adXrF74e0REaeJLeL1z1V0PfGO8cRrEZBbrN/V6jGulfW8f3SYhCBt1/xE/J9mAf3hRYST5Mqw==",
       "index": 2
     }
   ]
