@@ -102,6 +102,8 @@ const DIAG = (function () {
     if (a === '--diag-alert') out.alert = true;
     /* --diag-memo：备忘「截止时间 + 截止前周期提醒」端到端自检（真实弹窗 + 真实调度） */
     if (a === '--diag-memo') out.memo = true;
+    /* --diag-sleep：睡眠/息屏后「休息」计时重置自检（≥5 分钟算休息过 → 唤醒重置） */
+    if (a === '--diag-sleep') out.sleep = true;
     /* --diag-calzoom：桌面日历「放大缩小」+「固定」自检 */
     if (a === '--diag-calzoom') out.calzoom = true;
     /* --diag-diary：日记页端到端自检（写今天 / 点旧日记改 / 删除 / 导出） */
@@ -1926,6 +1928,54 @@ function createWindow() {
               'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));' +
               'return (raw.memos||[]).length;})()', true);
             diagLog('memo-5-清理', { 说明: '自检数据已清掉' });
+          }
+          /* ============ 睡眠/息屏后「休息」计时重置（--diag-sleep） ============
+             睡眠 ≥ 5 分钟 = 算休息过了：唤醒后「休息」项重置为完整间隔重新计时；
+             < 5 分钟、或计时器被手动暂停时不重置；喝水等其它项不受影响。 */
+          if (DIAG.sleep) {
+            const waitS = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const simSleep = function (ms) {
+              return win.webContents.executeJavaScript('window.__simSleepResume(' + ms + ')', true);
+            };
+            const ensureRunning = function () {
+              return win.webContents.executeJavaScript(
+                '(function(){var b=document.getElementById("btnToggle");' +
+                'if(b.textContent.indexOf("继续")>=0)b.click();return true;})()', true);
+            };
+            const setPaused = function () {
+              return win.webContents.executeJavaScript(
+                '(function(){var b=document.getElementById("btnToggle");' +
+                'if(b.textContent.indexOf("暂停")>=0)b.click();return true;})()', true);
+            };
+            const readTimers = function () {
+              return win.webContents.executeJavaScript(
+                '(function(){var q=function(sel){var n=document.querySelector(sel);' +
+                'return n?n.textContent:"(无)";};' +
+                'return {休息:q(\'#panelList [data-id="rest"] [data-role="countdown"]\'),' +
+                ' 喝水:q(\'#panelList [data-id="water"] [data-role="countdown"]\'),' +
+                ' 按钮:document.getElementById("btnToggle").textContent,' +
+                ' 提示:document.getElementById("stageCaption").textContent};})()', true);
+            };
+
+            await ensureRunning();
+            const base = await readTimers();
+            /* ① 睡 6 分钟（≥5 分钟阈值）→ 休息重置为完整间隔（默认 60 分钟 → 3600 秒），喝水不动 */
+            const r6 = await simSleep(6 * 60 * 1000);
+            const a6 = await readTimers();
+            /* ② 睡 3 分钟（< 阈值）→ 不重置，剩余基本不变 */
+            const r3 = await simSleep(3 * 60 * 1000);
+            const a3 = await readTimers();
+            /* ③ 计时器手动暂停 → 睡 6 分钟也不重置（尊重手动暂停） */
+            await setPaused();
+            const rp = await simSleep(6 * 60 * 1000);
+            const ap = await readTimers();
+            diagLog('sleep-1-睡眠唤醒重置', {
+              初始: base,
+              睡6分钟: { 钩子: r6, 界面: a6, 休息重置成满间隔: r6.reset === true && r6.rest === 3600, 提示是重置文案: a6.提示.indexOf('休息') >= 0 && a6.提示.indexOf('重新开始') >= 0 },
+              睡3分钟: { 钩子: r3, 界面: a3, 没重置: r3.reset === false },
+              暂停时睡6分钟: { 钩子: rp, 界面: ap, 尊重手动暂停没重置: rp.reset === false },
+              喝水全程没被重置: r6.water < 2700 && r3.water < 2700 && rp.water < 2700
+            });
           }
           if (DIAG.calzoom) {
             const waitZ = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };

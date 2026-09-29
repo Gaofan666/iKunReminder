@@ -1280,18 +1280,65 @@
      时间恢复流动后自动解除；电源事件触发的暂停只能由 resume / unlock 解除。 */
   let gapPause = false;
 
-  function setSleepPause(on) {
-    if (rt.sleeping === on) return;
+  /* 睡眠/息屏 ≥ 5 分钟 = 算休息过了：唤醒后把「休息」计时重置为完整间隔，
+     重新开始下一次计时（人确实歇过了，不该接着上次没数完的继续）。 */
+  const REST_RESET_AFTER_MS = 5 * 60 * 1000;
+  let sleepAt = 0;        // 进入睡眠的时刻（电源事件路径）
+  let sleepGapMs = 0;     // tick 推断路径已知的睡眠时长（毫秒）
+  let lastWakeReset = false;   // 最近一次唤醒是否重置了「休息」（自检钩子读它）
+
+  function setSleepPause(on, gapMs) {
+    if (rt.sleeping === on) {
+      /* 已处于目标状态：tick 推断路径可能补一个已知时长，收下更大的那个 */
+      if (on && gapMs > sleepGapMs) sleepGapMs = gapMs;
+      return;
+    }
     rt.sleeping = on;
     last = Date.now();                 // 不管暂停还是恢复，都把基准时间拉到现在
     if (on) {
+      sleepAt = Date.now();
+      if (gapMs) sleepGapMs = gapMs;
       setCaption('<b>电脑睡眠 / 息屏中</b> · 计时已自动暂停');
       stage.setMood('idle');
     } else {
-      setCaption('电脑已唤醒 · 计时继续');
+      /* 醒来：算这次睡了多久（电源路径用起止时刻，tick 推断路径用已知间隔，取大者兜底） */
+      const elapsed = Date.now() - (sleepAt || Date.now());
+      const slept = Math.max(elapsed, sleepGapMs);
+      sleepAt = 0;
+      sleepGapMs = 0;
+      lastWakeReset = slept >= REST_RESET_AFTER_MS && restResetIfNeeded();
+      if (lastWakeReset) {
+        setCaption('电脑已唤醒 · 休息超过 ' + (REST_RESET_AFTER_MS / 60000) +
+          ' 分钟算休息过，「休息」计时已重新开始');
+      } else {
+        setCaption('电脑已唤醒 · 计时继续');
+      }
     }
     render();
   }
+
+  /* 睡眠/息屏超阈值 = 算休息过了：把「休息」项重置为完整间隔。
+     计时器被用户手动暂停时不自动重置（尊重手动暂停）。返回 true 表示重置了。 */
+  function restResetIfNeeded() {
+    if (!rt.running) return false;
+    let hit = false;
+    settings.items.forEach(function (it) {
+      if (it.id === 'rest' && it.enabled) { resetTimer(it.id); hit = true; }
+    });
+    return hit;
+  }
+
+  /* 自检专用钩子（只有 --diag-* 跑的时候被主进程调，正常使用不会碰它）：
+     模拟一次「睡眠-唤醒」，sleptMs 指定睡了多久（毫秒），返回休息/喝水当前剩余秒数。 */
+  window.__simSleepResume = function (sleptMs) {
+    setSleepPause(true);
+    sleepAt = Date.now() - (sleptMs || 0);
+    lastWakeReset = false;
+    setSleepPause(false);
+    const t = rt.timers['rest'];
+    const w = rt.timers['water'];
+    return { rest: t ? t.remaining : -1, water: w ? w.remaining : -1, reset: lastWakeReset };
+  };
 
   /* ---------------------------------------------------------- 系统通知 */
   function notify(title, body) {
@@ -4065,7 +4112,7 @@
 
     /* 两次 tick 之间隔了很久 —— 电脑睡过 / 息屏过，这段时间不计入倒计时 */
     if (dt > 30) {
-      if (!rt.sleeping) { gapPause = true; setSleepPause(true); }
+      if (!rt.sleeping) { gapPause = true; setSleepPause(true, dt * 1000); }
       dt = 0;
     } else if (rt.sleeping && gapPause) {
       /* 时间又正常流动了，说明机器已经醒着（这条只对「推测出来的暂停」生效） */
