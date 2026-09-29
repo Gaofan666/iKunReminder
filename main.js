@@ -1347,6 +1347,10 @@ function createWindow() {
             };
             diagLog('arxiv-1-服务', { 起来了: !!arxivSvc, 状态: arxivSvc ? shortSt(arxivSvc.state()) : null });
             if (arxivSvc) {
+              /* 干净起步：清空论文 + 清空忽略名单。
+                 （清空论文会把它们记进忽略名单，所以必须再清一次名单，
+                   否则后面的自检抓回来的全是 0 条，测不出东西。） */
+              try { arxivDb.clearPapers(); arxivDb.clearHidden(); } catch (e) { }
               /* 用真关键词跑：图神经网络（标题+摘要）、最近 7 天、每次最多推 2 篇 */
               arxivSvc.setConfig({
                 keywords: ['graph neural network'], fields: ['ti', 'abs'], matchAny: true,
@@ -1488,6 +1492,7 @@ function createWindow() {
                 await ajs('document.getElementById("tabArxiv").click(); true;');
                 await aw(400);
                 arxivDb.clearPapers();                       // 先把库清空，列表也刷成空
+                arxivDb.clearHidden();                       // 连忽略名单一起清，保证下面还能抓回来
                 await ajs('window.kunkunArxivUI.refresh(); true;');
                 await aw(800);
                 const emptyNow = await ajs('window.kunkunArxivUI._debug().listCount');
