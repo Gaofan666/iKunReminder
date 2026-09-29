@@ -1,20 +1,20 @@
 {
-  "version": "3.9.11",
-  "releaseDate": "2026-09-29T03:26:56.156Z",
-  "notes": "## iKunReminder v3.9.11\n\n1. 🔒 **提醒弹窗改成「必须点按钮才会消失」**\n   以前点弹窗外面（背景），它就当成「5 分钟后再说」关掉了，容易手一滑就把提醒划走。现在：\n   · 点弹窗外面 —— **不再关闭**\n   · 按 Esc —— **也不再关闭**\n   · 只有点按钮才关：**我喝了 / 我休息了 / 完成 ✓**、**5 分钟后再说**、右上角 **✕**（等于稍后）\n   喝水和休息、待办到点，都是这个规则。\n\n**下载**：`iKunReminder-setup-v3.9.11.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121816614,
-  "sha512": "fd6FgzLI0ivvhEH57IfOXxLxvDT6r21sUZBcp3ajYUjNaUJMG9q1iztJlmwe4IAT5yDslPNGyEujY4ckgcWDGQ==",
+  "version": "3.11.0",
+  "releaseDate": "2026-09-29T08:26:08.918Z",
+  "notes": "## iKunReminder v3.11.0\n\n大版本合并：把 3.9.8 ~ 3.9.11（科研动态 + 多轮修复）和备忘录系列升级并到一起。\n\n### 🧪 科研动态（arXiv 论文）\n1. **新增「科研动态」页**：填英文关键词就能抓 arXiv 上最新的论文；标题和摘要里**命中的关键词会标红**、论文里的**数学公式（$...$）会自动清洗成能读的写法**。\n2. 每篇论文可以**收藏、打 1~5 分（评分即已读）、写评论（可编辑/删除）、删除**；删掉的论文会进「忽略名单」，以后抓取不会再冒出来（右边可一键恢复）。\n3. **一次最多取回 200 篇**，超过会自动翻页分批取；可以设抓取频率（6/12/24 小时、3 天、每周），到点自己在后台抓。\n4. 抓到新论文时，宠物会来说一句「**老大，识别到 N 篇关于『…』的新论文，点击查看**」——点一下气泡直接跳到科研页（这个气泡是浅绿配色）；没开宠物时用系统托盘提示。\n\n### 📝 备忘录升级\n5. **备忘录可以设截止时间了**，并且能在截止前按周期提醒（提前多久 + 每隔多久），到点全屏提醒；列表按截止排序、**过期标红置顶**；桌面日历上有虚线截止条；桌宠气泡里也多了一块「📌 备忘截止」。\n6. **备忘提醒弹窗新增「我知道了」**：确认收到，但不把备忘标成完成、也不打断周期提醒。\n\n### 🛠️ 修复与优化\n7. **提醒弹窗必须点按钮才会关**：点弹窗外面、按 Esc 都不再误关（只有按钮能关）。\n8. **修「点了休息了还有声音」**：音乐、没说完的语音、提醒小旋律都立刻静音，迟到的播放一律作废。\n9. **修备忘/待办弹窗里的下拉框和日期时间选择器偶尔点了没反应**（去掉表单弹窗的毛玻璃与缩放动画）。\n10. **「休息」计时更聪明**：电脑睡眠或息屏超过 5 分钟算休息过，唤醒后重置为完整间隔重新计时（手动暂停时照旧不重置）。\n11. **新形象**：「雷达观察员小猫」「喵星科学家」两个内置形象（朋友画的），加上皮肤「🔄 刷新」按钮和**自定义提醒音乐**。\n12. **细节**：去掉倒计时圆圈外面那圈方形荧光；提醒弹窗里的形象按可用高度缩放，不再切头。\n\n**下载**：`iKunReminder-setup-v3.11.0.exe`（约 116 MB，Windows x64，双击安装）\n",
+  "size": 121824617,
+  "sha512": "pDOQFHzF2KTen2f7XSihgOIqcTp8hC4eQJd/U9KLay9inEHoPZe8g+s64SqpCNL42laRKng+7LcRbNedRnUWfg==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.11/iKunReminder-setup-v3.9.11.exe.part1",
-      "size": 60908307,
-      "sha512": "GrLONpjt1ehMjKPNXohEewql5gyVyGlvhZtBHvBuqChm4UOTJI4+RVBkz6JWHcpZb/OhxHExkfWxWm3pOirSTA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.11.0/iKunReminder-setup-v3.11.0.exe.part1",
+      "size": 60912309,
+      "sha512": "ulEH4PLnZitosob8XbAjocp0UAAjmSZRHS74jOir5JA2QMwTGVOSkLBclKUZpCRcwiCK3bJsMxmieO1a25fJDQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.9.11/iKunReminder-setup-v3.9.11.exe.part2",
-      "size": 60908307,
-      "sha512": "nbKdcSeF8Nf6adXrF74e0REaeJLeL1z1V0PfGO8cRrEZBbrN/V6jGulfW8f3SYhCBt1/xE/J9mAf3hRYST5Mqw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v3.11.0/iKunReminder-setup-v3.11.0.exe.part2",
+      "size": 60912308,
+      "sha512": "ptQLSZKF/csZmo4iFjTA4RiyiFs7N1FLQffLcYWSl4OGeUItmKC7NpKv12ykEWuMNM/dkC/5b0ZCQDWMH4XodA==",
       "index": 2
     }
   ]
