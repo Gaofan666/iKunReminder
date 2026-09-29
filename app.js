@@ -30,6 +30,7 @@
     settings: 'kunkun.settings.v1',
     stats: 'kunkun.stats.v1',
     todos: 'kunkun.todos.v1',               // 备忘录 + 待办（一次存，省得两套版本号）
+    cats: 'kunkun.cats.v1',                 // 分类表（待办和备忘共用一套）
     ui: 'kunkun.ui.v1',                     // 界面偏好（当前标签页、设置项）
     diary: 'kunkun.diary.v1'                // 日记：{ 'yyyy-mm-dd': '正文' }，一天一篇
   };
@@ -183,6 +184,7 @@
     speech: true,
     petSize: 'max',            // 桌面宠物大小：max 迷你 / mid 小小 / min 超小
     petOn: false,              // 桌面宠物是否显示（独立小窗，可与主界面同时存在）
+    petTop: false,             // 桌宠是否「始终最前」（默认关：保持系统原本的置顶规则）
     calOn: false,              // 桌面日历是否显示（独立小窗，可与主界面同时存在）
     calTheme: 'light',         // 桌面日历主题：light / dark
     calOpacity: 97,            // 桌面日历卡片不透明度（35~100，只影响底色）
@@ -619,6 +621,16 @@
     alertMusic: $('#alertMusic'),
     alertTone: $('#alertTone'),
     alertMore: $('#alertMore'),
+    lateBox: $('#lateBox'),
+    lateChips: $('#lateChips'),
+    lateInput: $('#lateInput'),
+    lateFillOverlay: $('#lateFillOverlay'),
+    lateFillDesc: $('#lateFillDesc'),
+    lateFillChips: $('#lateFillChips'),
+    lateFillInput: $('#lateFillInput'),
+    lateFillSave: $('#lateFillSave'),
+    lateFillSkip: $('#lateFillSkip'),
+    lateFillClose: $('#lateFillClose'),
     alertOneByOne: $('#alertOneByOne'),
     alertClose: $('#alertClose'),
     floatWords: $('#floatWords'),
@@ -668,12 +680,21 @@
     todoBadge: $('#todoBadge'),
     /* 备忘 / 待办 */
     memoList: $('#memoList'),
+    memoLateStat: $('#memoLateStat'),
+    memoLateList: $('#memoLateList'),
+    memoCatFilter: $('#memoCatFilter'),
+    todoCatFilter: $('#todoCatFilter'),
+    catManage: $('#catManage'),
+    catNewName: $('#catNewName'),
+    btnCatAdd: $('#btnCatAdd'),
+    catMsg: $('#catMsg'),
     todoList: $('#todoList'),
     btnAddMemo: $('#btnAddMemo'),
     btnAddTodo: $('#btnAddTodo'),
     memoOverlay: $('#memoOverlay'),
     memoTitle: $('#memoTitle'),
     memoText: $('#memoText'),
+    memoCat: $('#memoCat'),
     memoSave: $('#memoSave'),
     memoCancel: $('#memoCancel'),
     memoClose: $('#memoClose'),
@@ -688,6 +709,7 @@
     todoOverlay: $('#todoOverlay'),
     tdTitle: $('#tdTitle'),
     tdText: $('#tdText'),
+    todoCat: $('#todoCat'),
     tdDate: $('#tdDate'),
     tdTime: $('#tdTime'),
     tdQuick: $('#tdQuick'),
@@ -705,6 +727,8 @@
     /* 设置 */
     chkDesktopPet: $('#chkDesktopPet'),
     desktopPetRow: $('#desktopPetRow'),
+    chkPetTop: $('#chkPetTop'),
+    petTopRow: $('#petTopRow'),
     chkDesktopCal: $('#chkDesktopCal'),
     calThemeSeg: $('#calThemeSeg'),
     calOpa: $('#calOpa'),
@@ -836,6 +860,7 @@
     native.syncState({
       running: rt.running,
       petOn: !!settings.petOn,
+      petTop: !!settings.petTop,
       calOn: !!settings.calOn,
       petSound: settings.sound,
       skin: settings.skin,
@@ -948,6 +973,7 @@
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
         if (typeof s.petOn === 'boolean') settings.petOn = s.petOn;
+        if (typeof s.petTop === 'boolean') settings.petTop = s.petTop;
         if (typeof s.calOn === 'boolean') settings.calOn = s.calOn;
         if (s.calTheme === 'dark' || s.calTheme === 'light') settings.calTheme = s.calTheme;
         if (isFinite(+s.calOpacity) && +s.calOpacity > 0) {
@@ -1138,6 +1164,211 @@
   }
 
   /* 备忘到截止时间（或到了提前提醒的点）→ 全屏弹窗，和待办同一套 */
+  /* ------------------------------- 备忘延期（过了截止时间还没完成）
+     用户要的「统计延期事件 + 延期原因」：备忘一旦过了截止时间还没完成，
+     下次弹提醒时顺手问一句原因（可留空），并累计延期次数与时长。
+     数据就存在备忘自己身上（lateCount / lateMs / lateReason / lateLog），
+     所以不用另开一张统计表，删掉备忘这些也跟着没了。 */
+  const LATE_CHIPS = ['时间不够', '被打断', '等别人', '忘了', '事情变多'];
+  let memoLateOpen = false;        // 延期统计明细展开着吗
+  let lateFillId = null;           // 正在补填延期原因的备忘 id
+
+  /* 完成一条备忘：延期过就顺手记一笔（次数 + 到完成为止一共拖了多久）。
+     why 有值就当作这次的原因；没有也照记，原因允许事后补。 */
+  function completeMemo(m, why) {
+    if (!m) return false;
+    const now = Date.now();
+    const reason = String(why || '').trim().slice(0, 60);
+    if (!m.done && m.dueAt && now > m.dueAt) {
+      m.lateCount = (+m.lateCount || 0) + 1;
+      m.lateMs = Math.max(0, now - m.dueAt);
+      if (!Array.isArray(m.lateLog)) m.lateLog = [];
+      m.lateLog.push({ at: now, ms: m.lateMs, text: reason });
+      if (m.lateLog.length > 20) m.lateLog = m.lateLog.slice(-20);
+    }
+    if (reason) m.lateReason = reason;
+    m.done = true;
+    m.doneAt = now;
+    m.remindAt = 0;
+    saveTodoStore();
+    renderMemos();
+    return true;
+  }
+
+  /* 完成前该不该问一句延期原因？
+     确实延期过（有延期记录、或已经过了截止），而且到现在一条原因都没写过。
+     写过一次就不再问 —— 补填是帮忙，不能变成骚扰。 */
+  function needLateReason(m) {
+    if (!m || !m.dueAt) return false;
+    if (!(+m.lateCount > 0 || Date.now() > m.dueAt)) return false;
+    if (m.lateReason) return false;
+    if (Array.isArray(m.lateLog) && m.lateLog.some(function (x) { return x && x.text; })) return false;
+    return true;
+  }
+
+  function lateFillChipPaint() {
+    if (!el.lateFillChips || !el.lateFillInput) return;
+    const cur = (el.lateFillInput.value || '').trim();
+    const btns = el.lateFillChips.querySelectorAll('button');
+    for (let i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].textContent === cur);
+  }
+
+  /* 打开「补填延期原因」。备忘已经完成的话（事后从卡片上补）措辞和按钮都要换。 */
+  function openLateFill(m) {
+    if (!m) return;
+    lateFillId = m.id;
+    const ms = (+m.lateMs || 0) || (m.dueAt ? Math.max(0, Date.now() - m.dueAt) : 0);
+    if (el.lateFillDesc) {
+      el.lateFillDesc.textContent = '「' + m.text + '」延期了 ' + fmtDur(ms) +
+        '，之前没写原因 —— 补一句？（不写也行）';
+    }
+    if (el.lateFillSave) el.lateFillSave.textContent = m.done ? '保存' : '保存并完成';
+    if (el.lateFillSkip) el.lateFillSkip.textContent = m.done ? '取消' : '跳过，直接完成';
+    if (el.lateFillChips) {
+      if (!el.lateFillChips.dataset.ready) {
+        el.lateFillChips.innerHTML = '';
+        LATE_CHIPS.forEach(function (txt) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = txt;
+          b.addEventListener('click', function () {
+            if (el.lateFillInput.value.trim() === txt) el.lateFillInput.value = '';
+            else el.lateFillInput.value = txt;
+            lateFillChipPaint();
+          });
+          el.lateFillChips.appendChild(b);
+        });
+        el.lateFillChips.dataset.ready = '1';
+      }
+      if (el.lateFillInput) el.lateFillInput.value = m.lateReason || '';
+      lateFillChipPaint();
+    }
+    if (el.lateFillOverlay) el.lateFillOverlay.hidden = false;
+    setTimeout(function () { try { el.lateFillInput.focus(); } catch (e) { } }, 50);
+  }
+
+  function closeLateFill() {
+    if (el.lateFillOverlay) el.lateFillOverlay.hidden = true;
+    lateFillId = null;
+  }
+
+  /* 两个按钮共用：skipIt = 不写原因（跳过 / 取消） */
+  function finishLateFill(skipIt) {
+    const m = memoById(lateFillId);
+    const wasDone = !!(m && m.done);
+    const why = skipIt ? '' : ((el.lateFillInput && el.lateFillInput.value) || '');
+    closeLateFill();
+    if (!m) return;
+    if (wasDone) {
+      /* 只是事后补一句原因，别去碰完成状态 */
+      const v = String(why || '').trim().slice(0, 60);
+      if (v) {
+        m.lateReason = v;
+        saveTodoStore();
+        renderMemos();
+        setCaption('已补上延期原因：<b>' + escapeHtml(v) + '</b>');
+      }
+      return;
+    }
+    completeMemo(m, why);
+    setCaption('备忘已完成：<b>' + escapeHtml(m.text) + '</b>');
+  }
+
+  function lateChipPaint() {
+    if (!el.lateChips) return;
+    const cur = (el.lateInput && el.lateInput.value || '').trim();
+    const btns = el.lateChips.querySelectorAll('button');
+    for (let i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].textContent === cur);
+  }
+
+  /* 弹窗里「延期原因」那一块的显隐：只有已经过了截止时间的备忘才问 */
+  function paintLateBox(m) {
+    if (!el.lateBox) return;
+    const late = !!(m && !m.done && m.dueAt && Date.now() > m.dueAt);
+    el.lateBox.hidden = !late;
+    if (!late) return;
+    if (el.lateChips && !el.lateChips.dataset.ready) {
+      el.lateChips.innerHTML = '';
+      LATE_CHIPS.forEach(function (txt) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = txt;
+        b.addEventListener('click', function () {
+          /* 再点一下同一个 = 取消，点错了不用手删 */
+          if (el.lateInput.value.trim() === txt) el.lateInput.value = '';
+          else el.lateInput.value = txt;
+          lateChipPaint();
+        });
+        el.lateChips.appendChild(b);
+      });
+      el.lateChips.dataset.ready = '1';
+    }
+    if (el.lateInput) el.lateInput.value = m.lateReason || '';   // 上次写过就带出来，改一下即可
+    lateChipPaint();
+  }
+
+  /* 把这次「逾期处理」记到备忘上：次数 +1、延期时长刷新、原因留档 */
+  function recordMemoLate(m) {
+    if (!m || !m.dueAt) return;
+    const now = Date.now();
+    m.lateCount = (+m.lateCount || 0) + 1;
+    m.lateMs = Math.max(0, now - m.dueAt);          // 到这次处理为止一共拖了多久
+    const why = (el.lateInput && el.lateInput.value || '').trim().slice(0, 60);
+    if (why) m.lateReason = why;
+    if (!Array.isArray(m.lateLog)) m.lateLog = [];
+    m.lateLog.push({ at: now, ms: m.lateMs, text: why });
+    if (m.lateLog.length > 20) m.lateLog = m.lateLog.slice(-20);
+  }
+
+  /* 延期统计：只算已经记过延期（处理过逾期提醒）的备忘 */
+  function lateStatRows() {
+    return memos
+      .filter(function (m) { return (+m.lateCount || 0) > 0 && (+m.lateMs || 0) > 0; })
+      .map(function (m) { return { m: m, ms: +m.lateMs || 0, why: m.lateReason || '' }; })
+      .sort(function (a, b) { return b.ms - a.ms; });
+  }
+
+  function renderMemoLateStat() {
+    if (!el.memoLateStat) return;
+    const rows = lateStatRows();
+    if (!rows.length) {
+      el.memoLateStat.hidden = true;
+      if (el.memoLateList) el.memoLateList.hidden = true;
+      return;
+    }
+    const total = rows.reduce(function (s, r) { return s + r.ms; }, 0);
+    const times = rows.reduce(function (s, r) { return s + (+r.m.lateCount || 0); }, 0);
+    const byWhy = {};
+    rows.forEach(function (r) {
+      const k = r.why || '没写原因';
+      byWhy[k] = (byWhy[k] || 0) + 1;
+    });
+    const top = Object.keys(byWhy)
+      .sort(function (a, b) { return byWhy[b] - byWhy[a]; })
+      .map(function (k) { return k + ' ×' + byWhy[k]; })
+      .slice(0, 3).join('、');
+    el.memoLateStat.hidden = false;
+    el.memoLateStat.innerHTML =
+      '<span class="ls-toggle">' + (memoLateOpen ? '收起 ▲' : '展开 ▼') + '</span>' +
+      '📊 延期备忘 <b>' + rows.length + '</b> 条 · 累计 <b>' + fmtDur(total) + '</b>' +
+      ' · 平均 <b>' + fmtDur(Math.round(total / rows.length)) + '</b>' +
+      (times > rows.length ? ' · 处理 <b>' + times + '</b> 次' : '') +
+      '<br>原因：' + escapeHtml(top);
+    if (el.memoLateList) {
+      el.memoLateList.hidden = !memoLateOpen;
+      if (memoLateOpen) {
+        el.memoLateList.innerHTML = rows.map(function (r) {
+          const why = r.why || '没写原因';
+          return '<div class="late-row">' +
+            '<span class="lr-text">' + escapeHtml(r.m.text) + '</span>' +
+            '<span class="lr-ms">拖了 ' + fmtDur(r.ms) + '</span>' +
+            '<span class="lr-why" title="' + escapeHtml(why) + '">' + escapeHtml(why) + '</span>' +
+            '</div>';
+        }).join('');
+      }
+    }
+  }
+
   function fireMemoAlert(m, late) {
     if (rt.alertId) return;
     if (!m) return;
@@ -1156,6 +1387,7 @@
     el.alertSnooze.textContent = '10 分钟后再说';
     if (el.alertOneByOne) el.alertOneByOne.hidden = true;
     if (el.alertAck) el.alertAck.hidden = false;
+    paintLateBox(m);                 // 已过截止的备忘：多问一句延期原因
     el.overlay.style.setProperty('--accent', '#D9A15F');
     el.overlay.hidden = false;
 
@@ -1225,6 +1457,7 @@
     if (el.alertMore) el.alertMore.hidden = true;
     if (el.alertOneByOne) el.alertOneByOne.hidden = true;
     if (el.alertAck) el.alertAck.hidden = true;
+    if (el.lateBox) el.lateBox.hidden = true;
     flashTitle(false);
     if (native) native.dismiss();
     setMood('cheer', 2200);
@@ -1253,15 +1486,13 @@
     /* 备忘：勾掉完成，提醒位清掉 */
     if (alertKind === 'memo') {
       const mm = memoById(id);
-      if (mm) {
-        mm.done = true;
-        mm.doneAt = Date.now();
-        mm.remindAt = 0;
-      }
-      saveTodoStore();
-      renderMemos();
+      /* 弹窗里如果显示了「延期原因」那一块，就把填的内容一起带上 */
+      const why = (el.lateBox && !el.lateBox.hidden && el.lateInput) ? el.lateInput.value : '';
       closeAlert();
-      if (mm) setCaption('备忘已完成：<b>' + escapeHtml(mm.text) + '</b>');
+      if (mm) {
+        completeMemo(mm, why);
+        setCaption('备忘已完成：<b>' + escapeHtml(mm.text) + '</b>');
+      }
       return;
     }
     if (stats.date !== todayKey()) stats = { date: todayKey(), counts: {} };
@@ -1308,6 +1539,7 @@
     if (alertKind === 'memo') {
       const mm = memoById(id);
       if (mm) {
+        recordMemoLate(mm);            // 又往后推了一次，同样算延期
         mm.remindAt = Date.now() + 10 * 60 * 1000;
         saveTodoStore();
         renderMemos();
@@ -1332,6 +1564,12 @@
     if (!id) return;
     if (alertKind === 'memo') {
       const mm = memoById(id);
+      /* 已经过了截止还点「我知道了」= 这次确实延期了，记一笔再关 */
+      if (mm && !mm.done && mm.dueAt && Date.now() > mm.dueAt) {
+        recordMemoLate(mm);
+        saveTodoStore();
+        renderMemos();
+      }
       closeAlert();
       if (mm) {
         if (mm.remindAt && mm.remindAt > 0) {
@@ -1726,6 +1964,16 @@
     return diff >= 0 ? '还有 ' + txt : '已过期 ' + txt;
   }
 
+  /* 纯时长（不带「还有 / 已过期」）：延期统计里用 */
+  function fmtDur(ms) {
+    const mins = Math.max(0, Math.round(+ms / 60000));
+    if (mins < 60) return mins + ' 分钟';
+    if (mins < 60 * 24) return Math.round(mins / 60) + ' 小时';
+    const d = Math.floor(mins / 1440);
+    const h = Math.round((mins % 1440) / 60);
+    return h ? d + ' 天 ' + h + ' 小时' : d + ' 天';
+  }
+
   const pad2 = n => String(n).padStart(2, '0');
   function localDateValue(d) {
     return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
@@ -1748,7 +1996,13 @@
             dueAt: +m.dueAt || 0,
             remindBefore: +m.remindBefore || 0,
             remindEvery: +m.remindEvery || 0,
-            remindAt: +m.remindAt || 0
+            remindAt: +m.remindAt || 0,
+            cat: String(m.cat || ''),
+            /* 延期统计（过了截止没完成时记的，原因在逾期提醒弹窗里填） */
+            lateCount: +m.lateCount || 0,
+            lateMs: +m.lateMs || 0,
+            lateReason: String(m.lateReason || ''),
+            lateLog: Array.isArray(m.lateLog) ? m.lateLog.slice(-20) : []
           };
         });
       }
@@ -1763,7 +2017,8 @@
             remindAt: +t.remindAt || 0,
             prio: normPrio(t.prio),
             repeat: normRepeat(t.repeat),
-            notify: t.notify !== false
+            notify: t.notify !== false,
+            cat: String(t.cat || '')
           };
         });
       }
@@ -1775,6 +2030,137 @@
       localStorage.setItem(STORE_KEY.todos, JSON.stringify({ memos: memos, todos: todos }));
     } catch (e) { }
     pushCalTodos();
+  }
+
+  /* ------------------------------------------------------------ 分类
+     待办和备忘共用同一套分类：{ id, name, color }，单独存一份。
+     条目上只记 cat: '<分类 id>'（空串 = 未分类），所以删掉分类不用去改条目，
+     那些条目自然变成「未分类」。 */
+  const CAT_COLORS = ['#4A9BD4', '#6FB56B', '#E8B843', '#D99B5F', '#B47FD1', '#4FB3A8', '#E07A6B', '#7FA8D9'];
+  let cats = [];
+  let catFilter = { memo: '', todo: '' };    // '' = 全部；'__none' = 未分类
+  let catToast = 0;
+
+  function loadCats() {
+    cats = [];
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY.cats) || '[]');
+      if (Array.isArray(raw)) {
+        cats = raw.filter(function (c) { return c && c.id && c.name; }).map(function (c, i) {
+          return {
+            id: String(c.id),
+            name: String(c.name).slice(0, 12),
+            color: /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : CAT_COLORS[i % CAT_COLORS.length]
+          };
+        });
+      }
+    } catch (e) { cats = []; }
+    /* 筛选里选的那个分类可能已经没了（比如在别处删的），回到「全部」 */
+    if (catFilter.memo && catFilter.memo !== '__none' && !catById(catFilter.memo)) catFilter.memo = '';
+    if (catFilter.todo && catFilter.todo !== '__none' && !catById(catFilter.todo)) catFilter.todo = '';
+  }
+
+  function saveCats() {
+    try { localStorage.setItem(STORE_KEY.cats, JSON.stringify(cats)); } catch (e) { }
+  }
+
+  function catById(id) {
+    for (let i = 0; i < cats.length; i++) if (cats[i].id === id) return cats[i];
+    return null;
+  }
+  function catOf(item) { return item && item.cat ? catById(item.cat) : null; }
+  function newCatId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  /* 一个分类被多少条内容用着（删之前提示用，删除不会动内容） */
+  function catUsage(id) {
+    let n = 0;
+    memos.forEach(function (m) { if (m.cat === id) n++; });
+    todos.forEach(function (t) { if (t.cat === id) n++; });
+    return n;
+  }
+
+  /* 弹窗里的分类下拉：第一项固定是「未分类」 */
+  function fillCatSelect(sel, cur) {
+    if (!sel) return;
+    sel.innerHTML = '';
+    const o0 = document.createElement('option');
+    o0.value = '';
+    o0.textContent = cats.length ? '未分类' : '未分类（还没建分类）';
+    sel.appendChild(o0);
+    cats.forEach(function (c) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.name;
+      sel.appendChild(o);
+    });
+    sel.value = (cur && catById(cur)) ? cur : '';
+  }
+
+  /* 某个条目在当前筛选下该不该显示 */
+  function catMatch(item, which) {
+    const f = catFilter[which];
+    if (!f) return true;
+    if (f === '__none') return !catOf(item);
+    return item.cat === f;
+  }
+
+  /* 列表上方的分类筛选条（一个分类都没有时不显示） */
+  function renderCatFilter(which) {
+    const box = which === 'todo' ? el.todoCatFilter : el.memoCatFilter;
+    if (!box) return;
+    const list = which === 'todo' ? todos : memos;
+    if (!cats.length) { box.hidden = true; box.innerHTML = ''; return; }
+    const cur = catFilter[which];
+    const parts = [{ v: '', label: '全部', color: '' }];
+    cats.forEach(function (c) { parts.push({ v: c.id, label: c.name, color: c.color }); });
+    if (list.some(function (x) { return !catOf(x); })) {
+      parts.push({ v: '__none', label: '未分类', color: '#C7D2DA' });
+    }
+    box.hidden = false;
+    box.innerHTML = parts.map(function (p) {
+      return '<button class="cat-chip' + (cur === p.v ? ' on' : '') + '" data-cat="' + p.v + '">' +
+        (p.color ? '<i class="cc-dot" style="background:' + p.color + '"></i>' : '') +
+        escapeHtml(p.label) + '</button>';
+    }).join('');
+  }
+
+  function catMsg(html) {
+    if (!el.catMsg) return;
+    el.catMsg.innerHTML = html;
+    el.catMsg.hidden = false;
+    if (catToast) clearTimeout(catToast);
+    catToast = setTimeout(function () { if (el.catMsg) el.catMsg.hidden = true; }, 4000);
+  }
+
+  /* 设置页里的分类管理：改名 / 换色 / 删除（名字用 textContent 填，防注入） */
+  function renderCatManage() {
+    if (!el.catManage) return;
+    if (!cats.length) {
+      el.catManage.innerHTML = '<div class="cat-empty">还没有分类。在下面新建一个，比如「工作」。</div>';
+      return;
+    }
+    el.catManage.innerHTML = cats.map(function (c) {
+      return '<div class="cat-item" data-id="' + c.id + '">' +
+        '<span class="cat-dot" style="background:' + c.color + '"></span>' +
+        '<span class="cat-name"></span>' +
+        '<span class="cat-count">' + catUsage(c.id) + ' 条</span>' +
+        '<input type="color" data-role="color" value="' + c.color + '" title="换个颜色">' +
+        '<button class="cat-btn" data-role="rename">改名</button>' +
+        '<button class="cat-btn del" data-role="del">删除</button>' +
+        '</div>';
+    }).join('');
+    const rows = el.catManage.querySelectorAll('.cat-item');
+    for (let i = 0; i < rows.length; i++) {
+      const c = catById(rows[i].dataset.id);
+      if (c) rows[i].querySelector('.cat-name').textContent = c.name;
+    }
+  }
+
+  /* 分类变了（改名/换色/删除/新建）→ 管理区 + 两个列表一起重画 */
+  function renderCats() {
+    renderCatManage();
+    renderMemos();
+    renderTodos();
   }
 
   /* 把待办推给桌面日历窗（只推日历要用的字段；没设日期的待办不进日历）。
@@ -2320,10 +2706,15 @@
   /* -------------------------------------------------------------- 渲染 */
   function renderMemos() {
     if (!el.memoList) return;
-    const list = sortedMemos();
+    const list = sortedMemos().filter(function (m) { return catMatch(m, 'memo'); });
     el.memoList.innerHTML = '';
+    renderCatFilter('memo');         // 列表上方的分类筛选条
+    renderMemoLateStat();            // 顶部那条延期统计跟着一起刷新
     if (!list.length) {
-      el.memoList.innerHTML = '<div class="empty-tip">还没有备忘。<br>点右上角「＋ 新增备忘」写第一条吧。</div>';
+      el.memoList.innerHTML = '<div class="empty-tip">' +
+        (catFilter.memo
+          ? '这个分类下还没有备忘。<br>点上面的「全部」看所有备忘。'
+          : '还没有备忘。<br>点右上角「＋ 新增备忘」写第一条吧。') + '</div>';
       return;
     }
     list.forEach(function (m) {
@@ -2337,6 +2728,9 @@
           '<div class="item-meta"></div>' +
         '</div>' +
         '<div class="item-tools">' +
+          (needLateReason(m)
+            ? '<button data-role="why" class="why" title="这条延期过、还没写原因，点一下补一句">补原因</button>'
+            : '') +
           '<button data-role="edit" title="编辑">编辑</button>' +
           '<button data-role="del" class="del" title="删除">删除</button>' +
         '</div>';
@@ -2350,21 +2744,44 @@
       } else {
         meta.textContent = '记于 ' + fmtTodoTime(m.at);
       }
+      /* 分类小标排在元信息最前面，然后是延期标 */
+      const cm = catOf(m);
+      if (cm) {
+        const ct = document.createElement('span');
+        ct.className = 'cat-tag';
+        ct.innerHTML = '<i style="background:' + cm.color + '"></i>';
+        ct.appendChild(document.createTextNode(cm.name));
+        meta.insertBefore(ct, meta.firstChild);
+      }
+      if (+m.lateCount > 0) {
+        const tag = document.createElement('span');
+        tag.className = 'late-tag';
+        tag.textContent = '延期 ' + m.lateCount + ' 次';
+        tag.title = '累计延期 ' + fmtDur(m.lateMs || 0) +
+          (m.lateReason ? '；原因：' + m.lateReason : '');
+        meta.appendChild(tag);
+      }
       el.memoList.appendChild(row);
     });
   }
 
   function renderTodos() {
     if (!el.todoList) return;
-    const list = sortedTodos();
-    el.todoList.innerHTML = '';
-    const pending = list.filter(t => !t.done).length;
+    const all = sortedTodos();
+    /* 角标数的是「全部未完成」，不跟着分类筛选变（筛的只是看的范围） */
+    const pending = all.filter(t => !t.done).length;
     if (el.todoBadge) {
       el.todoBadge.hidden = pending === 0;
       el.todoBadge.textContent = String(pending);
     }
+    const list = all.filter(function (t) { return catMatch(t, 'todo'); });
+    el.todoList.innerHTML = '';
+    renderCatFilter('todo');         // 列表上方的分类筛选条
     if (!list.length) {
-      el.todoList.innerHTML = '<div class="empty-tip">还没有待办。<br>点右上角「＋ 新增待办」，设好日期和时间就行。</div>';
+      el.todoList.innerHTML = '<div class="empty-tip">' +
+        (catFilter.todo
+          ? '这个分类下还没有待办。<br>点上面的「全部」看所有待办。'
+          : '还没有待办。<br>点右上角「＋ 新增待办」，设好日期和时间就行。') + '</div>';
       return;
     }
     list.forEach(function (t) {
@@ -2387,6 +2804,15 @@
       meta.innerHTML = '⏰ <b></b> <span class="' + (late ? 'late' : '') + '"></span>';
       meta.querySelector('b').textContent = fmtTodoTime(t.dueAt);
       meta.querySelector('span').textContent = t.done ? '（已完成）' : fmtFromNow(t.dueAt);
+      /* 分类小标排在最前面 */
+      const ct = catOf(t);
+      if (ct) {
+        const tag = document.createElement('span');
+        tag.className = 'cat-tag';
+        tag.innerHTML = '<i style="background:' + ct.color + '"></i>';
+        tag.appendChild(document.createTextNode(ct.name));
+        meta.insertBefore(tag, meta.firstChild);
+      }
       /* 重复待办挂个小标签，一眼看出它是每期都来的 */
       if (t.repeat) {
         const badge = document.createElement('span');
@@ -2463,6 +2889,7 @@
     if (el.memoDueTime) el.memoDueTime.value = localTimeValue(due);
     if (el.memoRemindBefore) el.memoRemindBefore.value = String((m && m.remindBefore) || DEFAULT_MEMO_REMIND_BEFORE);
     if (el.memoRemindEvery) el.memoRemindEvery.value = String((m && m.remindEvery) || DEFAULT_MEMO_REMIND_EVERY);
+    fillCatSelect(el.memoCat, m ? m.cat : '');
     paintMemoDueUI(hasDue);
     el.memoOverlay.hidden = false;
     setTimeout(function () { try { el.memoText.focus(); } catch (e) { } }, 50);
@@ -2473,6 +2900,7 @@
     const text = el.memoText.value.trim();
     if (!text) { try { el.memoText.focus(); } catch (e) { } return; }
     let dueAt = 0, remindBefore = 0, remindEvery = 0, remindAt = 0;
+    const catPick = (el.memoCat && el.memoCat.value) || '';
     if (el.memoDueOn && el.memoDueOn.checked) {
       const dv = el.memoDueDate.value, tv = el.memoDueTime.value || '09:00';
       const parts = dv.split('-');
@@ -2493,6 +2921,7 @@
         m.remindBefore = remindBefore;
         m.remindEvery = remindEvery;
         m.remindAt = remindAt;
+        m.cat = catPick;
         /* 改了截止时间就重新变回未完成（不然勾掉完成还挂个截止时间会很怪） */
         if (m.done) { m.done = false; m.doneAt = 0; }
       }
@@ -2504,7 +2933,8 @@
         dueAt: dueAt,
         remindBefore: remindBefore,
         remindEvery: remindEvery,
-        remindAt: remindAt
+        remindAt: remindAt,
+        cat: catPick
       });
     }
     saveTodoStore();
@@ -2661,6 +3091,7 @@
     })();
     el.tdDate.value = localDateValue(due);
     el.tdTime.value = localTimeValue(due);
+    fillCatSelect(el.todoCat, t ? t.cat : '');
     paintRepeatUI(t ? t.repeat : null, due);
     el.todoOverlay.hidden = false;
     setTimeout(function () { try { el.tdText.focus(); } catch (e) { } }, 50);
@@ -2709,6 +3140,7 @@
     if (!isFinite(dueAt)) return;
     const prio = pickedTodoPrio();
     const repeat = pickedRepeatUI();
+    const catPick = (el.todoCat && el.todoCat.value) || '';
 
     if (editingTodoId) {
       const t = todoById(editingTodoId);
@@ -2717,6 +3149,7 @@
         t.dueAt = dueAt;
         t.prio = prio;
         t.repeat = repeat;
+        t.cat = catPick;
         /* 改了时间就把「下次提醒」重置到新时间；已经完成的重新变回未完成 */
         t.remindAt = dueAt;
         if (t.done) { t.done = false; t.doneAt = 0; }
@@ -2730,7 +3163,8 @@
         remindAt: dueAt,          // 到点就提醒（过期的会在很短时间内被 tick 抓到）
         prio: prio,
         repeat: repeat,
-        notify: true
+        notify: true,
+        cat: catPick
       });
     }
     saveTodoStore();
@@ -2976,7 +3410,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v4.2 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v4.3 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -3573,12 +4007,122 @@
         const id = row.dataset.id;
         if (role === 'done') {
           const m = memoById(id);
-          if (m) { m.done = !m.done; saveTodoStore(); renderMemos(); Sound.click(); }
+          if (!m) return;
+          if (m.done) {
+            /* 取消完成：回到未完成 */
+            m.done = false;
+            m.doneAt = 0;
+            saveTodoStore();
+            renderMemos();
+            Sound.click();
+          } else if (needLateReason(m)) {
+            /* 延期过、又一直没写原因：完成前先让补一句（也能跳过） */
+            openLateFill(m);
+            Sound.click();
+          } else {
+            completeMemo(m);
+            Sound.click();
+          }
         } else if (role === 'edit') {
           openMemoModal(id);
         } else if (role === 'del') {
           deleteMemo(id);
+        } else if (role === 'why') {
+          const m = memoById(id);
+          if (m) openLateFill(m);
         }
+      });
+    }
+    /* 延期统计：点一下展开/收起明细 */
+    if (el.memoLateStat) {
+      el.memoLateStat.addEventListener('click', function () {
+        memoLateOpen = !memoLateOpen;
+        renderMemoLateStat();
+      });
+    }
+    /* 分类筛选：点一下只看这一类（'' = 全部，'__none' = 未分类） */
+    const bindCatFilter = function (box, which) {
+      if (!box) return;
+      box.addEventListener('click', function (e) {
+        const b = e.target.closest ? e.target.closest('.cat-chip') : null;
+        if (!b) return;
+        catFilter[which] = b.dataset.cat || '';
+        if (which === 'todo') renderTodos(); else renderMemos();
+        Sound.click();
+      });
+    };
+    bindCatFilter(el.memoCatFilter, 'memo');
+    bindCatFilter(el.todoCatFilter, 'todo');
+
+    /* 设置页里的分类管理：改名 / 换色 / 删除 */
+    if (el.catManage) {
+      el.catManage.addEventListener('click', function (e) {
+        const btn = e.target.closest ? e.target.closest('[data-role]') : null;
+        const row = e.target.closest ? e.target.closest('.cat-item') : null;
+        if (!btn || !row) return;
+        const c = catById(row.dataset.id);
+        if (!c) return;
+        if (btn.dataset.role === 'rename') {
+          const name = window.prompt('分类名字（最多 12 个字）', c.name);
+          if (name == null) return;
+          const v = name.trim().slice(0, 12);
+          if (!v) { catMsg('名字不能是空的'); return; }
+          c.name = v;
+          saveCats();
+          renderCats();
+          catMsg('已改名为「' + escapeHtml(v) + '」');
+        } else if (btn.dataset.role === 'del') {
+          const n = catUsage(c.id);
+          if (!window.confirm('删除分类「' + c.name + '」？\n\n' +
+            (n ? '现在有 ' + n + ' 条内容用了它，会变成「未分类」（内容不会被删）。'
+               : '目前没有内容用它。'))) return;
+          cats = cats.filter(function (x) { return x.id !== c.id; });
+          if (catFilter.memo === c.id) catFilter.memo = '';
+          if (catFilter.todo === c.id) catFilter.todo = '';
+          /* 分类没了，条目上那个 cat 也要清掉：不然会留一个指向不存在分类的脏 id */
+          memos.forEach(function (m) { if (m.cat === c.id) m.cat = ''; });
+          todos.forEach(function (t) { if (t.cat === c.id) t.cat = ''; });
+          saveCats();
+          saveTodoStore();
+          renderCats();
+          catMsg('分类「' + escapeHtml(c.name) + '」已删除，里面的内容没动');
+        }
+      });
+      /* 换色：即时生效，但不重画管理区（重画会把色盘弹层关掉） */
+      el.catManage.addEventListener('input', function (e) {
+        const inp = e.target;
+        if (!inp || inp.dataset.role !== 'color') return;
+        const row = inp.closest ? inp.closest('.cat-item') : null;
+        if (!row) return;
+        const c = catById(row.dataset.id);
+        if (!c) return;
+        c.color = inp.value;
+        saveCats();
+        const dot = row.querySelector('.cat-dot');
+        if (dot) dot.style.background = c.color;
+        renderMemos();
+        renderTodos();
+      });
+    }
+    if (el.btnCatAdd) {
+      el.btnCatAdd.addEventListener('click', function () {
+        const v = (el.catNewName && el.catNewName.value || '').trim().slice(0, 12);
+        if (!v) { catMsg('先写个分类名字'); try { el.catNewName.focus(); } catch (e) { } return; }
+        if (cats.some(function (c) { return c.name === v; })) {
+          catMsg('已经有叫「' + escapeHtml(v) + '」的分类了');
+          return;
+        }
+        cats.push({ id: newCatId(), name: v, color: CAT_COLORS[cats.length % CAT_COLORS.length] });
+        saveCats();
+        if (el.catNewName) el.catNewName.value = '';
+        renderCats();
+        catMsg('已新建分类「' + escapeHtml(v) + '」');
+        Sound.click();
+      });
+    }
+    if (el.catNewName) {
+      el.catNewName.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && el.btnCatAdd) el.btnCatAdd.click();
       });
     }
     if (el.btnAddMemo) el.btnAddMemo.addEventListener('click', function () { Sound.click(); openMemoModal(null); });
@@ -3589,6 +4133,21 @@
     if (el.memoOverlay) el.memoOverlay.addEventListener('click', function (e) {
       if (e.target === el.memoOverlay) closeMemoModal();
     });
+    /* 「补填延期原因」弹窗：保存=写原因（未完成的话顺手标完成），跳过=不写 */
+    if (el.lateFillSave) el.lateFillSave.addEventListener('click', function () { Sound.click(); finishLateFill(false); });
+    if (el.lateFillSkip) el.lateFillSkip.addEventListener('click', function () { Sound.click(); finishLateFill(true); });
+    if (el.lateFillClose) el.lateFillClose.addEventListener('click', function () { finishLateFill(true); });
+    if (el.lateFillOverlay) {
+      el.lateFillOverlay.addEventListener('click', function (e) {
+        if (e.target === el.lateFillOverlay) finishLateFill(true);
+      });
+    }
+    if (el.lateFillInput) {
+      el.lateFillInput.addEventListener('input', lateFillChipPaint);
+      el.lateFillInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); finishLateFill(false); }
+      });
+    }
 
     /* 待办：勾完成 / 改 / 删 */
     if (el.todoList) {
@@ -3661,6 +4220,36 @@
       });
     }
 
+    /* 「桌宠始终最前」：和上面同一套（主进程是权威，托盘菜单也能改）。
+       默认不勾 = 保持系统原本的置顶规则；勾上后由主进程定期把桌宠重新提到最上面。 */
+    if (el.chkPetTop) {
+      el.chkPetTop.addEventListener('change', function (e) {
+        const want = e.target.checked;
+        Sound.click();
+        if (native && native.setPetTop) {
+          native.setPetTop(want).then(function (real) {
+            e.target.checked = !!real;
+            settings.petTop = !!real;
+            saveSettings();
+            pushState();
+            setCaption(real
+              ? '桌宠会<b>一直保持在最前面</b>（被别的置顶窗口盖住时会自动提回来）'
+              : '桌宠恢复成<b>系统原本的置顶规则</b>');
+          }).catch(function () { e.target.checked = !want; });
+        } else {
+          e.target.checked = false;
+        }
+      });
+    }
+    if (native && native.onPetTopChanged) {
+      native.onPetTopChanged(function (on) {
+        if (el.chkPetTop) el.chkPetTop.checked = !!on;
+        settings.petTop = !!on;
+        saveSettings();
+        pushState();
+      });
+    }
+
     /* 桌面日历：和桌面宠物同一套（主进程是权威，托盘菜单也能改） */
     if (el.chkDesktopCal) {
       el.chkDesktopCal.addEventListener('change', function (e) {
@@ -3700,9 +4289,16 @@
         if (!id) return;
         const m = memoById(String(id));
         if (!m) return;
-        m.done = !m.done;
-        saveTodoStore();
-        renderMemos();
+        if (m.done) {
+          m.done = false;
+          m.doneAt = 0;
+          saveTodoStore();
+          renderMemos();
+        } else {
+          /* 日历窗那么小、没法弹「补原因」，先照常完成；
+             事后再从主界面卡片上的「补原因」补一句就行 */
+          completeMemo(m);
+        }
         Sound.click();
       });
     }
@@ -4845,6 +5441,7 @@
   function init() {
     loadStore();
     loadTodoStore();
+    loadCats();                      // 分类表（待办和备忘共用）
     loadDiary();
     loadUiPrefs();
     el.chkSound.checked = settings.sound;
@@ -4855,8 +5452,10 @@
     if ('Notification' in window && Notification.permission === 'granted') el.chkNotify.checked = true;
     if (native && el.btnTray) el.btnTray.hidden = false;
     if (native && el.petSizeRow) el.petSizeRow.hidden = false;
+    if (native && el.petTopRow) el.petTopRow.hidden = false;
     if (native && el.desktopPetRow) el.desktopPetRow.hidden = false;
     if (el.chkDesktopPet) el.chkDesktopPet.checked = !!settings.petOn;
+    if (el.chkPetTop) el.chkPetTop.checked = !!settings.petTop;
     if (el.chkDesktopCal) el.chkDesktopCal.checked = !!settings.calOn;
     /* 待办清单也给桌面日历一份（日历窗可能马上就会来要） */
     pushCalTodos();
@@ -4885,6 +5484,7 @@
     renderPanels();
     renderMemos();
     renderTodos();
+    renderCatManage();
     renderDiary();
     applyDiaryFont();
     updateDiaryQuote();

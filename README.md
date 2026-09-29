@@ -20,6 +20,39 @@
 
 ---
 
+## 🆕 v4.3.0 更新（桌宠置顶开关 + 备忘延期统计 + 待办/备忘分类）
+
+### 🐣 桌宠被压住了？现在有个开关
+
+1. **新增「📌 桌宠始终最前」开关（默认关闭）**：桌宠原来用的是最低一档的置顶，而 Windows 上**所有置顶窗口共用同一层，谁最后被激活谁就在最上面** —— 被别的置顶软件（或者软件自己的提醒窗）压住之后，它就再也回不来了。勾上这个开关之后，桌宠会自己盯着层级，**一旦被压住就重新提到最前**：只改层级，**不抢焦点、不打断你打字**。
+   **默认不开，原来的规则一点都不变**；设置页「桌面宠物」里能勾，托盘菜单和桌宠右键菜单里也有同一项。睡眠唤醒、提醒窗关掉之后都会自动重新提一次；**全屏提醒正在显示的时候它会主动让位**，不挡提醒。
+
+### 📝 延期了？记下来，也说明一下原因
+
+2. **逾期提醒里多了一个「延期原因」**：过了截止还没完成，提醒弹窗会问你一句为什么 —— 5 个快捷原因（时间不够 / 被打断 / 等别人 / 忘了 / 事情变多）+ 可以自己写，**留空也行**。「完成 / 我知道了 / 10 分钟后再说」三种处理都会记一笔。
+3. **备忘页顶部多了一条延期统计**：`📊 延期备忘 N 条 · 累计 X · 平均 Y · 原因分布`，**点一下展开明细**（每条拖了多久、当时写的原因）。
+4. **卡片上挂「延期 N 次」小标**，鼠标停上去能看到拖了多久、什么原因。
+5. **延期过、又一直没写原因的，完成的时候会让你补一句**：勾完成时会先弹「这条备忘延期了 —— 补一句？（不写也行）」，可以点快捷原因、自己写，或者**点「跳过，直接完成」**。跳过的也没关系 —— 卡片上会留一个橙色的「**补原因**」按钮，什么时候想补都行（已经完成的备忘补原因不会改变它的完成状态）。
+
+### 🏷 待办和备忘可以分类了
+
+6. **自定义分类，待办和备忘共用一套**：设置页最下面新增「🏷 分类」，可以**新建 / 改名 / 换色（直接调色盘）/ 删除**，每一项还显示有多少条内容在用它。**删除分类不会删内容** —— 那些内容会自动回到「未分类」。
+7. **新增 / 编辑弹窗里可以选分类**；列表上方多出一条**彩色分类筛选条**（全部 / 各个分类 / 未分类），点一下只看这一类；卡片上显示彩色分类小标（待办、备忘都有）。
+
+### 🛠 其他
+
+8. **新增 4 个自检开关**：`--diag-pettop`（桌宠置顶）、`--diag-late`（延期统计）、`--diag-cat`（分类）、`--diag-why`（补填延期原因），都是照真实界面点一遍的端到端自检。
+
+---
+
+## 🆕 v4.0 ～ v4.2 更新（更新链路修复 + 提示音可自选）
+
+1. **v4.0 修「老版本只能一个版本一个版本地升」**：自动更新除了读仓库里的更新清单，还会**直接问 GitHub / Gitee 的「最新发行版」接口**，两边取更新的那个当提示（清单有可能被 CDN 缓存住、停在上一版）。更新那一栏也多了 **「🌐 打开发布页」** 兜底按钮。**版本号从这版起按 `x.x` 显示**（安装包名和更新清单内部仍然是三段，如 `4.2.0` —— 更新器只认标准三段版本号，写 `4.2` 会失效）。
+2. **v4.1 提示音可以自己指定了**：提醒事项卡片右上角多了 **🔔** 按钮、待办卡片「＋ 新增待办」左边多了 **「🔔 提示音」** 按钮，可以挑电脑里的音乐文件当提示音；文件被删掉、或者格式放不出来时**自动退回内置提示音**。它和设置里的「提醒音乐」是两回事。
+3. **v4.2 提示音和提醒音乐不再叠在一起**：自己指定的提示音会**完整放完**（语音也说完）→ 再等 3 秒 → 才放提醒音乐；没指定提示音的跟以前一模一样。
+
+---
+
 ## 🆕 v3.11.0 综合更新（并入主分支 3.9.x 线：科研动态 + 备忘升级 + 多轮修复）
 
 本次把主分支（v3.9.8 ~ v3.9.11）的开发内容整体并入，和备忘录系列升级合成一个大版本。
@@ -291,32 +324,44 @@ v3.2.2 的「一键摸鱼」是「把所有有标题的可见窗口都最小化�
 
 **方式一：GitHub Releases（推荐）**
 
-> **v3.2.6（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.6
-> 直接下载：[`iKunReminder-setup-v3.2.6.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.6/iKunReminder-setup-v3.2.6.exe)（约 110 MB，安装版）
+> **v4.2（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.2
+> 直接下载：[`iKunReminder-setup-v4.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.2/iKunReminder-setup-v4.2.0.exe)（约 116 MB，安装版）
 >
 > ⚠️ **v3.2.1 及更早的版本需要手动装一次**（它们里面没有更新器，没法自己更新自己）。
 > 装上 v3.2.2 或更高之后就不用了 —— 以后的新版本都能在「设置 → 软件更新」里一键更新。
 >
+> 历史版本 **v4.1 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.1
+> 直接下载：[`iKunReminder-setup-v4.1.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.1/iKunReminder-setup-v4.1.0.exe)（约 116 MB，安装版）
+>
+> 历史版本 **v4.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.0
+> 直接下载：[`iKunReminder-setup-v4.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.0/iKunReminder-setup-v4.0.0.exe)（约 116 MB，安装版）
+>
+> 历史版本 **v3.11.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.11.0
+> 直接下载：[`iKunReminder-setup-v3.11.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.11.0/iKunReminder-setup-v3.11.0.exe)（约 116 MB，安装版）
+>
+> 历史版本 **v3.2.6 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.6
+> 直接下载：[`iKunReminder-setup-v3.2.6.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.6/iKunReminder-setup-v3.2.6.exe)（约 110 MB，安装版）
+>
 > 历史版本 **v3.2.5 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.5
-> 直接下载：[`iKunReminder-setup-v3.2.5.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.5/iKunReminder-setup-v3.2.5.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.5.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.5/iKunReminder-setup-v3.2.5.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.4 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.4
-> 直接下载：[`iKunReminder-setup-v3.2.4.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.4/iKunReminder-setup-v3.2.4.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.4.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.4/iKunReminder-setup-v3.2.4.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.3 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.3
-> 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.2 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.2
-> 直接下载：[`iKunReminder-setup-v3.2.2.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.2/iKunReminder-setup-v3.2.2.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.2.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.2/iKunReminder-setup-v3.2.2.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.1 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.1
-> 直接下载：[`iKunReminder-setup-v3.2.1.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.1/iKunReminder-setup-v3.2.1.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.1.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.1/iKunReminder-setup-v3.2.1.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.0
-> 直接下载：[`iKunReminder-setup-v3.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.0/iKunReminder-setup-v3.2.0.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.0/iKunReminder-setup-v3.2.0.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.0.0
-> 直接下载：[`iKunReminder-setup-v3.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.0.0/iKunReminder-setup-v3.0.0.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.0.0/iKunReminder-setup-v3.0.0.exe)（约 110 MB，安装版）
 
 **方式二：百度网盘**
 
