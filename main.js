@@ -6100,6 +6100,9 @@ function updateSnapshot() {
     percent: updatePercent,
     error: updateError,
     available: updateInfo ? String(updateInfo.version || '') : '',
+    /* direct = 这个版本号是从「发布页 API」查到的，仓库清单还没跟上（多半被缓存住）。
+       这种情况我们手上没有对应的分卷清单，不能凭空下载 —— 只能请用户去打开发布页手动下。 */
+    direct: !!(updateInfo && updateInfo.direct),
     notes: updateInfo ? notesText(updateInfo.releaseNotes) : '',
     /* 用了哪个更新源、探测过哪些（给设置页显示） */
     source: updateSourceId,
@@ -6315,6 +6318,13 @@ async function crossCheckLatestTag() {
 
 function downloadUpdate() {
   if (!updateSupported || updateState !== 'available') return false;
+  /* 版本号是从发布页 API 查到的（仓库清单还没跟上）：手上没有对应的分卷清单，
+     硬下会下成旧版本 —— 直接告诉用户去打开发布页，别让他下到错的东西。 */
+  if (updateInfo && updateInfo.direct) {
+    updateError = '仓库清单还没更新到这个版本，请点「🌐 打开发布页」去下载最新安装包';
+    pushUpdate();
+    return false;
+  }
   updateState = 'downloading';
   updatePercent = 0;
   updateError = '';

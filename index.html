@@ -19,7 +19,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v4.0</span>
+    <span class="tb-ver" id="tbVer">v4.1</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -149,7 +149,10 @@
   <section class="card todo-col">
     <div class="col-head">
       <h2>⏰ 待办事项</h2>
-      <button class="btn sm primary" id="btnAddTodo">＋ 新增待办</button>
+      <div class="todo-head-btns">
+        <button class="btn sm" id="btnTodoSound" title="给待办到点提醒指定一个自己的提示音（不指定就用默认的）">🔔 提示音</button>
+        <button class="btn sm primary" id="btnAddTodo">＋ 新增待办</button>
+      </div>
     </div>
     <p class="col-sub">设好日期和时间，到点会自动跳出来提醒你（过期未完成的，下次打开程序时补提醒一次）。</p>
     <div class="todo-list" id="todoList"></div>
@@ -681,6 +684,9 @@
   <div class="float-words" id="floatWords"></div>
   <!-- 提醒音乐：语音播报结束后 3 秒开始放，放完就停（不循环） -->
   <audio id="alertMusic" src="assets/music.mp3" preload="auto"></audio>
+  <!-- 到点那一下的「提示音」：用户可以在设置里 / 卡片上指定自己的音乐文件；
+       没指定就放内置的小旋律（Web Audio 合成的）。跟「提醒音乐」是两回事。 -->
+  <audio id="alertTone" preload="auto"></audio>
 </div>
 
 <script src="app.js"></script>

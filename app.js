@@ -179,6 +179,7 @@
     sound: true,
     music: true,               // 提醒时播一段音乐（语音播报结束后 3 秒开始，放完就停）
     musicSrc: '',              // 用户自选的音乐文件绝对路径；空串 = 用打包进来的 assets/music.mp3
+    todoSound: '',             // 待办/备忘到点的提示音（本地音乐文件路径）；空串 = 内置默认小旋律
     speech: true,
     petSize: 'max',            // 桌面宠物大小：max 迷你 / mid 小小 / min 超小
     petOn: false,              // 桌面宠物是否显示（独立小窗，可与主界面同时存在）
@@ -497,6 +498,25 @@
     catch (e) { return String(p); }
   }
 
+  /* ------------------------------------------------ 到点那一下的「提示音」
+     默认是内置的 8-bit 小旋律（Sound.alert）。用户给某条提醒 / 待办指定了
+     自己的音乐文件，这里就放那个文件；放不出来（被删了/格式不支持）就退回默认小旋律。
+     跟「提醒音乐」（播报结束后放的那段）是两回事，各放各的。 */
+  function playAlertTone(path) {
+    const a = el.alertTone;
+    if (!path || !a) { try { Sound.alert(); } catch (e) { } return; }
+    try {
+      a.src = musicFileUrl(path);
+      a.currentTime = 0;
+      const pr = a.play();
+      if (pr && pr.catch) pr.catch(function () { try { Sound.alert(); } catch (e) { } });
+    } catch (e) { try { Sound.alert(); } catch (e2) { } }
+  }
+  function stopAlertTone() {
+    const a = el.alertTone;
+    if (a) { try { a.pause(); a.currentTime = 0; } catch (e) { } }
+  }
+
   function stopAlertMusic() {
     musicSeq++;                      // 作废所有还没落地的播放（定时器里的、play 回调里的）
     if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
@@ -565,6 +585,7 @@
     alertSnooze: $('#alertSnooze'),
     overlayCard: $('#overlayCard'),
     alertMusic: $('#alertMusic'),
+    alertTone: $('#alertTone'),
     alertMore: $('#alertMore'),
     alertOneByOne: $('#alertOneByOne'),
     alertClose: $('#alertClose'),
@@ -587,6 +608,7 @@
     btnSkinRefresh: $('#btnSkinRefresh'),
     chkSound: $('#chkSound'),
     chkMusic: $('#chkMusic'),
+    btnTodoSound: $('#btnTodoSound'),
     musicPath: $('#musicPath'),
     btnPickMusic: $('#btnPickMusic'),
     btnResetMusic: $('#btnResetMusic'),
@@ -759,7 +781,9 @@
       title: it.title || ('该' + name + '啦！'),
       desc: it.desc || ('到点啦，' + name + '的时间到了。'),
       done: it.done || '我完成了',
-      voice: it.voice || ('该' + name + '了')
+      voice: it.voice || ('该' + name + '了'),
+      /* 这条提醒自己的提示音（本地音乐文件路径）；空串 = 用内置默认小旋律 */
+      sound: typeof it.sound === 'string' ? it.sound : ''
     };
   }
   function makeItem(name, emoji, minutes) {
@@ -888,6 +912,7 @@
         if (typeof s.sound === 'boolean') settings.sound = s.sound;
         if (typeof s.music === 'boolean') settings.music = s.music;
         if (typeof s.musicSrc === 'string' && s.musicSrc.length < 500) settings.musicSrc = s.musicSrc;
+        if (typeof s.todoSound === 'string' && s.todoSound.length < 500) settings.todoSound = s.todoSound;
         if (typeof s.speech === 'boolean') settings.speech = s.speech;
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
         if (typeof s.petOn === 'boolean') settings.petOn = s.petOn;
@@ -994,10 +1019,9 @@
     stage.setMood('dance');
     setCaption('<b>' + (it.emoji || '') + ' ' + it.name + ' 时间到了！</b>');
 
-    Sound.alert();
+    playAlertTone(it.sound);
     armAlertMusic();                 // 先挂好「播报结束后放音乐」，再播报
-    speak(info.voice || it.voice || ('该' + it.name + '了'));
-    notify(title, info.desc || it.desc || '');
+    speak(info.voice || it.voice || ('该' + it.name + '了'));    notify(title, info.desc || it.desc || '');
     flashTitle(true);
     if (native) native.alert(id);
     try { el.alertDone.focus(); } catch (e) { }
@@ -1030,9 +1054,9 @@
     stage.setMood('dance');
     setCaption('<b>⏰ 待办到点：' + escapeHtml(todo.text) + '</b>');
 
-    Sound.alert();
+    playAlertTone(settings.todoSound);
     armAlertMusic();
-    speak(late ? '有一条待办已经过期了' : '待办时间到了');
+        speak(late ? '有一条待办已经过期了' : '待办时间到了');
     notify(title, todo.text);
     flashTitle(true);
     /* 用户可以在设置里关掉「抢前台」 —— 关掉就只弹窗 + 系统通知，不打断工作 */
@@ -1072,9 +1096,9 @@
     stage.setMood('dance');
     setCaption('<b>⏰ ' + list.length + ' 条待办到点了</b>');
 
-    Sound.alert();
+    playAlertTone(settings.todoSound);
     armAlertMusic();
-    speak('有 ' + list.length + ' 条待办到点了');
+        speak('有 ' + list.length + ' 条待办到点了');
     notify(title, list.map(function (t) { return t.text; }).join('、'));
     flashTitle(true);
     if (native && ui.todoGrabFront) native.alert(null);
@@ -1109,9 +1133,9 @@
     stage.setMood('dance');
     setCaption('<b>⏰ 备忘提醒：' + escapeHtml(m.text) + '</b>');
 
-    Sound.alert();
+    playAlertTone(settings.todoSound);
     armAlertMusic();
-    speak(late ? '有一条备忘到截止时间了' : '有一条备忘快到截止时间了');
+        speak(late ? '有一条备忘到截止时间了' : '有一条备忘快到截止时间了');
     notify(title, m.text);
     flashTitle(true);
     if (native && ui.todoGrabFront) native.alert(m.id);
@@ -1163,6 +1187,7 @@
          它没法单独停 → 把整个音频上下文挂起（下次发声时会自动 resume） */
     try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { }
     try { Sound.silence(); } catch (e) { }
+    stopAlertTone();                 // 到点那一下的提示音也一起停
     el.overlay.hidden = true;
     el.floatWords.innerHTML = '';
     if (el.alertMore) el.alertMore.hidden = true;
@@ -2919,7 +2944,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v4.0 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v4.1 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -3081,10 +3106,11 @@
       el.btnUpdCheck.disabled = (s.state === 'checking' || s.state === 'downloading');
       el.btnUpdCheck.textContent = (s.state === 'checking') ? '⏳ 检查中…' : '🔍 检查更新';
     }
-    if (el.btnUpdDownload) el.btnUpdDownload.hidden = (s.state !== 'available');
+    if (el.btnUpdDownload) el.btnUpdDownload.hidden = (s.state !== 'available' || !!s.direct);
     if (el.btnUpdInstall) el.btnUpdInstall.hidden = (s.state !== 'downloaded');
     /* 「打开发布页」：有新版本时一起给出来 —— 万一自动下载这条路不通
-       （老版本、缓存、网络特殊），用户还能一键去下载页手动下最新版 */
+       （老版本、缓存、网络特殊），用户还能一键去下载页手动下最新版。
+       s.direct = 版本号来自发布页接口、仓库清单还没跟上，这时只有这个按钮管用。 */
     if (el.btnUpdPage) el.btnUpdPage.hidden = !(s.supported && s.available);
 
     if (el.updDesc) {
@@ -4025,6 +4051,70 @@
   /* ================================================================ 渲染 */
   const QUICK_MINUTES = [15, 30, 45, 60, 90];
 
+  /* 给某条提醒挑一个本地音乐当提示音；已经设过的话，先问「换一个还是改回默认」 */
+  async function pickItemSound(id) {
+    const it = itemById(id);
+    if (!it || !native || !native.pickMusic) return;
+    if (it.sound) {
+      const keep = window.confirm(it.name + ' 现在用的是自定义提示音：\n' + it.sound +
+        '\n\n确定 = 重新选一个；取消 = 用回默认提示音');
+      if (!keep) {
+        it.sound = '';
+        saveSettings();
+        renderPanels();
+        setCaption('<b>' + it.name + '</b> 的提示音已改回默认');
+        return;
+      }
+    }
+    let p = '';
+    try { p = await native.pickMusic(); } catch (e) { p = ''; }
+    if (!p) return;
+    it.sound = p;
+    saveSettings();
+    renderPanels();
+    setCaption('<b>' + it.name + '</b> 的提示音已设为：' + baseName(p) + '（再点一次 🔔 可以换或改回默认）');
+  }
+
+  /* 待办提示音按钮上的字：设过就显示「自定义提示音」 */
+  function updateTodoSoundBtn() {
+    if (!el.btnTodoSound) return;
+    if (settings.todoSound) {
+      el.btnTodoSound.textContent = '🔔 自定义提示音';
+      el.btnTodoSound.title = '当前：' + settings.todoSound + '\n（点一下可以换，或按取消改回默认）';
+    } else {
+      el.btnTodoSound.textContent = '🔔 提示音';
+      el.btnTodoSound.title = '给待办到点提醒指定一个自己的提示音（不指定就用默认的）';
+    }
+  }
+
+  /* 待办提示音：一次给所有待办到点设一个提示音 */
+  function bindTodoSoundBtn() {
+    if (!el.btnTodoSound || el.btnTodoSound.dataset.bound) return;
+    el.btnTodoSound.dataset.bound = '1';
+    el.btnTodoSound.addEventListener('click', async function () {
+      if (!native || !native.pickMusic) return;
+      if (settings.todoSound) {
+        const keep = window.confirm('待办到点现在用的是自定义提示音：\n' + settings.todoSound +
+          '\n\n确定 = 重新选一个；取消 = 用回默认提示音');
+        if (!keep) {
+          settings.todoSound = '';
+          saveSettings();
+          updateTodoSoundBtn();
+          setCaption('待办提示音已改回默认');
+          return;
+        }
+      }
+      let p = '';
+      try { p = await native.pickMusic(); } catch (e) { p = ''; }
+      if (!p) return;
+      settings.todoSound = p;
+      saveSettings();
+      updateTodoSoundBtn();
+      setCaption('待办到点的提示音已设为：' + baseName(p) + '（点一下按钮可以换或改回默认）');
+    });
+    updateTodoSoundBtn();
+  }
+
   function buildPanel(it, idx) {
     const art = document.createElement('article');
     art.className = 'card panel';
@@ -4034,6 +4124,7 @@
       '<header class="panel-head">' +
         '<h2><span class="ico"></span><span class="pname"></span></h2>' +
         '<div class="panel-tools">' +
+          '<button class="icon-btn sound" data-role="sound" title="给这条提醒指定一个提示音">🔔</button>' +
           '<button class="icon-btn" data-role="edit" title="改名称 / 图标 / 间隔">编辑</button>' +
           '<button class="icon-btn del" data-role="del" title="删除这条提醒">删除</button>' +
           '<label class="switch" title="启用 / 停用">' +
@@ -4261,6 +4352,7 @@
   /* ---------------------------------------------------------- 事件绑定 */
   function bindPanelList() {
     /* 面板是动态生成的，事件用委托接 */
+    bindTodoSoundBtn();
     el.panelList.addEventListener('click', function (e) {
       const art = e.target.closest ? e.target.closest('.panel') : null;
       if (!art) return;
@@ -4286,6 +4378,8 @@
         openItemModal(id);
       } else if (role === 'del') {
         deleteItem(id);
+      } else if (role === 'sound') {
+        pickItemSound(id);
       }
     });
 
