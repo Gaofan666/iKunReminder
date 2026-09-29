@@ -1,0 +1,28 @@
+{
+  "name": "雷达观察员小猫",
+  "author": "自定义",
+  "frame": {
+    "w": 239,
+    "h": 263
+  },
+  "fps": 6,
+  "sheet": "leidaxiaomao.png",
+  "bottomGap": 3,
+  "animations": {
+    "idle": {
+      "row": 0,
+      "count": 6,
+      "fps": 4
+    },
+    "dance": {
+      "row": 1,
+      "count": 6,
+      "fps": 6
+    },
+    "cheer": {
+      "row": 2,
+      "count": 6,
+      "fps": 6
+    }
+  }
+}

@@ -119,5 +119,28 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onDisplayInfo: (cb) => ipcRenderer.on('display-info', (e, d) => cb(d)),
 
   /* 页面 → 主进程：同步运行状态与提醒列表，用于刷新托盘菜单 */
-  syncState: (state) => ipcRenderer.send('state', state)
+  syncState: (state) => ipcRenderer.send('state', state),
+
+  /* ---------------------------------------------------------- 科研动态（arXiv）
+     抓取、解析、存库全在主进程；页面只拿状态、列表，点按钮触发抓取。 */
+  arxivState: () => ipcRenderer.invoke('arxiv-state'),
+  arxivSetConfig: (patch) => ipcRenderer.invoke('arxiv-set-config', patch || {}),
+  arxivFetchNow: () => ipcRenderer.invoke('arxiv-fetch-now'),
+  arxivList: (opts) => ipcRenderer.invoke('arxiv-list', opts || {}),
+  arxivMarkRead: (id) => ipcRenderer.invoke('arxiv-mark-read', String(id || '')),
+  arxivMarkAllRead: () => ipcRenderer.invoke('arxiv-mark-all-read'),
+  arxivStar: (id, on) => ipcRenderer.invoke('arxiv-star', String(id || ''), !!on),
+  arxivScore: (id, n) => ipcRenderer.invoke('arxiv-score', String(id || ''), Number(n) || 0),
+  arxivRemove: (id) => ipcRenderer.invoke('arxiv-remove', String(id || '')),
+  /* 评论：读 / 写 / 改 / 删 */
+  arxivComments: (id) => ipcRenderer.invoke('arxiv-comments', String(id || '')),
+  arxivCommentAdd: (id, text) => ipcRenderer.invoke('arxiv-comment-add', String(id || ''), String(text || '')),
+  arxivCommentUpdate: (cid, text) => ipcRenderer.invoke('arxiv-comment-update', cid, String(text || '')),
+  arxivCommentDelete: (cid) => ipcRenderer.invoke('arxiv-comment-delete', cid),
+  arxivClear: () => ipcRenderer.invoke('arxiv-clear'),
+  arxivHiddenCount: () => ipcRenderer.invoke('arxiv-hidden-count'),
+  arxivHiddenClear: () => ipcRenderer.invoke('arxiv-hidden-clear'),
+  arxivOpen: (url) => ipcRenderer.invoke('arxiv-open', String(url || '')),
+  onArxivState: (cb) => ipcRenderer.on('arxiv-state', (e, s) => cb(s)),
+  onShowArxiv: (cb) => ipcRenderer.on('show-arxiv', () => cb())
 });
