@@ -1232,13 +1232,15 @@ function createWindow() {
               'raw.memos.push({id:"diag-done-pastdue",text:"' + T_H + '",done:true,at:Date.now()-5*86400000,' +
               ' dueAt:Date.now()-4*86400000,remindBefore:0,remindEvery:0,remindAt:0,cat:"",' +
               ' lateCount:0,lateMs:0,lateReason:"",lateOpen:false,lateLog:[]});' +
-              /* 老数据补账用的两条（用户报的第二种）：
-                 I = 写了延期原因、却没记上账的（真实例子「KBS英文论文润色」：原因「中秋节休假」、
-                     lateCount 是 0 → 既没有延期标也进不了统计，整条隐身）；
+              /* 老数据补账用的两条（用户报的第二组问题）：
+                 I = 只写了原因、没有完成时间记录、也没有账（真实数据「填写博士学位信息」
+                     就是这个形状：截止 09-28 15:41，其实 11:45 就完成了，原因「忘了」
+                     是被弹窗问出来的）→ 读进来什么都不能变，绝不能凭原因当延期；
                  J = 确实完成得比截止晚、但没留下记录的（doneAt 比 dueAt 晚 2 小时）。 */
               'raw.memos.push({id:"diag-reason-norec",text:"' + T_I + '",done:true,at:Date.now()-6*86400000,' +
-              ' dueAt:Date.now()-3*86400000,doneAt:Date.now()-2*86400000,remindBefore:0,remindEvery:0,' +
-              ' remindAt:0,cat:"",lateCount:0,lateMs:0,lateReason:"开会去了",lateOpen:false,lateLog:[]});' +
+              ' dueAt:Date.now()-3*86400000,remindBefore:3600000,remindEvery:86400000,' +
+              ' remindAt:Date.now()-3*86400000-3600000,cat:"",lateCount:0,lateMs:0,lateReason:"开会去了",' +
+              ' lateOpen:false,lateLog:[]});' +
               'raw.memos.push({id:"diag-late-done",text:"' + T_J + '",done:true,at:Date.now()-7*86400000,' +
               ' dueAt:Date.now()-5*86400000,doneAt:Date.now()-5*86400000+7200000,remindBefore:0,remindEvery:0,' +
               ' remindAt:0,cat:"",lateCount:0,lateMs:0,lateReason:"",lateOpen:false,lateLog:[]});' +
@@ -1263,10 +1265,11 @@ function createWindow() {
             };
 
             /* ⑥ 老数据补账：把「写原因」和「记账」重新绑在一起。
-               I：只写了原因没记账（KBS 那种）→ 读进来就该补上「延期 1 次」，
-                  时长按真实完成时间算（截止 = 3 天前、完成 = 2 天前 → 正好 1 天）；
-               J：确实晚完成、但没记录的 → 卡片该冒出「补原因」，补完只记 1 次，
-                  时长用真实完成时间（晚 2 小时），不是「截止到现在」。 */
+               I：只写了原因、没有任何完成时间记录（真实数据「填写博士学位信息」那种：
+                  截止早过了、原因是当时被弹窗问出来的）→ **不许**自己补账、不许标延期，
+                  也不能冒出「补原因」；用户会被追问时随手写一句，那不能当延期的证据；
+               J：确实晚完成（doneAt 比 dueAt 晚 2 小时）→ 卡片该冒出「补原因」，
+                  补完只记 1 次，时长用真实完成时间，不是「截止到现在」。 */
             const reasonI = await jsw(readRow(T_I));
             const lateJ0 = await jsw(readRow(T_J));
             const clickedJ = await jsw(clickWhy(T_J));
@@ -1276,13 +1279,12 @@ function createWindow() {
             await jsw('document.getElementById("lateFillSave").click(); true');
             await waitW(400);
             const afterJ = await jsw(readM(T_J));
-            const afterI = await jsw(readM(T_I));   /* 上一步存过盘，这里能读到补账后的数值 */
+            const afterI = await jsw(readM(T_I));   /* 上一步存过盘，这里能读到最新数值 */
             out['6-老数据补账'] = {
               只写原因那条: reasonI, 晚完成那条_补原因前: lateJ0, 点开补原因: clickedJ,
               补完后: afterJ, 补账后: afterI,
-              写原因就该补上账: reasonI.卡片上有延期标 === true && afterI.延期次数 === 1 &&
-                afterI.拖了毫秒 >= 86000000 && afterI.拖了毫秒 <= 86800000,
-              已有原因不再提示: reasonI.卡片上有补原因 === false,
+              只写原因不许自己补账: reasonI.卡片上有延期标 === false &&
+                reasonI.卡片上有补原因 === false && afterI.延期次数 === 0 && afterI.拖了毫秒 === 0,
               晚完成的会提示补原因: lateJ0.卡片上有补原因 === true,
               补完账目正确: afterJ.延期次数 === 1 && afterJ.原因 === '加班' &&
                 afterJ.拖了毫秒 >= 7100000 && afterJ.拖了毫秒 <= 7300000

@@ -2100,26 +2100,18 @@
           /* 修补老数据里的「假延期」：早先的 bug 会把截止前点「10 分钟后再说」也记一笔，
              这些记录 lateCount 有值、lateMs 却是 0（没真拖时间）。留着的话卡片会显示
              「延期 N 次」、还一直要人补原因。真延期过一定有 lateMs > 0，所以整组清掉。 */
+          /* 只清「假延期」这一件事是有据可查的：lateCount 有值、lateMs 却是 0。
+             ⚠️ 反过来「写过原因 → 就当延期过」这件事绝对不能做：用户会被程序追问时
+             随手写一句，而那可能根本不是延期。真实例子：「填写博士学位信息」截止
+             09-28 15:41，11:45 就已经完成了（老存档里 done=true 有据），原因「忘了」
+             纯粹是被弹窗问出来的 —— 照「有原因就补账」处理会平白冤枉一条。
+             能证明延期过的只有两样：lateMs > 0 的真实记录，或者 doneAt 晚于 dueAt。 */
           if ((+o.lateCount || 0) > 0 && !((+o.lateMs || 0) > 0)) {
             o.lateCount = 0;
             o.lateMs = 0;
             o.lateReason = '';
             o.lateOpen = false;
             o.lateLog = [];
-          } else if (o.dueAt && !hasLateRecord(o) &&
-                     (o.lateReason || o.lateLog.some(function (x) { return x && x.text; }))) {
-            /* 反向修补：写过年期原因、却没记上账的。老的「事后补原因」只存原因不记账，
-               这条备忘就会在延期账上整条隐身 —— 没有「延期 N 次」、进不了统计卡，
-               又因为有原因而不再提示补原因（用户真实遇到的：「KBS英文论文润色」写着
-               原因「中秋节休假」，lateCount 却是 0）。写过原因就说明用户认过这次延期，
-               给它补一笔；时长按「截止 → 完成（有完成时间就用它）/ 现在」算。 */
-            const end = (+o.doneAt > o.dueAt) ? +o.doneAt : Date.now();
-            o.lateCount = 1;
-            o.lateMs = Math.max(1, end - o.dueAt);
-            o.lateOpen = true;
-            if (!o.lateLog.length) {
-              o.lateLog = [{ at: Date.now(), ms: o.lateMs, text: o.lateReason || '' }];
-            }
           }
           return o;
         });
