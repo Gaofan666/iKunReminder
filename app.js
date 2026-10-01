@@ -1254,7 +1254,7 @@
     lateFillId = m.id;
     const ms = (+m.lateMs || 0) || (m.dueAt ? Math.max(0, Date.now() - m.dueAt) : 0);
     if (el.lateFillDesc) {
-      el.lateFillDesc.textContent = '「' + m.text + '」延期了 ' + fmtDur(ms) +
+      el.lateFillDesc.textContent = '「' + m.text + '」逾期了 ' + fmtDur(ms) +
         '，之前没写原因 —— 补一句？（不写也行）';
     }
     if (el.lateFillSave) el.lateFillSave.textContent = m.done ? '保存' : '保存并完成';
@@ -1304,10 +1304,10 @@
         saveTodoStore();
         renderMemos();
         if (v) {
-          setCaption('已补上延期原因：<b>' + escapeHtml(v) + '</b>' +
-            (rec ? '，并补记了 1 次延期' : ''));
+          setCaption('已补上逾期原因：<b>' + escapeHtml(v) + '</b>' +
+            (rec ? '，并补记了 1 次逾期' : ''));
         } else {
-          setCaption(rec ? '已补记 1 次延期：<b>' + escapeHtml(m.text) + '</b>' : '');
+          setCaption(rec ? '已补记 1 次逾期：<b>' + escapeHtml(m.text) + '</b>' : '');
         }
       }
       return;
@@ -1354,45 +1354,90 @@
     return String((el.lateInput && el.lateInput.value) || '').trim().slice(0, 60);
   }
 
-  /* 记一次「延期」。一次逾期只记一次：在逾期提醒里处理（我知道了 / 10 分钟后再说）时记，
-     或者最后完成时记 —— 谁先来算谁的。同一回合后面再处理，只把「拖了多久」和原因
-     刷新到最新，不再加次数。why 不传就从提醒弹窗那个输入框取。 */
-  function recordMemoLate(m, why) {
-    if (!m || !m.dueAt) return false;
+  /* ============ 逾期 / 延期 两个计数器（口径是用户定的）============
+     逾期 = 一个截止时间点被错过（到点了还没完成）。每个截止时间最多记一次，去重键是
+            lateDue（记住「上次记的是哪个截止时间」）—— 所以「取消完成再勾一次」不会
+            重复记，重启也不会。
+     延期 = 你把截止时间往后挪了一次。改早、清空都不算；重复待办勾完自动排下一期也不算
+            （那条路走的是 markTodoDone，不经过保存弹窗，天然不会被算进来）。
+     两件事互相独立：错过旧期限之后再改期，就是「逾期 1 次 + 延期 1 次」。 */
+
+  /* 这个截止时间点该不该记一笔逾期？ */
+  function missPending(x) {
+    if (!x || !x.dueAt) return false;
+    if ((+x.lateDue || 0) === +x.dueAt) return false;   // 这个期限已经记过了
+    if (x.done) return (+x.doneAt || 0) > +x.dueAt;     // 完成得比截止晚 = 确实错过了
+    return Date.now() > +x.dueAt;
+  }
+
+  /* 记一笔逾期。这个期限已经记过 → 只把「拖了多久」和原因刷到最新，不加次数。
+     why 不传就从提醒弹窗那个输入框取；自动判定（tick / 读盘）一律传 ''，绝不替你编原因。 */
+  function recordLate(x, why) {
+    if (!x || !x.dueAt) return false;
     const now = Date.now();
-    /* 「没真的过截止」就不算延期，直接不记 —— 这是唯一的硬防线，下面所有调用点都靠它兜底。
+    /* 「没真的过截止」就不算逾期，直接不记 —— 这是唯一的硬防线，下面所有调用点都靠它兜底。
        以前没有这一句：截止前的提前提醒弹出时点「我知道了 / 10 分钟后再说」也会记一笔，
-       那时 lateMs 算出来是 0，于是没过期的备忘被标成「延期 1 次」、还被要求补原因，
-       而统计卡按 lateMs>0 过滤又把它排除掉，「卡片说延期、统计里没有」就是这么来的。
-       真延期过一定有 lateMs > 0。 */
-    if (now <= m.dueAt) return false;
+       那时 lateMs 算出来是 0，于是没过期的备忘被标成「逾期 1 次」、还被要求补原因，
+       而统计卡按 lateMs>0 过滤又把它排除掉，「卡片说逾期、统计里没有」就是这么来的。
+       真逾期过一定有 lateMs > 0。 */
+    const end = (+x.doneAt > +x.dueAt) ? +x.doneAt : now;
+    if (end <= +x.dueAt) return false;
     if (why === undefined) why = lateInputVal();
     const reason = String(why || '').trim().slice(0, 60);
-    const ms = now - m.dueAt;
-    if (!Array.isArray(m.lateLog)) m.lateLog = [];
-    if (reason) m.lateReason = reason;
-    if (m.lateOpen) {
-      /* 这一回合已经记过了：不加次数，只把时长/原因更新到最新 */
-      m.lateMs = Math.max(+m.lateMs || 0, ms);
-      const last = m.lateLog[m.lateLog.length - 1];
-      if (last) { last.ms = m.lateMs; if (reason) last.text = reason; }
+    const ms = end - +x.dueAt;
+    if (!Array.isArray(x.lateLog)) x.lateLog = [];
+    if (reason) x.lateReason = reason;
+    if ((+x.lateDue || 0) === +x.dueAt) {
+      /* 这个期限已经记过了：不加次数，只把时长/原因刷到最新 */
+      x.lateMs = Math.max(+x.lateMs || 0, ms);
+      const last = x.lateLog[x.lateLog.length - 1];
+      if (last) { last.ms = x.lateMs; if (reason) last.text = reason; }
       return false;
     }
-    m.lateOpen = true;                          // 这一回合开始：之后不再重复记
-    m.lateCount = (+m.lateCount || 0) + 1;
-    m.lateMs = ms;
-    m.lateLog.push({ at: now, ms: ms, text: reason });
-    if (m.lateLog.length > 20) m.lateLog = m.lateLog.slice(-20);
+    x.lateDue = +x.dueAt;                     // 记住「这次记的是哪个截止时间」
+    x.lateCount = (+x.lateCount || 0) + 1;
+    x.lateMs = ms;
+    x.lateOpen = true;
+    x.lateLog.push({ at: Math.min(now, end), ms: ms, text: reason });
+    if (x.lateLog.length > 20) x.lateLog = x.lateLog.slice(-20);
     return true;
   }
 
-  /* 事后给一条【已验证完成】的备忘补延期原因。和 recordMemoLate 的区别：
+  /* 备忘那边沿用老名字（调用点很多，行为不变） */
+  function recordMemoLate(m, why) { return recordLate(m, why); }
+
+  /* 记一笔延期：只有「往后挪」才算（改早、清空、原来没期限都不算） */
+  function recordExtend(x, from, to) {
+    if (!x) return false;
+    const a = +from || 0, b = +to || 0;
+    if (!a || !b) return false;
+    if (b <= a) return false;
+    x.extCount = (+x.extCount || 0) + 1;
+    if (!Array.isArray(x.extLog)) x.extLog = [];
+    x.extLog.push({ at: Date.now(), from: a, to: b });
+    if (x.extLog.length > 50) x.extLog = x.extLog.slice(-50);
+    return true;
+  }
+
+  /* 扫一遍：到点了还没完成的（或者完成得比截止晚的）自己记一笔逾期 —— 不用等用户点弹窗。
+     用户定的口径是「没完成、也没改截止时间，就算逾期」，这是截止时间的性质，
+     不该取决于他点没点那个按钮（弹窗被晾着、被 12 小时宽限静默清掉，都不该漏记）。 */
+  function sweepLate(list) {
+    let changed = false;
+    (list || []).forEach(function (x) {
+      if (!missPending(x)) return;
+      if (recordLate(x, '')) changed = true;
+    });
+    return changed;
+  }
+
+  /* 事后给一条【已验证完成】的备忘补逾期原因。和 recordLate 的区别：
      写原因必须同时把账记上，而且已经记过账的不许再改时长。 */
   function backfillMemoLate(m, why) {
     if (!m || !m.dueAt) return false;
     const v = String(why || '').trim().slice(0, 60);
     if (hasLateRecord(m)) {
-      /* 那次延期的「拖了多久」在完成那一刻就定死了，事后点一次不该算成「拖到现在」 */
+      /* 那次逾期的「拖了多久」在完成那一刻就定死了，事后点一次不该算成「拖到现在」 */
       if (v) m.lateReason = v;
       return false;
     }
@@ -1402,11 +1447,12 @@
       if (v) m.lateReason = v;
       return false;
     }
-    /* 光写原因不记账 = 这条备忘在延期统计里隐身（用户真实遇到的「KBS英文论文润色」：
-       lateReason 写着「中秋节休假」，lateCount 却是 0，既没有「延期 N 次」也进不了统计）。
+    /* 光写原因不记账 = 这条备忘在逾期统计里隐身（用户真实遇到的「KBS英文论文润色」：
+       lateReason 写着「中秋节休假」，lateCount 却是 0，既没有「逾期 N 次」也进不了统计）。
        时长优先用真实完成时间（doneAt 现在会存盘），没有再退到「截止到现在」。 */
     const end = (+m.doneAt > m.dueAt) ? +m.doneAt : now;
     if (!Array.isArray(m.lateLog)) m.lateLog = [];
+    m.lateDue = +m.dueAt;                       // 记上「这次记的是这个截止时间」
     m.lateOpen = true;
     m.lateCount = (+m.lateCount || 0) + 1;
     m.lateMs = Math.max(1, end - m.dueAt);
@@ -1422,6 +1468,30 @@
      卡片小标、补原因提示、延期统计卡统一走这一个判断，免得三处口径不一致。 */
   function hasLateRecord(m) {
     return !!m && (+m.lateCount || 0) > 0 && (+m.lateMs || 0) > 0;
+  }
+
+  /* 卡片上的两个小标：逾期（错过过截止时间）和延期（把截止时间往后挪过）——
+     互相独立，各显示各的：错过旧期限之后又改期，就是「逾期 1 次 · 延期 1 次」。 */
+  function appendLateTags(meta, x) {
+    if (!meta || !x) return;
+    if (hasLateRecord(x)) {
+      const tag = document.createElement('span');
+      tag.className = 'late-tag';
+      tag.textContent = '逾期 ' + (+x.lateCount || 0) + ' 次';
+      tag.title = '错过截止 ' + (+x.lateCount || 0) + ' 次，累计拖了 ' + fmtDur(x.lateMs || 0) +
+        (x.lateReason ? '；原因：' + x.lateReason : '');
+      meta.appendChild(tag);
+    }
+    const ext = +x.extCount || 0;
+    if (ext > 0) {
+      const last = (Array.isArray(x.extLog) && x.extLog.length) ? x.extLog[x.extLog.length - 1] : null;
+      const tag = document.createElement('span');
+      tag.className = 'ext-tag';
+      tag.textContent = '延期 ' + ext + ' 次';
+      tag.title = '把截止时间往后挪过 ' + ext + ' 次' +
+        (last ? '；最近一次挪到了 ' + fmtTodoTime(last.to) : '');
+      meta.appendChild(tag);
+    }
   }
 
   /* 已完成那栏的拼装：未完成留在上面的列表里，已完成的收进这条低调的折叠条。
@@ -1480,6 +1550,8 @@
     }
     const total = rows.reduce(function (s, r) { return s + r.ms; }, 0);
     const times = rows.reduce(function (s, r) { return s + (+r.m.lateCount || 0); }, 0);
+    /* 延期（把截止往后挪过几次）也算个总数摆在这儿 —— 和逾期是两回事，分开列 */
+    const exts = memos.reduce(function (s, m) { return s + (+m.extCount || 0); }, 0);
     const byWhy = {};
     rows.forEach(function (r) {
       const k = r.why || '没写原因';
@@ -1492,9 +1564,10 @@
     el.memoLateStat.hidden = false;
     el.memoLateStat.innerHTML =
       '<span class="ls-toggle">' + (memoLateOpen ? '收起 ▲' : '展开 ▼') + '</span>' +
-      '📊 延期备忘 <b>' + rows.length + '</b> 条 · 累计 <b>' + fmtDur(total) + '</b>' +
+      '📊 逾期备忘 <b>' + rows.length + '</b> 条 · 累计 <b>' + fmtDur(total) + '</b>' +
       ' · 平均 <b>' + fmtDur(Math.round(total / rows.length)) + '</b>' +
-      (times > rows.length ? ' · 处理 <b>' + times + '</b> 次' : '') +
+      (times > rows.length ? ' · 逾期共 <b>' + times + '</b> 次' : '') +
+      (exts ? ' · 延期 <b>' + exts + '</b> 次' : '') +
       '<br>原因：' + escapeHtml(top);
     if (el.memoLateList) {
       el.memoLateList.hidden = !memoLateOpen;
@@ -2145,12 +2218,17 @@
             remindEvery: +m.remindEvery || 0,
             remindAt: +m.remindAt || 0,
             cat: String(m.cat || ''),
-            /* 延期统计（过了截止没完成时记的，原因在逾期提醒弹窗里填） */
+            /* 逾期记录（过了截止没完成时记的，原因在逾期提醒弹窗里填） */
             lateCount: +m.lateCount || 0,
             lateMs: +m.lateMs || 0,
             lateReason: String(m.lateReason || ''),
             lateOpen: !!m.lateOpen,
-            lateLog: Array.isArray(m.lateLog) ? m.lateLog.slice(-20) : []
+            lateLog: Array.isArray(m.lateLog) ? m.lateLog.slice(-20) : [],
+            /* 已经记过逾期的那个截止时间（去重键：同一个期限只记一次） */
+            lateDue: +m.lateDue || 0,
+            /* 延期记录：你把截止时间往后挪了几次 */
+            extCount: +m.extCount || 0,
+            extLog: Array.isArray(m.extLog) ? m.extLog.slice(-50) : []
           };
           /* 修补老数据里的「假延期」：早先的 bug 会把截止前点「10 分钟后再说」也记一笔，
              这些记录 lateCount 有值、lateMs 却是 0（没真拖时间）。留着的话卡片会显示
@@ -2167,7 +2245,11 @@
             o.lateReason = '';
             o.lateOpen = false;
             o.lateLog = [];
+            o.lateDue = 0;
           }
+          /* 老数据平移当起点：以前没有 lateDue 这个去重键，就先认「现有这一笔记的是当前
+             这个截止时间」，否则一读盘就会把同一次逾期再记一遍。只对已经有记录的做。 */
+          if ((+o.lateCount || 0) > 0 && !o.lateDue && o.dueAt) o.lateDue = o.dueAt;
           return o;
         });
       }
@@ -2186,7 +2268,14 @@
             prio: normPrio(t.prio),
             repeat: normRepeat(t.repeat),
             notify: t.notify !== false,
-            cat: String(t.cat || '')
+            cat: String(t.cat || ''),
+            /* 待办也有逾期 / 延期两个计数器（口径和备忘完全一样，见 recordLate / recordExtend） */
+            lateCount: +t.lateCount || 0,
+            lateMs: +t.lateMs || 0,
+            lateLog: Array.isArray(t.lateLog) ? t.lateLog.slice(-20) : [],
+            lateDue: +t.lateDue || 0,
+            extCount: +t.extCount || 0,
+            extLog: Array.isArray(t.extLog) ? t.extLog.slice(-50) : []
           };
         });
       }
@@ -2894,7 +2983,7 @@
         '</div>' +
         '<div class="item-tools">' +
           (needLateReason(m)
-            ? '<button data-role="why" class="why" title="这条延期过、还没写原因，点一下补一句">补原因</button>'
+            ? '<button data-role="why" class="why" title="这条逾期过、还没写原因，点一下补一句">补原因</button>'
             : '') +
           '<button data-role="edit" title="编辑">编辑</button>' +
           '<button data-role="del" class="del" title="删除">删除</button>' +
@@ -2909,7 +2998,7 @@
       } else {
         meta.textContent = '记于 ' + fmtTodoTime(m.at);
       }
-      /* 分类小标排在元信息最前面，然后是延期标 */
+      /* 分类小标排在元信息最前面，然后是逾期 / 延期标 */
       const cm = catOf(m);
       if (cm) {
         const ct = document.createElement('span');
@@ -2918,14 +3007,7 @@
         ct.appendChild(document.createTextNode(cm.name));
         meta.insertBefore(ct, meta.firstChild);
       }
-      if (hasLateRecord(m)) {
-        const tag = document.createElement('span');
-        tag.className = 'late-tag';
-        tag.textContent = '延期 ' + m.lateCount + ' 次';
-        tag.title = '累计延期 ' + fmtDur(m.lateMs || 0) +
-          (m.lateReason ? '；原因：' + m.lateReason : '');
-        meta.appendChild(tag);
-      }
+      appendLateTags(meta, m);
       if (m.done) { doneTotal++; (doneIsRecent(m) ? recentRows : oldRows).push([doneSortKey(m), row]); }
       else pendFrag.appendChild(row);
     });
@@ -2994,6 +3076,7 @@
         badge.title = '重复待办：点一下前面的勾 = 完成这一期，会自动排下一期';
         meta.appendChild(badge);
       }
+      appendLateTags(meta, t);
       if (t.done) { doneTotal++; (doneIsRecent(t) ? recentRows : oldRows).push([doneSortKey(t), row]); }
       else pendFrag.appendChild(row);
     });
@@ -3101,8 +3184,12 @@
       const m = memoById(editingMemoId);
       if (m) {
         m.text = text.slice(0, 500);
-        /* 改了截止时间 = 上一回合结束：之后再逾期算新的一回合，重新记一次 */
-        if (m.dueAt !== dueAt) m.lateOpen = false;
+        /* 往后挪截止时间 = 记一笔延期（改早、清空都不算，见 recordExtend）。
+           lateOpen 复位保留着：那只是「这次逾期还没收尾」的标记，去重靠的是 lateDue。 */
+        if (m.dueAt !== dueAt) {
+          recordExtend(m, m.dueAt, dueAt);
+          m.lateOpen = false;
+        }
         m.dueAt = dueAt;
         m.remindBefore = remindBefore;
         m.remindEvery = remindEvery;
@@ -3332,6 +3419,12 @@
       const t = todoById(editingTodoId);
       if (t) {
         t.text = text.slice(0, 60);
+        /* 往后挪截止时间 = 记一笔延期。重复待办的「勾完自动排下一期」不走这里
+           （走 markTodoDone 直接改 dueAt），所以自动排期永远不会被算成延期。 */
+        if (t.dueAt !== dueAt) {
+          recordExtend(t, t.dueAt, dueAt);
+          t.lateOpen = false;
+        }
         t.dueAt = dueAt;
         t.prio = prio;
         t.repeat = repeat;
@@ -3381,12 +3474,16 @@
     const t = todoById(id);
     if (!t) return false;
     if (t.repeat) {
+      /* 排下一期之前先把这一期结掉：已经过了这一期的截止时间 = 确实错过了一次。
+         （同一期限只记一次，到点那会儿 tick 很可能已经记过了，这里不会重复。） */
+      if (t.dueAt && Date.now() > t.dueAt) recordLate(t, '');
       const next = nextOccurrence(t.dueAt || Date.now(), t.repeat, Date.now() + 60000);
       if (!next) return false;
       t.dueAt = next;
       t.remindAt = next;
       t.done = false;
       t.doneAt = 0;
+      t.lateOpen = false;          // 这一期收尾，新的一期重新算
       saveTodoStore();
       renderTodos();
       Sound.confirm();
@@ -3396,6 +3493,8 @@
     t.done = true;
     t.doneAt = Date.now();
     t.remindAt = 0;                              // 完成了就别再提醒
+    /* 完成得比截止晚 = 这次确实错过了，记一笔逾期（到点那会儿记过就不会重复） */
+    if (t.dueAt && t.doneAt > t.dueAt) recordLate(t, '');
     saveTodoStore();
     renderTodos();
     requestFit();
@@ -5109,6 +5208,15 @@
       diaryEditKey = '';
       if (ui.tab === 'diary') renderDiary();
     }
+    /* 逾期是「截止时间的性质」，不由用户点没点那个弹窗决定，也不该被「正在显示的提醒」挡住：
+       每轮 tick 都扫一遍，到点了还没完成的就记一笔（同一个截止时间只记一次，重启也不会重复记）。 */
+    const sweptM = sweepLate(memos);
+    const sweptT = sweepLate(todos);
+    if (sweptM || sweptT) {
+      saveTodoStore();
+      if (sweptM) renderMemos();
+      if (sweptT) renderTodos();
+    }
     /* 待办到点检查：跟循环提醒各自独立（待办是「具体某个时刻」，
        不受「暂停计时」「睡眠暂停」影响 —— 约了几点就是几点） */
     if (!rt.alertId) {
@@ -5691,6 +5799,11 @@
     } catch (e) { /* 科研动态挂了也不能连累主界面 */ }
 
     bindAll();
+    /* 开机先扫一遍逾期：程序没开着的那段时间里错过的截止时间也算数
+       （同一个截止时间只记一次，所以反复启动不会把次数越滚越大）。 */
+    const sweptOnBootM = sweepLate(memos);
+    const sweptOnBootT = sweepLate(todos);
+    if (sweptOnBootM || sweptOnBootT) saveTodoStore();
     renderPanels();
     renderMemos();
     renderTodos();

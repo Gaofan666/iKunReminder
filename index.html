@@ -614,11 +614,11 @@
   </div>
 </div>
 
-<!-- 补填延期原因：备忘延期过、但当时没写原因时，完成的时候补一句（也能事后从卡片上补） -->
+<!-- 补填逾期原因：备忘逾期过、但当时没写原因时，完成的时候补一句（也能事后从卡片上补） -->
 <div class="overlay modal" id="lateFillOverlay" hidden>
   <div class="overlay-card item-card">
     <button class="close" id="lateFillClose" title="关闭">✕</button>
-    <h3 class="it-title">这条备忘延期了</h3>
+    <h3 class="it-title">这条备忘逾期了</h3>
     <p class="col-sub" id="lateFillDesc"></p>
     <div class="late-chips" id="lateFillChips"></div>
     <input class="late-input" id="lateFillInput" type="text" maxlength="60"
@@ -742,10 +742,10 @@
     <div class="alert-stage-wrap"><canvas id="alertStage"></canvas></div>
     <div class="alert-title" id="alertTitle">该喝水啦！</div>
     <p class="alert-desc" id="alertDesc"></p>
-    <!-- 备忘已经过了截止时间才弹的提醒：顺手问一句延期原因（统计用，留空也行）。
+    <!-- 备忘已经过了截止时间才弹的提醒：顺手问一句逾期原因（统计用，留空也行）。
          只有 alertKind==='memo' 且确实逾期时才会显示。 -->
     <div class="late-box" id="lateBox" hidden>
-      <p class="late-head">这条已经过了截止时间 —— 记一下延期原因？</p>
+      <p class="late-head">这条已经过了截止时间 —— 记一下逾期原因？</p>
       <div class="late-chips" id="lateChips"></div>
       <input class="late-input" id="lateInput" type="text" maxlength="60"
              placeholder="也可以自己写一句（留空也行）">
