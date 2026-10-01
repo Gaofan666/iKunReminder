@@ -1257,11 +1257,29 @@ function createWindow() {
             };
             const fakeG = await jsw(readRow(T_G));
             const doneH = await jsw(readRow(T_H));
+            /* 顺便验一下「已完成折叠栏」分流：这三条都是已完成的 ——
+               H / I 没有完成时间（老数据）→ 该落进「更早」；J 的 doneAt 是 5 天前 → 留在「最近一周」。
+               一件都不能留在未完成的主列表里，折叠栏默认还得是收着的。 */
+            const doneBox = await jsw('(function(){' +
+              'var where=function(t){' +
+              'var has=function(sel){return Array.prototype.some.call(document.querySelectorAll(sel),' +
+              'function(r){return r.textContent.indexOf(t)>=0;});};' +
+              'if(has("#memoList .memo-item"))return "未完成列表";' +
+              'if(has("#memoDoneList .memo-item"))return "最近一周";' +
+              'if(has("#memoDoneOld .memo-item"))return "更早";' +
+              'return "没渲染";};' +
+              'var bar=document.getElementById("memoDoneBar");' +
+              'return {完成没过期的:where("' + T_H + '"),只写原因的:where("' + T_I + '"),' +
+              '晚完成的:where("' + T_J + '"),折叠条:bar.innerText,' +
+              '默认收着:document.getElementById("memoDoneBox").hidden,' +
+              '更早开关:document.getElementById("memoDoneMore").innerText};})()');
             out['5-老数据不误伤'] = {
-              假延期那条: fakeG, 已完成没过期那条: doneH,
+              假延期那条: fakeG, 已完成没过期那条: doneH, 折叠栏: doneBox,
               假延期清干净了: fakeG.卡片上有延期标 === false && fakeG.卡片上有补原因 === false,
               已完成不追着补原因: doneH.显示已完成 === true && doneH.卡片上有补原因 === false &&
-                doneH.卡片上有延期标 === false
+                doneH.卡片上有延期标 === false,
+              完成的收进折叠栏: doneBox.完成没过期的 === '更早' && doneBox.只写原因的 === '更早' &&
+                doneBox.晚完成的 === '最近一周' && doneBox.默认收着 === true
             };
 
             /* ⑥ 老数据补账：把「写原因」和「记账」重新绑在一起。
@@ -3098,6 +3116,63 @@ function createWindow() {
               ' 下一提醒点等于截止:!!m&&m.remindAt===m.dueAt&&m.remindAt>Date.now(),' +
               ' 弹窗关了:document.getElementById("overlay").hidden};})()', true);
             diagLog('memo-7-我知道了-周期', { 弹窗: ackCycleFired, 点完后: ackCycleAfter });
+
+            /* ⑧ 已完成折叠栏：未完成的留在主列表，已完成的收进折叠条里 ——
+               默认收着（看不见），点一下才展开；最近一周完成的在外面，更早的在二级开关里。
+               老数据没有完成时间（doneAt=0），一律算「更早」。 */
+            await win.webContents.executeJavaScript(
+              '(function(){' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】折叠-新完成";' +
+              'var on=document.getElementById("memoDueOn");on.checked=false;on.dispatchEvent(new Event("change"));' +
+              'document.getElementById("memoSave").click();' +
+              'return true;})()', true);
+            await waitM(600);
+            const foldBefore = await win.webContents.executeJavaScript(
+              '(function(){var bar=document.getElementById("memoDoneBar");' +
+              'return {折叠条在:!bar.hidden, 折叠条文字:bar.innerText,' +
+              ' 内容默认收着:document.getElementById("memoDoneBox").hidden};})()', true);
+            /* 勾完成 → 应该从主列表消失、进折叠栏 */
+            await win.webContents.executeJavaScript(
+              '(function(){var rows=document.querySelectorAll("#memoList .memo-item");' +
+              'for(var i=0;i<rows.length;i++){if(rows[i].innerText.indexOf("【自检】折叠-新完成")>=0){' +
+              'rows[i].querySelector("[data-role=done]").click();return true;}}return false;})()', true);
+            await waitM(600);
+            const foldAfter = await win.webContents.executeJavaScript(
+              '(function(){' +
+              'var inPend=0,inRecent=0;' +
+              'document.querySelectorAll("#memoList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inPend++;});' +
+              'document.querySelectorAll("#memoDoneList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inRecent++;});' +
+              'var bar=document.getElementById("memoDoneBar");' +
+              'return {主列表里没有了:inPend===0, 收进最近一周:inRecent===1,' +
+              ' 折叠条有字数:bar.innerText.indexOf("已完成")>=0, 折叠条文字:bar.innerText,' +
+              ' 内容还收着:document.getElementById("memoDoneBox").hidden};})()', true);
+            /* 点折叠条 → 展开 */
+            await win.webContents.executeJavaScript(
+              'document.getElementById("memoDoneBar").click(); true', true);
+            await waitM(400);
+            const foldOpen = await win.webContents.executeJavaScript(
+              '(function(){return {展开后看得见:!document.getElementById("memoDoneBox").hidden,' +
+              ' 行在里面:document.getElementById("memoDoneList").innerText.indexOf("【自检】折叠-新完成")>=0,' +
+              ' 条上箭头:document.getElementById("memoDoneBar").innerText.indexOf("▲")>=0};})()', true);
+            /* 「更早的」那一级不在这里验：验它得 reload，而 reload 会让整个自检重跑一遍
+               （did-finish-load 会再触发一次，见上面 ⑦ 的注释），多一条并发链互相搅。
+               老数据落进「更早」这件事放在 --diag-why ⑤ 里一起验，那边本来就要 reload。 */
+            /* 已完成那条自己的按钮也得是活的：行搬出了 #memoList，事件委托必须两处都挂。
+               点它自己的勾 = 取消完成 → 应该回到未完成的主列表。 */
+            const foldUncheck = await win.webContents.executeJavaScript(
+              '(function(){var rows=document.querySelectorAll("#memoDoneList .memo-item");' +
+              'for(var i=0;i<rows.length;i++){if(rows[i].innerText.indexOf("【自检】折叠-新完成")>=0){' +
+              'rows[i].querySelector("[data-role=done]").click();return true;}}return false;})()', true);
+            await waitM(600);
+            const foldBack = await win.webContents.executeJavaScript(
+              '(function(){var inPend=0;' +
+              'document.querySelectorAll("#memoList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inPend++;});' +
+              'return {取消完成的按钮点了:true, 回到未完成列表:inPend===1};})()', true);
+            diagLog('memo-8-已完成折叠', {
+              完成前: foldBefore, 完成后: foldAfter, 展开后: foldOpen,
+              已完成行上的按钮: foldUncheck, 取消完成: foldBack
+            });
 
             /* ⑤ 收尾：清掉自检造的备忘 */
             await win.webContents.executeJavaScript(

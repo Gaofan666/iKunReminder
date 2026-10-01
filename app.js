@@ -680,6 +680,11 @@
     todoBadge: $('#todoBadge'),
     /* 备忘 / 待办 */
     memoList: $('#memoList'),
+    memoDoneBar: $('#memoDoneBar'),
+    memoDoneBox: $('#memoDoneBox'),
+    memoDoneList: $('#memoDoneList'),
+    memoDoneOld: $('#memoDoneOld'),
+    memoDoneMore: $('#memoDoneMore'),
     memoLateStat: $('#memoLateStat'),
     memoLateList: $('#memoLateList'),
     memoCatFilter: $('#memoCatFilter'),
@@ -689,6 +694,11 @@
     btnCatAdd: $('#btnCatAdd'),
     catMsg: $('#catMsg'),
     todoList: $('#todoList'),
+    todoDoneBar: $('#todoDoneBar'),
+    todoDoneBox: $('#todoDoneBox'),
+    todoDoneList: $('#todoDoneList'),
+    todoDoneOld: $('#todoDoneOld'),
+    todoDoneMore: $('#todoDoneMore'),
     btnAddMemo: $('#btnAddMemo'),
     btnAddTodo: $('#btnAddTodo'),
     memoOverlay: $('#memoOverlay'),
@@ -1171,6 +1181,13 @@
      所以不用另开一张统计表，删掉备忘这些也跟着没了。 */
   const LATE_CHIPS = ['时间不够', '被打断', '等别人', '忘了', '事情变多'];
   let memoLateOpen = false;        // 延期统计明细展开着吗
+  /* 已完成那栏的折叠状态：只在本次运行里记着，不跨重启（和分类筛选一样，开一次干净一次） */
+  let memoDoneOpen = false, memoDoneMore = false;
+  let todoDoneOpen = false, todoDoneMore = false;
+  /* 「最近一周完成的」留在外面，更早的收进二级开关。老数据没有完成时间（doneAt=0）一律算更早。 */
+  const DONE_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
+  function doneIsRecent(x) { return (+(x && x.doneAt) || 0) >= Date.now() - DONE_RECENT_MS; }
+  function doneSortKey(x) { return (+(x && x.doneAt) || 0) || +(x && x.at) || 0; }
   let lateFillId = null;           // 正在补填延期原因的备忘 id
 
   /* 完成一条备忘。逾期的那一笔交给 recordMemoLate 去记（同一回合不会重复记），
@@ -1405,6 +1422,44 @@
      卡片小标、补原因提示、延期统计卡统一走这一个判断，免得三处口径不一致。 */
   function hasLateRecord(m) {
     return !!m && (+m.lateCount || 0) > 0 && (+m.lateMs || 0) > 0;
+  }
+
+  /* 已完成那栏的拼装：未完成留在上面的列表里，已完成的收进这条低调的折叠条。
+     默认是收着的（列表里就只剩未完成），点开先看最近一周完成的，更早的再用二级开关放出来。
+     注意：收着的时候行也照样渲染在 DOM 里（只是整块 hidden），不为了「看不见」去省这点活。 */
+  function paintDoneBox(kind, recentRows, oldRows, total) {
+    const bar = kind === 'memo' ? el.memoDoneBar : el.todoDoneBar;
+    const box = kind === 'memo' ? el.memoDoneBox : el.todoDoneBox;
+    const listEl = kind === 'memo' ? el.memoDoneList : el.todoDoneList;
+    const oldEl = kind === 'memo' ? el.memoDoneOld : el.todoDoneOld;
+    const moreEl = kind === 'memo' ? el.memoDoneMore : el.todoDoneMore;
+    if (!bar || !box) return;
+    if (!total) { bar.hidden = true; box.hidden = true; return; }
+    const open = kind === 'memo' ? memoDoneOpen : todoDoneOpen;
+    const more = kind === 'memo' ? memoDoneMore : todoDoneMore;
+    const recentN = recentRows.length;
+    const oldN = oldRows.length;
+    const toggle = bar.querySelector('.done-toggle');
+    if (toggle) {
+      toggle.textContent = '已完成 ' + total + ' 条' +
+        (recentN ? '（最近一周 ' + recentN + '）' : '') + (open ? ' ▲' : ' ▼');
+    }
+    bar.hidden = false;
+    box.hidden = !open;
+    /* 完成得晚的排前面；收着的时候也照样填好（整块 hidden 而已），刷新时不闪 */
+    const fill = function (host, rows, show) {
+      if (!host) return;
+      host.innerHTML = '';
+      rows.slice().sort(function (a, b) { return b[0] - a[0]; })
+        .forEach(function (r) { host.appendChild(r[1]); });
+      host.hidden = !show;
+    };
+    fill(listEl, recentRows, true);
+    fill(oldEl, oldRows, more);
+    if (moreEl) {
+      moreEl.hidden = oldN === 0;
+      moreEl.textContent = more ? '收起更早的 ▴' : '更早的 ' + oldN + ' 条 ▾';
+    }
   }
 
   /* 延期统计：只算真的延期过的备忘 */
@@ -2124,6 +2179,9 @@
             done: !!t.done,
             at: +t.at || Date.now(),
             dueAt: +t.dueAt || 0,
+            /* 完成时间也要存住：已完成那栏按它排序，「最近一周完成的」也靠它判断。
+               以前这里没存，重启后所有已完成待办都变成「没有完成时间」。 */
+            doneAt: +t.doneAt || 0,
             remindAt: +t.remindAt || 0,
             prio: normPrio(t.prio),
             repeat: normRepeat(t.repeat),
@@ -2820,13 +2878,10 @@
     el.memoList.innerHTML = '';
     renderCatFilter('memo');         // 列表上方的分类筛选条
     renderMemoLateStat();            // 顶部那条延期统计跟着一起刷新
-    if (!list.length) {
-      el.memoList.innerHTML = '<div class="empty-tip">' +
-        (catFilter.memo
-          ? '这个分类下还没有备忘。<br>点上面的「全部」看所有备忘。'
-          : '还没有备忘。<br>点右上角「＋ 新增备忘」写第一条吧。') + '</div>';
-      return;
-    }
+    /* 未完成的进主列表；已完成的进折叠栏（最近一周 / 更早两堆） */
+    const pendFrag = document.createDocumentFragment();
+    const recentRows = [], oldRows = [];
+    let doneTotal = 0;
     list.forEach(function (m) {
       const row = document.createElement('div');
       row.className = 'memo-item' + (m.done ? ' done' : '');
@@ -2871,8 +2926,19 @@
           (m.lateReason ? '；原因：' + m.lateReason : '');
         meta.appendChild(tag);
       }
-      el.memoList.appendChild(row);
+      if (m.done) { doneTotal++; (doneIsRecent(m) ? recentRows : oldRows).push([doneSortKey(m), row]); }
+      else pendFrag.appendChild(row);
     });
+    if (pendFrag.childNodes.length) {
+      el.memoList.appendChild(pendFrag);
+    } else {
+      el.memoList.innerHTML = '<div class="empty-tip">' + (catFilter.memo
+        ? '这个分类下还没有未完成的备忘。<br>点上面的「全部」看所有备忘。'
+        : (doneTotal
+          ? '未完成的都清空了 👌<br>已经完成的收在下面「已完成」那一条里。'
+          : '还没有备忘。<br>点右上角「＋ 新增备忘」写第一条吧。')) + '</div>';
+    }
+    paintDoneBox('memo', recentRows, oldRows, doneTotal);
   }
 
   function renderTodos() {
@@ -2887,13 +2953,10 @@
     const list = all.filter(function (t) { return catMatch(t, 'todo'); });
     el.todoList.innerHTML = '';
     renderCatFilter('todo');         // 列表上方的分类筛选条
-    if (!list.length) {
-      el.todoList.innerHTML = '<div class="empty-tip">' +
-        (catFilter.todo
-          ? '这个分类下还没有待办。<br>点上面的「全部」看所有待办。'
-          : '还没有待办。<br>点右上角「＋ 新增待办」，设好日期和时间就行。') + '</div>';
-      return;
-    }
+    /* 未完成的进主列表；已完成的进折叠栏（最近一周 / 更早两堆） */
+    const pendFrag = document.createDocumentFragment();
+    const recentRows = [], oldRows = [];
+    let doneTotal = 0;
     list.forEach(function (t) {
       const late = !t.done && t.dueAt && t.dueAt < Date.now();
       const row = document.createElement('div');
@@ -2931,8 +2994,19 @@
         badge.title = '重复待办：点一下前面的勾 = 完成这一期，会自动排下一期';
         meta.appendChild(badge);
       }
-      el.todoList.appendChild(row);
+      if (t.done) { doneTotal++; (doneIsRecent(t) ? recentRows : oldRows).push([doneSortKey(t), row]); }
+      else pendFrag.appendChild(row);
     });
+    if (pendFrag.childNodes.length) {
+      el.todoList.appendChild(pendFrag);
+    } else {
+      el.todoList.innerHTML = '<div class="empty-tip">' + (catFilter.todo
+        ? '这个分类下还没有未完成的待办。<br>点上面的「全部」看所有待办。'
+        : (doneTotal
+          ? '未完成的都清空了 👌<br>已经完成的收在下面「已完成」那一条里。'
+          : '还没有待办。<br>点右上角「＋ 新增待办」，设好日期和时间就行。')) + '</div>';
+    }
+    paintDoneBox('todo', recentRows, oldRows, doneTotal);
   }
 
   /* ------------------------------------------------------------ 备忘弹层 */
@@ -4109,42 +4183,44 @@
 
   /* -------------------------------------------------- 备忘 / 待办 事件绑定 */
   function bindTodoPage() {
-    /* 备忘：勾完成 / 改 / 删（事件委托，列表是动态渲染的） */
-    if (el.memoList) {
-      el.memoList.addEventListener('click', function (e) {
-        const row = e.target.closest ? e.target.closest('.memo-item') : null;
-        if (!row) return;
-        const roleEl = e.target.closest ? e.target.closest('[data-role]') : null;
-        const role = roleEl ? roleEl.dataset.role : '';
-        const id = row.dataset.id;
-        if (role === 'done') {
-          const m = memoById(id);
-          if (!m) return;
-          if (m.done) {
-            /* 取消完成：回到未完成 */
-            m.done = false;
-            m.doneAt = 0;
-            saveTodoStore();
-            renderMemos();
-            Sound.click();
-          } else if (needLateReasonOnDone(m)) {
-            /* 正拖着（或记过延期）、又一直没写原因：完成前先让补一句（也能跳过） */
-            openLateFill(m);
-            Sound.click();
-          } else {
-            completeMemo(m);
-            Sound.click();
-          }
-        } else if (role === 'edit') {
-          openMemoModal(id);
-        } else if (role === 'del') {
-          deleteMemo(id);
-        } else if (role === 'why') {
-          const m = memoById(id);
-          if (m) openLateFill(m);
+    /* 备忘：勾完成 / 改 / 删（事件委托，列表是动态渲染的）。
+       已完成的那些行搬去了 #memoDoneBox（和 #memoList 是兄弟节点），所以同一个
+       处理函数必须两处都挂 —— 否则已完成那条上的勾选 / 编辑 / 删除 / 补原因全都没反应。 */
+    const onMemoRowClick = function (e) {
+      const row = e.target.closest ? e.target.closest('.memo-item') : null;
+      if (!row) return;
+      const roleEl = e.target.closest ? e.target.closest('[data-role]') : null;
+      const role = roleEl ? roleEl.dataset.role : '';
+      const id = row.dataset.id;
+      if (role === 'done') {
+        const m = memoById(id);
+        if (!m) return;
+        if (m.done) {
+          /* 取消完成：回到未完成 */
+          m.done = false;
+          m.doneAt = 0;
+          saveTodoStore();
+          renderMemos();
+          Sound.click();
+        } else if (needLateReasonOnDone(m)) {
+          /* 正拖着（或记过延期）、又一直没写原因：完成前先让补一句（也能跳过） */
+          openLateFill(m);
+          Sound.click();
+        } else {
+          completeMemo(m);
+          Sound.click();
         }
-      });
-    }
+      } else if (role === 'edit') {
+        openMemoModal(id);
+      } else if (role === 'del') {
+        deleteMemo(id);
+      } else if (role === 'why') {
+        const m = memoById(id);
+        if (m) openLateFill(m);
+      }
+    };
+    if (el.memoList) el.memoList.addEventListener('click', onMemoRowClick);
+    if (el.memoDoneBox) el.memoDoneBox.addEventListener('click', onMemoRowClick);
     /* 延期统计：点一下展开/收起明细 */
     if (el.memoLateStat) {
       el.memoLateStat.addEventListener('click', function () {
@@ -4152,6 +4228,28 @@
         renderMemoLateStat();
       });
     }
+    /* 已完成那栏：点折叠条展开/收起；展开后「更早的 N 条」再放一批出来 */
+    const bindDoneBox = function (which) {
+      const bar = which === 'memo' ? el.memoDoneBar : el.todoDoneBar;
+      const more = which === 'memo' ? el.memoDoneMore : el.todoDoneMore;
+      const rerender = function () { if (which === 'memo') renderMemos(); else renderTodos(); };
+      if (bar) {
+        bar.addEventListener('click', function () {
+          if (which === 'memo') memoDoneOpen = !memoDoneOpen; else todoDoneOpen = !todoDoneOpen;
+          rerender();
+          Sound.click();
+        });
+      }
+      if (more) {
+        more.addEventListener('click', function () {
+          if (which === 'memo') memoDoneMore = !memoDoneMore; else todoDoneMore = !todoDoneMore;
+          rerender();
+          Sound.click();
+        });
+      }
+    };
+    bindDoneBox('memo');
+    bindDoneBox('todo');
     /* 分类筛选：点一下只看这一类（'' = 全部，'__none' = 未分类） */
     const bindCatFilter = function (box, which) {
       if (!box) return;
@@ -4261,19 +4359,19 @@
       });
     }
 
-    /* 待办：勾完成 / 改 / 删 */
-    if (el.todoList) {
-      el.todoList.addEventListener('click', function (e) {
-        const row = e.target.closest ? e.target.closest('.todo-item') : null;
-        if (!row) return;
-        const roleEl = e.target.closest ? e.target.closest('[data-role]') : null;
-        const role = roleEl ? roleEl.dataset.role : '';
-        const id = row.dataset.id;
-        if (role === 'done') toggleTodoDone(id);
-        else if (role === 'edit') openTodoModal(id);
-        else if (role === 'del') deleteTodo(id);
-      });
-    }
+    /* 待办：勾完成 / 改 / 删（同理，已完成那栏也要挂） */
+    const onTodoRowClick = function (e) {
+      const row = e.target.closest ? e.target.closest('.todo-item') : null;
+      if (!row) return;
+      const roleEl = e.target.closest ? e.target.closest('[data-role]') : null;
+      const role = roleEl ? roleEl.dataset.role : '';
+      const id = row.dataset.id;
+      if (role === 'done') toggleTodoDone(id);
+      else if (role === 'edit') openTodoModal(id);
+      else if (role === 'del') deleteTodo(id);
+    };
+    if (el.todoList) el.todoList.addEventListener('click', onTodoRowClick);
+    if (el.todoDoneBox) el.todoDoneBox.addEventListener('click', onTodoRowClick);
     if (el.btnAddTodo) el.btnAddTodo.addEventListener('click', function () { Sound.click(); openTodoModal(null); });
     if (el.tdSave) el.tdSave.addEventListener('click', saveTodoModal);
     if (el.tdCancel) el.tdCancel.addEventListener('click', closeTodoModal);

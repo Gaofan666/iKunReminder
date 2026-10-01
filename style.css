@@ -402,6 +402,23 @@ mark.ax-hit{
   background:rgba(217,161,95,.18);border:1px solid rgba(217,161,95,.45);
   color:#B9762A;font-size:11.5px;font-weight:700;
 }
+/* ---- 已完成那栏（未完成的留在主列表，已完成的收进这条折叠条） ---- */
+.done-bar{
+  margin:10px 0 0;padding:7px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.35);
+  color:#A9A49B;font-size:11.5px;line-height:1.6;
+}
+.done-bar:hover{color:#8a6a2c}
+.done-box{margin:6px 0 0}
+.done-more{
+  margin:4px 0 0;padding:5px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.22);
+  color:#B4AFA7;font-size:11.5px;text-align:center;
+}
+.done-more:hover{color:#8a6a2c}
+/* 已完成的行压暗一点，一眼能和待办中的区分开 */
+.done-list .memo-item,.done-old .memo-item,
+.done-list .todo-item,.done-old .todo-item{opacity:.72}
 /* ---- 延期统计（备忘列表最下面的小尾巴：平时低调，点一下展开明细） ---- */
 .late-stat{
   margin:8px 0 0;padding:7px 2px 0;cursor:pointer;user-select:none;
