@@ -1267,12 +1267,15 @@ function createWindow() {
               'var has=function(sel){return Array.prototype.some.call(document.querySelectorAll(sel),' +
               'function(r){return r.textContent.indexOf(t)>=0;});};' +
               'if(has("#memoList .memo-item"))return "未完成列表";' +
-              'if(has("#memoDoneList .memo-item"))return "最近一周";' +
-              'if(has("#memoDoneOld .memo-item"))return "更早";' +
+              'if(has("#memoDoneList .memo-item"))return "点开就看到";' +
+              'if(has("#memoDoneOld .memo-item"))return "更早里";' +
               'return "没渲染";};' +
+              'var head=document.querySelectorAll("#memoDoneList .memo-item").length;' +
+              'var tail=document.querySelectorAll("#memoDoneOld .memo-item").length;' +
               'var bar=document.getElementById("memoDoneBar");' +
               'return {完成没过期的:where("' + T_H + '"),只写原因的:where("' + T_I + '"),' +
-              '晚完成的:where("' + T_J + '"),折叠条:bar.innerText,' +
+              '晚完成的:where("' + T_J + '"),' +
+              '点开就看到几条:head, 更早几条:tail, 折叠条:bar.innerText,' +
               '默认收着:document.getElementById("memoDoneBox").hidden,' +
               '更早开关:document.getElementById("memoDoneMore").innerText};})()');
             out['5-老数据不误伤'] = {
@@ -1280,8 +1283,9 @@ function createWindow() {
               假延期清干净了: fakeG.卡片上有逾期标 === false && fakeG.卡片上有补原因 === false,
               已完成不追着补原因: doneH.显示已完成 === true && doneH.卡片上有补原因 === false &&
                 doneH.卡片上有逾期标 === false,
-              完成的收进折叠栏: doneBox.完成没过期的 === '更早' && doneBox.只写原因的 === '更早' &&
-                doneBox.晚完成的 === '最近一周' && doneBox.默认收着 === true
+              完成的收进折叠栏: doneBox.完成没过期的 !== '未完成列表' &&
+                doneBox.只写原因的 !== '未完成列表' && doneBox.晚完成的 !== '未完成列表' &&
+                doneBox.默认收着 === true && doneBox.点开就看到几条 > 0
             };
 
             /* ⑥ 老数据补账：把「写原因」和「记账」重新绑在一起。
@@ -1558,12 +1562,49 @@ function createWindow() {
               没有重复记: bAfter.逾期次数 === bBefore.逾期次数 && bAfter.逾期次数 === 1
             };
 
+            /* ⑨ 已完成那栏点开必须有内容（用户反馈：老数据没有完成时间，点开一条都没有）。
+               造 7 条已完成，验证「先摆 5 条、其余的进更早的 N 条、点了更早就都出来」。 */
+            for (let i = 1; i <= 7; i++) {
+              const nm = '【自检】折叠-' + i;
+              await mkMemo(nm, 3 * 3600000);       // 截止在未来：完成得早，不会记逾期
+              await waitC(250);
+              await completeMemoC(nm);
+              await waitC(250);
+            }
+            await waitC(700);
+            const foldShut = await jswC('(function(){' +
+              'var bar=document.getElementById("memoDoneBar");' +
+              'return {条数文字:bar.innerText, 收着:document.getElementById("memoDoneBox").hidden,' +
+              ' 点开就看到:document.querySelectorAll("#memoDoneList .memo-item").length,' +
+              ' 更早几条:document.querySelectorAll("#memoDoneOld .memo-item").length,' +
+              ' 更早开关:document.getElementById("memoDoneMore").innerText};})()');
+            await jswC('document.getElementById("memoDoneBar").click(); true');
+            await waitC(400);
+            const foldOpenC = await jswC('(function(){' +
+              'return {箱开了:!document.getElementById("memoDoneBox").hidden,' +
+              ' 点开就看到:document.querySelectorAll("#memoDoneList .memo-item").length,' +
+              ' 更早还藏着:document.getElementById("memoDoneOld").hidden,' +
+              ' 箭头:document.getElementById("memoDoneBar").innerText};})()');
+            await jswC('document.getElementById("memoDoneMore").click(); true');
+            await waitC(400);
+            const foldMore = await jswC('(function(){' +
+              'return {更早放出来了:!document.getElementById("memoDoneOld").hidden,' +
+              ' 更早几条:document.querySelectorAll("#memoDoneOld .memo-item").length,' +
+              ' 开关文字:document.getElementById("memoDoneMore").innerText};})()');
+            outC['9-折叠栏点开有内容'] = {
+              收着时: foldShut, 点开: foldOpenC, 再放更早: foldMore,
+              点开不是空的: foldOpenC.点开就看到 > 0,
+              先摆五条: foldOpenC.点开就看到 === 5,
+              剩下的收在更早里: foldShut.更早几条 > 0 && foldMore.更早几条 === foldShut.更早几条,
+              更早能放出来: foldMore.更早放出来了 === true && foldMore.更早几条 > 0
+            };
+
             /* 收尾：清掉自检造的备忘和待办 */
             await jswC('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
               'raw.memos=(raw.memos||[]).filter(function(x){return (x.text||"").indexOf("【自检】")<0;});' +
               'raw.todos=(raw.todos||[]).filter(function(x){return (x.text||"").indexOf("【自检】")<0;});' +
               'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()');
-            outC['9-清理'] = { 说明: '自检数据已清掉' };
+            outC['10-清理'] = { 说明: '自检数据已清掉' };
             diagLog('count', outC);
           }
           /* 桌面日历端到端自检：
@@ -3393,7 +3434,7 @@ function createWindow() {
               'document.querySelectorAll("#memoList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inPend++;});' +
               'document.querySelectorAll("#memoDoneList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inRecent++;});' +
               'var bar=document.getElementById("memoDoneBar");' +
-              'return {主列表里没有了:inPend===0, 收进最近一周:inRecent===1,' +
+              'return {主列表里没有了:inPend===0, 收进点开就看到那组:inRecent===1,' +
               ' 折叠条有字数:bar.innerText.indexOf("已完成")>=0, 折叠条文字:bar.innerText,' +
               ' 内容还收着:document.getElementById("memoDoneBox").hidden};})()', true);
             /* 点折叠条 → 展开 */

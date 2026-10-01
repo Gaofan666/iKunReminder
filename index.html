@@ -155,14 +155,14 @@
     <!-- 分类筛选：有分类时才显示（点一下只看这一类） -->
     <div class="cat-filter" id="memoCatFilter" hidden></div>
     <div class="memo-list" id="memoList"></div>
-    <!-- 已完成那栏：默认收纳，只留一条低调的折叠条（点一下展开；更早的再有一级开关） -->
-    <div class="done-bar" id="memoDoneBar" hidden><span class="done-toggle"></span></div>
+    <!-- 已完成那栏：默认收纳成一条小标题，点一下展开（先摆最近完成的几条，剩下的再点「更早的」） -->
+    <div class="done-bar" id="memoDoneBar" hidden><span class="done-title"></span><span class="done-caret"></span></div>
     <div class="done-box" id="memoDoneBox" hidden>
       <div class="done-list" id="memoDoneList"></div>
       <div class="done-old" id="memoDoneOld" hidden></div>
       <div class="done-more" id="memoDoneMore" hidden></div>
     </div>
-    <!-- 延期统计：挂在列表最下面当个小尾巴，不占列表的位置（点一下展开明细；原因在提醒弹窗里填） -->
+    <!-- 逾期统计：挂在列表最下面当个小尾巴，不占列表的位置（点一下展开明细；原因在提醒弹窗里填） -->
     <div class="late-stat" id="memoLateStat" hidden></div>
     <div class="late-stat-list" id="memoLateList" hidden></div>
   </section>
@@ -179,8 +179,8 @@
     <!-- 分类筛选：有分类时才显示（点一下只看这一类） -->
     <div class="cat-filter" id="todoCatFilter" hidden></div>
     <div class="todo-list" id="todoList"></div>
-    <!-- 已完成那栏：和备忘一样，默认收纳成一条折叠条 -->
-    <div class="done-bar" id="todoDoneBar" hidden><span class="done-toggle"></span></div>
+    <!-- 已完成那栏：和备忘一样，默认收纳成一条小标题 -->
+    <div class="done-bar" id="todoDoneBar" hidden><span class="done-title"></span><span class="done-caret"></span></div>
     <div class="done-box" id="todoDoneBox" hidden>
       <div class="done-list" id="todoDoneList"></div>
       <div class="done-old" id="todoDoneOld" hidden></div>

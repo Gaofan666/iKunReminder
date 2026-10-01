@@ -1184,10 +1184,11 @@
   /* 已完成那栏的折叠状态：只在本次运行里记着，不跨重启（和分类筛选一样，开一次干净一次） */
   let memoDoneOpen = false, memoDoneMore = false;
   let todoDoneOpen = false, todoDoneMore = false;
-  /* 「最近一周完成的」留在外面，更早的收进二级开关。老数据没有完成时间（doneAt=0）一律算更早。 */
-  const DONE_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
-  function doneIsRecent(x) { return (+(x && x.doneAt) || 0) >= Date.now() - DONE_RECENT_MS; }
-  function doneSortKey(x) { return (+(x && x.doneAt) || 0) || +(x && x.at) || 0; }
+  /* 展开已完成那栏时先摆几条出来，超出的收进「更早的 N 条」二级开关。
+     别按「最近一周」分组 —— 老数据没有完成时间（doneAt=0），那样点开会一条都看不到；
+     现在按「完成时间（没有就按记录时间）」从新到旧取前 DONE_SHOW 条，点开一定有东西看。 */
+  const DONE_SHOW = 5;
+  function doneSortKey(x) { return (+(x && x.doneAt) || 0) || (+(x && x.at) || 0); }
   let lateFillId = null;           // 正在补填延期原因的备忘 id
 
   /* 完成一条备忘。逾期的那一笔交给 recordMemoLate 去记（同一回合不会重复记），
@@ -1494,10 +1495,10 @@
     }
   }
 
-  /* 已完成那栏的拼装：未完成留在上面的列表里，已完成的收进这条低调的折叠条。
-     默认是收着的（列表里就只剩未完成），点开先看最近一周完成的，更早的再用二级开关放出来。
-     注意：收着的时候行也照样渲染在 DOM 里（只是整块 hidden），不为了「看不见」去省这点活。 */
-  function paintDoneBox(kind, recentRows, oldRows, total) {
+  /* 已完成那栏的拼装：未完成留在上面的列表里，已完成的收进这条折叠栏。
+     默认是收着的（列表里就只剩未完成），点开先摆最近完成的 DONE_SHOW 条，剩下的再由
+     「更早的 N 条」放出来。收着的时候行也照样渲染在 DOM 里（整块 hidden）。 */
+  function paintDoneBox(kind, doneRows, total) {
     const bar = kind === 'memo' ? el.memoDoneBar : el.todoDoneBar;
     const box = kind === 'memo' ? el.memoDoneBox : el.todoDoneBox;
     const listEl = kind === 'memo' ? el.memoDoneList : el.todoDoneList;
@@ -1507,28 +1508,27 @@
     if (!total) { bar.hidden = true; box.hidden = true; return; }
     const open = kind === 'memo' ? memoDoneOpen : todoDoneOpen;
     const more = kind === 'memo' ? memoDoneMore : todoDoneMore;
-    const recentN = recentRows.length;
-    const oldN = oldRows.length;
-    const toggle = bar.querySelector('.done-toggle');
-    if (toggle) {
-      toggle.textContent = '已完成 ' + total + ' 条' +
-        (recentN ? '（最近一周 ' + recentN + '）' : '') + (open ? ' ▲' : ' ▼');
-    }
+    /* 完成得晚的排前面（没有完成时间的按记录时间），前 DONE_SHOW 条直接摆出来 */
+    const sorted = doneRows.slice().sort(function (a, b) { return b[0] - a[0]; });
+    const head = sorted.slice(0, DONE_SHOW);
+    const tail = sorted.slice(DONE_SHOW);
+    const titleEl = bar.querySelector('.done-title');
+    if (titleEl) titleEl.textContent = '🗂 已完成 ' + total + ' 条';
+    const caretEl = bar.querySelector('.done-caret');
+    if (caretEl) caretEl.textContent = open ? '收起 ▲' : '展开 ▼';
     bar.hidden = false;
     box.hidden = !open;
-    /* 完成得晚的排前面；收着的时候也照样填好（整块 hidden 而已），刷新时不闪 */
     const fill = function (host, rows, show) {
       if (!host) return;
       host.innerHTML = '';
-      rows.slice().sort(function (a, b) { return b[0] - a[0]; })
-        .forEach(function (r) { host.appendChild(r[1]); });
+      rows.forEach(function (r) { host.appendChild(r[1]); });
       host.hidden = !show;
     };
-    fill(listEl, recentRows, true);
-    fill(oldEl, oldRows, more);
+    fill(listEl, head, true);
+    fill(oldEl, tail, more);
     if (moreEl) {
-      moreEl.hidden = oldN === 0;
-      moreEl.textContent = more ? '收起更早的 ▴' : '更早的 ' + oldN + ' 条 ▾';
+      moreEl.hidden = tail.length === 0;
+      moreEl.textContent = more ? '收起更早的 ▴' : '更早的 ' + tail.length + ' 条 ▾';
     }
   }
 
@@ -2967,9 +2967,9 @@
     el.memoList.innerHTML = '';
     renderCatFilter('memo');         // 列表上方的分类筛选条
     renderMemoLateStat();            // 顶部那条延期统计跟着一起刷新
-    /* 未完成的进主列表；已完成的进折叠栏（最近一周 / 更早两堆） */
+    /* 未完成的进主列表；已完成的进折叠栏 */
     const pendFrag = document.createDocumentFragment();
-    const recentRows = [], oldRows = [];
+    const doneRows = [];
     let doneTotal = 0;
     list.forEach(function (m) {
       const row = document.createElement('div');
@@ -3008,7 +3008,7 @@
         meta.insertBefore(ct, meta.firstChild);
       }
       appendLateTags(meta, m);
-      if (m.done) { doneTotal++; (doneIsRecent(m) ? recentRows : oldRows).push([doneSortKey(m), row]); }
+      if (m.done) { doneTotal++; doneRows.push([doneSortKey(m), row]); }
       else pendFrag.appendChild(row);
     });
     if (pendFrag.childNodes.length) {
@@ -3020,7 +3020,7 @@
           ? '未完成的都清空了 👌<br>已经完成的收在下面「已完成」那一条里。'
           : '还没有备忘。<br>点右上角「＋ 新增备忘」写第一条吧。')) + '</div>';
     }
-    paintDoneBox('memo', recentRows, oldRows, doneTotal);
+    paintDoneBox('memo', doneRows, doneTotal);
   }
 
   function renderTodos() {
@@ -3035,9 +3035,9 @@
     const list = all.filter(function (t) { return catMatch(t, 'todo'); });
     el.todoList.innerHTML = '';
     renderCatFilter('todo');         // 列表上方的分类筛选条
-    /* 未完成的进主列表；已完成的进折叠栏（最近一周 / 更早两堆） */
+    /* 未完成的进主列表；已完成的进折叠栏 */
     const pendFrag = document.createDocumentFragment();
-    const recentRows = [], oldRows = [];
+    const doneRows = [];
     let doneTotal = 0;
     list.forEach(function (t) {
       const late = !t.done && t.dueAt && t.dueAt < Date.now();
@@ -3077,7 +3077,7 @@
         meta.appendChild(badge);
       }
       appendLateTags(meta, t);
-      if (t.done) { doneTotal++; (doneIsRecent(t) ? recentRows : oldRows).push([doneSortKey(t), row]); }
+      if (t.done) { doneTotal++; doneRows.push([doneSortKey(t), row]); }
       else pendFrag.appendChild(row);
     });
     if (pendFrag.childNodes.length) {
@@ -3089,7 +3089,7 @@
           ? '未完成的都清空了 👌<br>已经完成的收在下面「已完成」那一条里。'
           : '还没有待办。<br>点右上角「＋ 新增待办」，设好日期和时间就行。')) + '</div>';
     }
-    paintDoneBox('todo', recentRows, oldRows, doneTotal);
+    paintDoneBox('todo', doneRows, doneTotal);
   }
 
   /* ------------------------------------------------------------ 备忘弹层 */

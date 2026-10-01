@@ -408,13 +408,18 @@ mark.ax-hit{
   background:rgba(120,150,180,.16);border:1px solid rgba(120,150,180,.45);
   color:#5B7C9B;font-size:11.5px;font-weight:700;
 }
-/* ---- 已完成那栏（未完成的留在主列表，已完成的收进这条折叠条） ---- */
+/* ---- 已完成那栏（未完成的留在主列表，已完成的收进这条）----
+   做成一条「小标题」的样子：图标 + 加粗 + 独立底色 + 右侧箭头，别太不显眼 */
 .done-bar{
-  margin:10px 0 0;padding:7px 2px 0;cursor:pointer;user-select:none;
-  border-top:1px dashed rgba(217,161,95,.35);
-  color:#A9A49B;font-size:11.5px;line-height:1.6;
+  margin:14px 0 0;padding:8px 12px;cursor:pointer;user-select:none;
+  display:flex;align-items:center;gap:8px;
+  background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(255,255,255,.6));
+  border:1px solid rgba(217,161,95,.42);border-radius:10px;
+  color:#6E6152;font-size:13px;font-weight:700;line-height:1.5;
 }
-.done-bar:hover{color:#8a6a2c}
+.done-bar:hover{border-color:rgba(217,161,95,.72);color:#8a6a2c;background:rgba(255,255,255,.96)}
+.done-bar .done-title{flex:1;min-width:0}
+.done-bar .done-caret{flex:none;color:#B9762A;font-size:11.5px;font-weight:700}
 .done-box{margin:6px 0 0}
 .done-more{
   margin:4px 0 0;padding:5px 2px 0;cursor:pointer;user-select:none;
