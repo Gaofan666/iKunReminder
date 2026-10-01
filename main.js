@@ -1215,26 +1215,39 @@ function createWindow() {
               也没要补原因: snoozeF.卡片上有补原因 === false
             };
 
-            /* ⑤ 老数据里的「假延期」（lateCount 有值、lateMs 是 0）读进来就该自动清掉，
-               不能还挂着「延期 N 次」要人补原因 —— 这是升级后已经存在的备忘能不能恢复的关键。 */
+            /* ⑤ 老数据的两种坑，读进来就该是对的（升级后用户已有的备忘能不能恢复就看这段）：
+               a) 假延期：lateCount 有值、lateMs 是 0 → 该整组清掉，不能挂着「延期 N 次」；
+               b) 已完成 + 截止在过去 + 从没延期过（用户真实遇到的那种，例如「实验室聚餐」）
+                  → 不许出现「补原因」，也不能被当成延期过。 */
             const T_G = '【自检】老数据F';
+            const T_H = '【自检】已完成G';
             await jsw(
               '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
               'raw.memos=raw.memos||[];' +
               'raw.memos.push({id:"diag-fake-late",text:"' + T_G + '",done:false,at:Date.now(),' +
               ' dueAt:Date.now()+86400000,remindBefore:0,remindEvery:0,remindAt:0,cat:"",' +
               ' lateCount:1,lateMs:0,lateReason:"",lateOpen:true,lateLog:[{at:Date.now(),ms:0,text:""}]});' +
+              'raw.memos.push({id:"diag-done-pastdue",text:"' + T_H + '",done:true,at:Date.now()-5*86400000,' +
+              ' dueAt:Date.now()-4*86400000,remindBefore:0,remindEvery:0,remindAt:0,cat:"",' +
+              ' lateCount:0,lateMs:0,lateReason:"",lateOpen:false,lateLog:[]});' +
               'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()');
             win.webContents.reload();
             await waitW(2600);
-            const fakeG = await jsw(
-              '(function(){var rows=document.querySelectorAll(".memo-item");' +
-              'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + T_G + '")>=0;});' +
-              'return {行在:!!row,卡片上有延期标:!!(row&&row.textContent.indexOf("延期 ")>=0),' +
-              ' 卡片上有补原因:!!(row&&row.querySelector("[data-role=why]"))};})()');
-            out['5-老数据假延期自动清掉'] = {
-              清理后: fakeG,
-              两样都没了: fakeG.卡片上有延期标 === false && fakeG.卡片上有补原因 === false
+            const readRow = function (text, wantDone) {
+              return '(function(){var rows=document.querySelectorAll(".memo-item");' +
+                'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + text + '")>=0;});' +
+                'return {行在:!!row,显示已完成:!!(row&&row.textContent.indexOf("（已完成）")>=0),' +
+                ' 显示已过期:!!(row&&row.textContent.indexOf("已过期")>=0),' +
+                ' 卡片上有延期标:!!(row&&row.textContent.indexOf("延期 ")>=0),' +
+                ' 卡片上有补原因:!!(row&&row.querySelector("[data-role=why]"))};})()';
+            };
+            const fakeG = await jsw(readRow(T_G));
+            const doneH = await jsw(readRow(T_H));
+            out['5-老数据不误伤'] = {
+              假延期那条: fakeG, 已完成没过期那条: doneH,
+              假延期清干净了: fakeG.卡片上有延期标 === false && fakeG.卡片上有补原因 === false,
+              已完成不追着补原因: doneH.显示已完成 === true && doneH.卡片上有补原因 === false &&
+                doneH.卡片上有延期标 === false
             };
 
             /* 收尾：把自检造的备忘清掉 */

@@ -1192,16 +1192,30 @@
     return true;
   }
 
-  /* 完成前该不该问一句延期原因？
-     确实延期过（有延期记录、或已经过了截止），而且到现在一条原因都没写过。
-     写过一次就不再问 —— 补填是帮忙，不能变成骚扰。 */
-  function needLateReason(m) {
-    if (!m || !m.dueAt) return false;
-    /* 真的延期过（有 lateMs 的记录），或者现在已经过了截止 —— 后者是「正拖着」，也该问一句 */
-    if (!(hasLateRecord(m) || Date.now() > m.dueAt)) return false;
+  /* 延期原因的两个口径必须分开，混在一起就会出现「没过期也被追着补原因」：
+       · 完成前问一句 —— 这条现在正拖着（没完成 + 已经过了截止），或者之前记过延期；
+       · 卡片上挂「补原因」按钮 —— 只认真的记过延期（hasLateRecord）。
+     早先两条共用一句 "Date.now() > m.dueAt"，可截止时间一旦过去就永远成立，
+     于是已完成的老备忘（比如「实验室聚餐」）也一直被挂着「补原因」，看着像在说过期。 */
+  function lateReasonMissing(m) {
+    if (!m) return false;
     if (m.lateReason) return false;
     if (Array.isArray(m.lateLog) && m.lateLog.some(function (x) { return x && x.text; })) return false;
     return true;
+  }
+
+  /* 完成前该不该问一句？（只管没完成的 —— 已经完成的谈不上"接下来会不会拖"）
+     写过一次就不再问：补填是帮忙，不能变成骚扰。 */
+  function needLateReasonOnDone(m) {
+    if (!m || !m.dueAt || m.done) return false;
+    if (!(hasLateRecord(m) || Date.now() > m.dueAt)) return false;
+    return lateReasonMissing(m);
+  }
+
+  /* 卡片上要不要留「补原因」按钮？只认「真的记过延期」。 */
+  function needLateReason(m) {
+    if (!m || !m.dueAt) return false;
+    return hasLateRecord(m) && lateReasonMissing(m);
   }
 
   function lateFillChipPaint() {
@@ -4061,8 +4075,8 @@
             saveTodoStore();
             renderMemos();
             Sound.click();
-          } else if (needLateReason(m)) {
-            /* 延期过、又一直没写原因：完成前先让补一句（也能跳过） */
+          } else if (needLateReasonOnDone(m)) {
+            /* 正拖着（或记过延期）、又一直没写原因：完成前先让补一句（也能跳过） */
             openLateFill(m);
             Sound.click();
           } else {
