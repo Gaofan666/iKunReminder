@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   getPetOn: () => ipcRenderer.invoke('pet-on-get'),
   setPetSize: (name) => ipcRenderer.invoke('set-pet-size', name),
   getPetSize: () => ipcRenderer.invoke('get-pet-size'),
+  /* 桌宠「始终最前」：默认关，保持系统原本的置顶规则 */
+  setPetTop: (on) => ipcRenderer.invoke('pet-top', !!on),
+  getPetTop: () => ipcRenderer.invoke('pet-top-get'),
 
   /* 桌面日历：另一个独立小窗（透明月历挂件：左备忘录 + 右月历）。
      待办/备忘录的真数据在页面这边，所以是页面把清单推给主进程，
@@ -98,6 +101,7 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onSetInterval: (cb) => ipcRenderer.on('set-interval', (e, d) => cb(d)),
   onPetOnChanged: (cb) => ipcRenderer.on('pet-on-changed', (e, on) => cb(on)),
   onSetPetSize: (cb) => ipcRenderer.on('pet-size-changed', (e, name) => cb(name)),
+  onPetTopChanged: (cb) => ipcRenderer.on('pet-top-changed', (e, on) => cb(on)),
   onShowShichen: (cb) => ipcRenderer.on('show-shichen', () => cb()),
   onAddItem: (cb) => ipcRenderer.on('add-item', () => cb()),
   onShowTodo: (cb) => ipcRenderer.on('show-todo', () => cb()),

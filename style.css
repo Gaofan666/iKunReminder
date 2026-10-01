@@ -396,6 +396,101 @@ mark.ax-hit{
 .item-meta{margin-top:4px;font-size:12px;color:#3A505C;letter-spacing:.3px}
 .item-meta b{color:var(--lake)}
 .item-meta .late{color:#c0392b;font-weight:700}
+/* 卡片上的「逾期 N 次」小标（错过过截止时间） */
+.item-meta .late-tag{
+  display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;
+  background:rgba(217,161,95,.18);border:1px solid rgba(217,161,95,.45);
+  color:#B9762A;font-size:11.5px;font-weight:700;
+}
+/* 卡片上的「延期 N 次」小标（把截止时间往后挪过）—— 换个冷色，和「逾期」一眼分得开 */
+.item-meta .ext-tag{
+  display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;
+  background:rgba(120,150,180,.16);border:1px solid rgba(120,150,180,.45);
+  color:#5B7C9B;font-size:11.5px;font-weight:700;
+}
+/* ---- 已完成那栏（未完成的留在主列表，已完成的收进这条折叠条） ---- */
+.done-bar{
+  margin:10px 0 0;padding:7px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.35);
+  color:#A9A49B;font-size:11.5px;line-height:1.6;
+}
+.done-bar:hover{color:#8a6a2c}
+.done-box{margin:6px 0 0}
+.done-more{
+  margin:4px 0 0;padding:5px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.22);
+  color:#B4AFA7;font-size:11.5px;text-align:center;
+}
+.done-more:hover{color:#8a6a2c}
+/* 已完成的行压暗一点，一眼能和待办中的区分开 */
+.done-list .memo-item,.done-old .memo-item,
+.done-list .todo-item,.done-old .todo-item{opacity:.72}
+/* ---- 延期统计（备忘列表最下面的小尾巴：平时低调，点一下展开明细） ---- */
+.late-stat{
+  margin:8px 0 0;padding:7px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.35);
+  color:#A9A49B;font-size:11.5px;line-height:1.6;
+}
+.late-stat:hover{color:#8a6a2c}
+.late-stat b{color:#B9762A;font-weight:600}
+.late-stat .ls-toggle{float:right;color:#c3bcb2}
+.late-stat-list{
+  margin:6px 0 0;padding:8px 10px;border-radius:10px;max-height:170px;overflow:auto;
+  background:rgba(255,255,255,.55);border:1px dashed rgba(217,161,95,.35);
+}
+.late-row{display:flex;gap:8px;align-items:baseline;padding:5px 2px;font-size:12.5px;color:#5E6B60}
+.late-row + .late-row{border-top:1px dashed rgba(217,161,95,.28)}
+.late-row .lr-text{flex:1;min-width:0;color:#16242E;word-break:break-word}
+.late-row .lr-ms{flex:none;color:#B9762A;font-weight:700}
+.late-row .lr-why{flex:none;max-width:46%;color:#8a6a2c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---- 分类（待办和备忘共用：筛选条 + 卡片小标 + 设置页管理） ---- */
+.cat-filter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.cat-chip{
+  padding:4px 11px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:12px;
+  border:1px solid var(--line);background:#fff;color:#4E6675;transition:.15s;
+}
+.cat-chip:hover{border-color:var(--lake)}
+.cat-chip.on{background:var(--lake);border-color:var(--lake);color:#fff;font-weight:700}
+.cat-chip .cc-dot{
+  display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;
+}
+.cat-chip.on .cc-dot{box-shadow:0 0 0 1.5px rgba(255,255,255,.75)}
+.item-meta .cat-tag{
+  display:inline-flex;align-items:center;gap:4px;margin-right:6px;padding:1px 7px;border-radius:99px;
+  background:rgba(74,155,212,.12);border:1px solid var(--line);color:#4E6675;font-size:11.5px;font-weight:600;
+}
+.item-meta .cat-tag i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.cat-sel{min-width:132px}
+.cat-manage{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
+.cat-item{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;
+  background:rgba(255,255,255,.72);border:1px solid var(--line);
+}
+.cat-item .cat-dot{flex:none;width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+.cat-item .cat-name{
+  flex:1;min-width:0;font-size:13.5px;color:#16242E;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cat-item .cat-count{flex:none;font-size:12px;color:var(--dim)}
+.cat-item input[type=color]{
+  flex:none;width:26px;height:24px;padding:0;border:1px solid var(--line);
+  border-radius:7px;background:#fff;cursor:pointer;
+}
+.cat-item .cat-btn{
+  flex:none;height:26px;padding:0 10px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--line);border-radius:8px;background:#EEF6FB;
+  color:#4E6675;font-size:12px;font-weight:600;font-family:inherit;transition:.15s;white-space:nowrap;
+}
+.cat-item .cat-btn:hover{color:var(--text);background:#DFEDF6;border-color:var(--lake)}
+.cat-item .cat-btn.del{color:#B93B2C;background:#FDECE9;border-color:rgba(185,59,44,.45)}
+.cat-item .cat-btn.del:hover{color:#fff;background:#B93B2C}
+.cat-empty{font-size:12.5px;color:var(--dim);padding:6px 2px}
+.cat-add{display:flex;gap:8px;align-items:center}
+.cat-add input{
+  flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:10px;
+  font-family:inherit;font-size:13.5px;color:var(--text);background:#fff;outline:none;
+}
+.cat-add input:focus{border-color:var(--lake)}
 .item-tools{flex:none;display:flex;gap:4px}
 .item-tools button{
   height:26px;padding:0 10px;display:grid;place-items:center;cursor:pointer;
@@ -410,6 +505,14 @@ mark.ax-hit{
 .item-tools button.del:hover{
   background:#D9534F;border-color:transparent;color:#fff;
   box-shadow:0 3px 10px rgba(217,83,79,.35);
+}
+/* 「补原因」：延期过、还没写原因的备忘卡片上才有 */
+.item-tools button.why{
+  color:#B9762A;background:rgba(217,161,95,.16);border-color:rgba(217,161,95,.5);
+}
+.item-tools button.why:hover{
+  color:#fff;background:#D9A15F;border-color:transparent;
+  box-shadow:0 3px 10px rgba(217,161,95,.35);
 }
 
 .empty-tip{
@@ -893,6 +996,25 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 }
 
 .alert-desc{margin:0 0 20px;color:#5E6B60;font-size:13.5px;line-height:1.8}
+/* 备忘已经过了截止时间才弹的提醒：顺手问一句延期原因（统计用，留空也行） */
+.late-box{
+  margin:0 0 18px;padding:10px 13px;border-radius:12px;text-align:left;
+  background:rgba(217,161,95,.12);border:1px solid rgba(217,161,95,.42);
+}
+.late-head{margin:0 0 8px;font-size:12.5px;color:#8a6a2c}
+.late-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.late-chips button{
+  padding:4px 11px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:12px;
+  border:1px solid rgba(217,161,95,.5);background:#fff;color:#8a6a2c;transition:.15s;
+}
+.late-chips button:hover{border-color:#D9A15F}
+.late-chips button.on{background:#D9A15F;border-color:#D9A15F;color:#fff;font-weight:700}
+.late-input{
+  width:100%;box-sizing:border-box;padding:7px 10px;border-radius:9px;font-family:inherit;
+  font-size:12.5px;color:var(--text);background:#fff;border:1px solid rgba(217,161,95,.5);
+  outline:none;
+}
+.late-input:focus{border-color:#D9A15F}
 .alert-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 /* 「还有 N 条也到点了」：提示后面还排着几条，别让用户以为处理完这条就没了 */
 .alert-more{

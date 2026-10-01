@@ -59,6 +59,8 @@ const DIAG = (function () {
     if (m) out.avail = { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
     /* --diag-pet：自检时顺手打开桌面宠物，验证它和主界面能同时存在 */
     if (a === '--diag-pet') out.pet = true;
+    /* --diag-pettop：桌宠「始终最前」自检（默认关 → 打开 → 提醒态让位 → 关掉还原） */
+    if (a === '--diag-pettop') out.pettop = true;
     /* --diag-bubble：点宠物看气泡，验证「今日待办」那一块（有/没有两种） */
     if (a === '--diag-bubble') out.bubble = true;
     /* --diag-arxiv：科研动态端到端自检（真抓一次 arXiv + 界面 + 可点气泡） */
@@ -116,6 +118,14 @@ const DIAG = (function () {
     if (a === '--diag-alert') out.alert = true;
     /* --diag-memo：备忘「截止时间 + 截止前周期提醒」端到端自检（真实弹窗 + 真实调度） */
     if (a === '--diag-memo') out.memo = true;
+    /* --diag-late：备忘「逾期统计 + 延期原因」端到端自检（逾期弹窗里真的填一次原因） */
+    if (a === '--diag-late') out.late = true;
+    /* --diag-cat：待办/备忘分类端到端自检（建分类 → 选分类 → 筛选 → 改名 → 删除） */
+    if (a === '--diag-cat') out.cat = true;
+    /* --diag-why：延期原因补填端到端自检（完成时补填 / 跳过 / 事后从卡片补） */
+    if (a === '--diag-why') out.why = true;
+    /* --diag-count：逾期 / 延期两个计数器的口径自检（按用户定的规矩逐条验） */
+    if (a === '--diag-count') out.count = true;
     /* --diag-sleep：睡眠/息屏后「休息」计时重置自检（≥5 分钟算休息过 → 唤醒重置） */
     if (a === '--diag-sleep') out.sleep = true;
     /* --diag-calzoom：桌面日历「放大缩小」+「固定」自检 */
@@ -386,6 +396,8 @@ const PET_SIZES = {
 };
 let petSize = 'max';
 let petOn = false;          // 用户是否勾选了「桌面宠物」
+let petTop = false;         // 桌宠「始终最前」：默认关，保持系统原本的置顶规则
+let petTopTimer = null;     // 「始终最前」的看门狗定时器
 let petBooted = false;      // 宠物窗页面是否已经画好（画好之前不显示，避免闪一下）
 let petSkin = '__default';  // 当前形象，宠物窗与主界面共用
 let currentSkin = '__default';   // 同上（菜单打勾用这个名字，保留两个别名更直观）
@@ -790,6 +802,769 @@ function createWindow() {
               });
               setPetOn(false);
             }
+          }
+          /* ============ 桌宠「始终最前」（--diag-pettop） ============
+             用户报「桌宠有时候不显示在最前面」：Windows 上所有置顶窗共享同一个
+             「顶级带」，带内谁在上由最后激活的窗口决定 —— 别的软件的置顶窗、或者
+             本程序的提醒窗一激活，桌宠就被压住，而且系统不会自己把它放回来。
+             这里验证新加的可选项（默认关 = 保持系统原本的规则）：
+             1) 默认关：看门狗没起来、raise 一次都不动手；
+             2) 打开后：看门狗起来，并且真的把宠物提到最上面；
+             3) 提醒窗在前台（主窗置顶）时让一让，不跟提醒抢 Z 序；
+             4) 关掉后：看门狗停掉、raise 不再动手，完全回到原规则；
+             5) 托盘 / 右键菜单里有这一项；
+             6) 界面上的勾选框点一下，能存进设置并同步到主进程。 */
+          if (DIAG.pettop) {
+            const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const out = {};
+            const SKEY = 'kunkun.settings.v1';
+            setPetOn(true);
+            /* 等宠物窗真的显示出来再断言：首次要等宠物页画完（pet-win-ready），
+               机器忙的时候 1.4 秒不一定够 —— 这里最多等 10 秒 */
+            for (let pi = 0; pi < 40; pi++) {
+              if (petWin && !petWin.isDestroyed() && petWin.isVisible()) break;
+              await wait(250);
+            }
+            out['1-默认关'] = {
+              宠物窗口开着吗: !!(petWin && !petWin.isDestroyed() && petWin.isVisible()),
+              petTop: petTop,
+              看门狗起来了吗: !!petTopTimer,
+              raise被拦住: petRaise() === false
+            };
+            setPetTop(true);
+            await wait(120);
+            out['2-打开后'] = { petTop: petTop, 看门狗起来了吗: !!petTopTimer, raise提上去了: petRaise() };
+            /* 提醒态：bringToFront() 就是把主窗置顶 —— 这时候桌宠不该顶上去 */
+            win.setAlwaysOnTop(true, 'screen-saver');
+            await wait(80);
+            out['3-提醒态让一让'] = { raise被拦住: petRaise() === false };
+            win.setAlwaysOnTop(false);
+            setPetTop(false);
+            await wait(120);
+            out['4-关掉后'] = { petTop: petTop, 看门狗还在吗: !!petTopTimer, raise被拦住: petRaise() === false };
+            out['5-菜单里有吗'] = petMenuSummary().filter(function (s) { return s.indexOf('始终最前') >= 0; });
+            /* 界面勾选框：真点一下，走「勾选框 → 主进程 → 回写设置」整条链路 */
+            const uiBefore = await win.webContents.executeJavaScript(`(function(){
+              const row = document.getElementById('petTopRow');
+              const cb = document.getElementById('chkPetTop');
+              return { 行在吗: !!row, 行是藏着的吗: row ? row.hidden : null,
+                       勾选框在吗: !!cb, 当前勾选: cb ? cb.checked : null };
+            })()`, true);
+            await win.webContents.executeJavaScript(`(function(){
+              const cb = document.getElementById('chkPetTop');
+              cb.checked = true;
+              cb.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            })()`, true);
+            await wait(400);
+            const uiAfter = await win.webContents.executeJavaScript(`(function(){
+              let st = null;
+              try { st = JSON.parse(localStorage.getItem('${SKEY}') || '{}'); } catch (e) { }
+              return { 勾选框: document.getElementById('chkPetTop').checked,
+                       存进设置了吗: st ? st.petTop : null };
+            })()`, true);
+            out['6-界面勾一下'] = { 点之前: uiBefore, 点之后: uiAfter, 主进程收到: petTop, 看门狗起来了吗: !!petTopTimer };
+            /* 收拾干净：自检不能把用户的设置留在改过的状态 */
+            await win.webContents.executeJavaScript(`(function(){
+              const cb = document.getElementById('chkPetTop');
+              cb.checked = false;
+              cb.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            })()`, true);
+            await wait(300);
+            out['7-收尾'] = { petTop: petTop, 看门狗还在吗: !!petTopTimer };
+            diagLog('pettop', out);
+            setPetOn(false);
+          }
+          /* ============ 备忘延期统计 + 延期原因（--diag-late） ============
+             造一条【已经过了截止时间】的备忘（截止 = N 小时前、只提醒一次），
+             等 tick 真的把它当逾期弹出来，然后验证：
+             1) 弹窗里出现「延期原因」那一块，快捷原因按钮也在；
+             2) 点一个快捷原因 → 输入框被填上；
+             3) 点「完成 ✓」→ 备忘记上 lateCount / lateMs / lateReason；
+             4) 备忘卡片上出现「延期 N 次」小标；
+             5) 备忘页顶部的延期统计卡出来，条数对得上；
+             6) 第二条逾期时点「我知道了」→ 同样记一笔（两种处理方式都算延期）。 */
+          if (DIAG.late) {
+            const waitL = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const T_A = '【自检】逾期备忘A';
+            const T_B = '【自检】逾期备忘B';
+            /* 用真实的「新增备忘」弹窗造一条截止在过去、只提醒一次的备忘 */
+            const mkLate = function (text, hoursAgo) {
+              return '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
+                'var d=new Date(Date.now()-' + Math.round((hoursAgo || 2) * 3600 * 1000) + ');' +
+                'var dv=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());' +
+                'var tv=pad2(d.getHours())+":"+pad2(d.getMinutes());' +
+                'document.getElementById("btnAddMemo").click();' +
+                'document.getElementById("memoText").value="' + text + '";' +
+                'var on=document.getElementById("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+                'document.getElementById("memoDueDate").value=dv;' +
+                'document.getElementById("memoDueTime").value=tv;' +
+                'document.getElementById("memoRemindBefore").value="3600000";' +
+                'document.getElementById("memoRemindEvery").value="0";' +
+                'document.getElementById("memoSave").click();' +
+                'return true;})()';
+            };
+            const readLate = function (text) {
+              return '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var m=(raw.memos||[]).filter(function(x){return x.text==="' + text + '";})[0];' +
+                'var rows=document.querySelectorAll(".memo-item");' +
+                'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + text + '")>=0;});' +
+                'var stat=document.getElementById("memoLateStat");' +
+                'if(!m)return {没找到这条备忘:true};' +
+                'return {逾期次数:m.lateCount||0,' +
+                ' 逾期小时:Math.round((m.lateMs||0)/36000)/100,' +
+                ' 原因:m.lateReason||"",' +
+                ' 卡片上有逾期标:!!row&&row.textContent.indexOf("逾期 "+(m.lateCount||0)+" 次")>=0,' +
+                ' 统计卡显示:stat?!stat.hidden:null,' +
+                ' 统计卡文字:stat?stat.textContent.replace(/\\s+/g," ").trim():""};})()';
+            };
+            /* ① 第一条：逾期 2 小时 → 等真弹窗 → 填原因 → 完成 */
+            await win.webContents.executeJavaScript(mkLate(T_A, 2), true);
+            await waitL(3800);
+            const boxA = await win.webContents.executeJavaScript(
+              '(function(){var b=document.getElementById("lateBox");' +
+              'var chips=document.querySelectorAll("#lateChips button");' +
+              'var out={弹窗开着:!document.getElementById("overlay").hidden,' +
+              ' 延期原因块显示:!b.hidden,几个快捷原因:chips.length};' +
+              'if(chips.length){chips[0].click();}' +
+              'out.点完快捷原因后输入框=document.getElementById("lateInput").value;' +
+              'return out;})()', true);
+            await win.webContents.executeJavaScript(
+              'document.getElementById("alertDone").click(); true', true);
+            await waitL(500);
+            const afterA = await win.webContents.executeJavaScript(readLate(T_A), true);
+            diagLog('late-1-逾期完成', { 弹窗: boxA, 备忘: afterA });
+
+            /* ② 第二条：逾期 3 小时 → 点「我知道了」，也应该记一笔 */
+            await win.webContents.executeJavaScript(mkLate(T_B, 3), true);
+            await waitL(3800);
+            const boxB = await win.webContents.executeJavaScript(
+              '(function(){return {弹窗开着:!document.getElementById("overlay").hidden,' +
+              ' 延期原因块显示:!document.getElementById("lateBox").hidden};})()', true);
+            await win.webContents.executeJavaScript(
+              'document.getElementById("alertAck").click(); true', true);
+            await waitL(500);
+            const afterB = await win.webContents.executeJavaScript(readLate(T_B), true);
+            const statNow = await win.webContents.executeJavaScript(
+              '(function(){var s=document.getElementById("memoLateStat");' +
+              'return {显示:!s.hidden,文字:s.textContent.replace(/\\s+/g," ").trim()};})()', true);
+            diagLog('late-2-逾期我知道了', { 弹窗: boxB, 备忘: afterB, 统计: statNow });
+
+            /* ③ 统计卡展开明细：应该列出两条 + 各自的原因 */
+            await win.webContents.executeJavaScript(
+              'document.getElementById("memoLateStat").click(); true', true);
+            await waitL(300);
+            const detail = await win.webContents.executeJavaScript(
+              '(function(){var l=document.getElementById("memoLateList");' +
+              'var rs=l.querySelectorAll(".late-row");' +
+              'var arr=[];for(var i=0;i<rs.length;i++)arr.push(rs[i].textContent.replace(/\\s+/g," ").trim());' +
+              'return {明细显示:!l.hidden,条数:rs.length,行:arr};})()', true);
+            diagLog('late-3-明细', detail);
+
+            /* ④ 位置和长相：统计卡要挂在列表【下面】，而且得低调（字号比正文小、没有底色），
+               不能压在备忘列表上面抢位置 */
+            const place = await win.webContents.executeJavaScript(
+              '(function(){var l=document.getElementById("memoList"),s=document.getElementById("memoLateStat");' +
+              'var cs=getComputedStyle(s);' +
+              'return {在列表下面:!!(l.compareDocumentPosition(s)&Node.DOCUMENT_POSITION_FOLLOWING),' +
+              ' 字号:cs.fontSize,没有底色:cs.backgroundColor==="rgba(0, 0, 0, 0)"};})()', true);
+            diagLog('late-4-低调位置', place);
+          }
+          /* ============ 待办 / 备忘分类（--diag-cat） ============
+             1) 在设置页真建两个分类（工作 / 学习）→ 管理区两行 + 存进 localStorage；
+             2) 备忘弹窗里的分类下拉能选到这两项；
+             3) 建一条「工作」的备忘 + 一条「学习」的待办 → 存进各自的 cat、卡片上有小标；
+             4) 列表上方出现分类筛选条，点「工作」只剩那一条，点「全部」回来；
+             5) 把「工作」改名成「项目」→ 卡片小标跟着变；
+             6) 删掉「学习」→ 那条待办变成「未分类」（内容没被删）。 */
+          if (DIAG.cat) {
+            const waitC = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const jsc = function (code) { return win.webContents.executeJavaScript(code, true); };
+            const out = {};
+
+            /* ① 建两个分类：走设置页真实的输入框 + 按钮 */
+            out['1-新建分类'] = await jsc(
+              '(function(){var o={};' +
+              'var add=function(n){document.getElementById("catNewName").value=n;' +
+              'document.getElementById("btnCatAdd").click();};' +
+              'add("工作");add("学习");' +
+              'var rows=document.querySelectorAll("#catManage .cat-item");' +
+              'var names=[];for(var i=0;i<rows.length;i++)names.push(rows[i].querySelector(".cat-name").textContent);' +
+              'o.管理区行数=rows.length;o.分类名=names;' +
+              'o.存了几条=(JSON.parse(localStorage.getItem("kunkun.cats.v1")||"[]")).length;' +
+              'o.提示=document.getElementById("catMsg").textContent;' +
+              'return o;})()');
+            await waitC(250);
+
+            /* ② 备忘弹窗的分类下拉 */
+            out['2-弹窗下拉'] = await jsc(
+              '(function(){document.getElementById("btnAddMemo").click();' +
+              'var sel=document.getElementById("memoCat");var opts=[];' +
+              'for(var i=0;i<sel.options.length;i++)opts.push(sel.options[i].textContent);' +
+              'return {选项:opts};})()');
+
+            /* ③ 建备忘录（工作）+ 待办（学习） */
+            out['3-建条目'] = await jsc(
+              '(function(){var o={};' +
+              'var cats=JSON.parse(localStorage.getItem("kunkun.cats.v1")||"[]");' +
+              'var idOf=function(n){var c=cats.filter(function(x){return x.name===n;})[0];return c?c.id:"";};' +
+              'var w=idOf("工作"),s=idOf("学习");' +
+              'document.getElementById("memoText").value="【自检】分类备忘";' +
+              'document.getElementById("memoCat").value=w;' +
+              'document.getElementById("memoSave").click();' +
+              'document.getElementById("btnAddTodo").click();' +
+              'document.getElementById("tdText").value="【自检】分类待办";' +
+              'document.getElementById("todoCat").value=s;' +
+              'document.getElementById("tdSave").click();' +
+              'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】分类备忘";})[0];' +
+              'var t=(raw.todos||[]).filter(function(x){return x.text==="【自检】分类待办";})[0];' +
+              'o.备忘存了分类=!!m&&!!m.cat&&m.cat===w;o.待办存了分类=!!t&&!!t.cat&&t.cat===s;' +
+              'var mrows=document.querySelectorAll(".memo-item");' +
+              'var mrow=Array.prototype.find.call(mrows,function(r){return r.textContent.indexOf("【自检】分类备忘")>=0;});' +
+              'var trows=document.querySelectorAll(".todo-item");' +
+              'var trow=Array.prototype.find.call(trows,function(r){return r.textContent.indexOf("【自检】分类待办")>=0;});' +
+              'o.备忘卡片小标=!!mrow&&!!mrow.querySelector(".cat-tag")?mrow.querySelector(".cat-tag").textContent:"";' +
+              'o.待办卡片小标=!!trow&&!!trow.querySelector(".cat-tag")?trow.querySelector(".cat-tag").textContent:"";' +
+              'return o;})()');
+            await waitC(250);
+
+            /* ④ 筛选条：点「工作」只留那一条 */
+            out['4-分类筛选'] = await jsc(
+              '(function(){var o={};' +
+              'var box=document.getElementById("memoCatFilter");' +
+              'var chips=box.querySelectorAll(".cat-chip");var txt=[];' +
+              'for(var i=0;i<chips.length;i++)txt.push(chips[i].textContent.trim());' +
+              'o.筛选条显示=!box.hidden;o.筛选项=txt;' +
+              'var work=Array.prototype.find.call(chips,function(c){return c.textContent.indexOf("工作")>=0;});' +
+              'if(work)work.click();' +
+              'var rows=document.querySelectorAll(".memo-item");' +
+              'o.筛完剩几条=rows.length;' +
+              'o.剩下的是=rows.length?rows[0].querySelector(".item-text").textContent:"";' +
+              'var all=Array.prototype.find.call(box.querySelectorAll(".cat-chip"),function(c){return c.textContent.indexOf("全部")>=0;});' +
+              'if(all)all.click();' +
+              'o.点全部后条数=document.querySelectorAll(".memo-item").length;' +
+              'return o;})()');
+            await waitC(250);
+
+            /* ⑤ 改名「工作」→「项目」：卡片小标要跟着变 */
+            out['5-改名'] = await jsc(
+              '(function(){var o={};' +
+              'window.prompt=function(){return "项目";};' +
+              'var rows=document.querySelectorAll("#catManage .cat-item");' +
+              'var row=Array.prototype.find.call(rows,function(r){return r.querySelector(".cat-name").textContent==="工作";});' +
+              'if(!row)return {没找到工作:true};' +
+              'row.querySelector("[data-role=rename]").click();' +
+              'var names=[];var rr=document.querySelectorAll("#catManage .cat-item");' +
+              'for(var i=0;i<rr.length;i++)names.push(rr[i].querySelector(".cat-name").textContent);' +
+              'o.改名后分类=names;' +
+              'var mrows=document.querySelectorAll(".memo-item");' +
+              'var mrow=Array.prototype.find.call(mrows,function(r){return r.textContent.indexOf("【自检】分类备忘")>=0;});' +
+              'o.卡片小标=!!mrow&&!!mrow.querySelector(".cat-tag")?mrow.querySelector(".cat-tag").textContent:"";' +
+              'return o;})()');
+            await waitC(250);
+
+            /* ⑥ 删掉「学习」→ 待办变未分类、内容还在 */
+            out['6-删分类'] = await jsc(
+              '(function(){var o={};' +
+              'window.confirm=function(){return true;};' +
+              'var rows=document.querySelectorAll("#catManage .cat-item");' +
+              'var row=Array.prototype.find.call(rows,function(r){return r.querySelector(".cat-name").textContent==="学习";});' +
+              'if(!row)return {没找到学习:true};' +
+              'row.querySelector("[data-role=del]").click();' +
+              'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var t=(raw.todos||[]).filter(function(x){return x.text==="【自检】分类待办";})[0];' +
+              'o.待办还在=!!t;o.变成未分类=!!t&&!t.cat;' +
+              'o.剩几个分类=(JSON.parse(localStorage.getItem("kunkun.cats.v1")||"[]")).length;' +
+              'var trows=document.querySelectorAll(".todo-item");' +
+              'var trow=Array.prototype.find.call(trows,function(r){return r.textContent.indexOf("【自检】分类待办")>=0;});' +
+              'o.卡片小标没了=!!trow&&!trow.querySelector(".cat-tag");' +
+              'return o;})()');
+            diagLog('cat', out);
+          }
+          /* ============ 延期原因补填（--diag-why） ============
+             1) 逾期备忘 →「我知道了」（记一次延期、没写原因）→ 从列表勾完成：
+                应该先弹「补填」而不是直接完成；填完原因才标完成；
+             2) 另一条 → 勾完成时「跳过」→ 直接完成、没原因 → 卡片上应该冒出
+                「补原因」按钮 → 点它补一句 → 原因写上去、按钮消失；
+             3) 没延期的备忘（截止在未来）勾完成 → 不许打扰，直接完成。 */
+          if (DIAG.why) {
+            const waitW = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const jsw = function (code) { return win.webContents.executeJavaScript(code, true); };
+            const T_C = '【自检】补原因A';
+            const T_D = '【自检】补原因B';
+            const T_E = '【自检】没延期C';
+            const T_F = '【自检】没延期D';
+            /* hoursAgo > 0 = 截止在过去（会弹提醒）；负数 = 截止在未来 */
+            const mk = function (text, hoursAgo) {
+              return '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
+                'var d=new Date(Date.now()-(' + Math.round((hoursAgo || 0) * 3600 * 1000) + '));' +
+                'var dv=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());' +
+                'var tv=pad2(d.getHours())+":"+pad2(d.getMinutes());' +
+                'document.getElementById("btnAddMemo").click();' +
+                'document.getElementById("memoText").value="' + text + '";' +
+                'var on=document.getElementById("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+                'document.getElementById("memoDueDate").value=dv;' +
+                'document.getElementById("memoDueTime").value=tv;' +
+                'document.getElementById("memoRemindBefore").value="3600000";' +
+                'document.getElementById("memoRemindEvery").value="0";' +
+                'document.getElementById("memoSave").click();' +
+                'return true;})()';
+            };
+            const readM = function (text) {
+              return '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var m=(raw.memos||[]).filter(function(x){return x.text==="' + text + '";})[0];' +
+                'if(!m)return {没找到:true};' +
+                'var rows=document.querySelectorAll(".memo-item");' +
+                'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + text + '")>=0;});' +
+                'return {完成:m.done,逾期次数:m.lateCount||0,拖了毫秒:m.lateMs||0,原因:m.lateReason||"",' +
+                ' 卡片上有补原因:!!(row&&row.querySelector("[data-role=why]")),' +
+                ' 卡片上有逾期标:!!(row&&row.textContent.indexOf("逾期 ")>=0)};})()';
+            };
+            const fillOpen = '(function(){var ov=document.getElementById("lateFillOverlay");' +
+              'return {弹窗开着:!ov.hidden,' +
+              ' 说明:(document.getElementById("lateFillDesc").textContent||"").slice(0,44),' +
+              ' 保存按钮:document.getElementById("lateFillSave").textContent,' +
+              ' 跳过按钮:document.getElementById("lateFillSkip").textContent,' +
+              ' 几个快捷原因:document.querySelectorAll("#lateFillChips button").length};})()';
+            const clickDone = function (text) {
+              return '(function(){var rows=document.querySelectorAll(".memo-item");' +
+                'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + text + '")>=0;});' +
+                'if(!row)return false;row.querySelector("[data-role=done]").click();return true;})()';
+            };
+            const clickWhy = function (text) {
+              return '(function(){var rows=document.querySelectorAll(".memo-item");' +
+                'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + text + '")>=0;});' +
+                'var b=row?row.querySelector("[data-role=why]"):null;if(!b)return false;b.click();return true;})()';
+            };
+            const out = {};
+
+            /* ① 逾期 → 我知道了 → 列表勾完成：该弹补填，填了原因才完成 */
+            await jsw(mk(T_C, 2));
+            await waitW(3900);
+            await jsw('document.getElementById("alertAck").click(); true');
+            await waitW(400);
+            const ackC = await jsw(readM(T_C));
+            await jsw(clickDone(T_C));
+            await waitW(300);
+            const modalC = await jsw(fillOpen);
+            await jsw('(function(){var c=document.querySelectorAll("#lateFillChips button");' +
+              'var t=Array.prototype.find.call(c,function(b){return b.textContent==="被打断";});' +
+              'if(t)t.click();return true;})()');
+            await jsw('document.getElementById("lateFillSave").click(); true');
+            await waitW(400);
+            const doneC = await jsw(readM(T_C));
+            out['1-完成时补填'] = {
+              接手时: ackC, 补填弹窗: modalC, 保存后: doneC,
+              /* 关键：「我知道了」已经记过一次，完成时不能再记第二次 */
+              次数没重复加: ackC.逾期次数 === doneC.逾期次数
+            };
+
+            /* ② 逾期 → 我知道了 → 勾完成时「跳过」→ 卡片上冒「补原因」→ 补一句 */
+            await jsw(mk(T_D, 1));
+            await waitW(3900);
+            await jsw('document.getElementById("alertAck").click(); true');
+            await waitW(400);
+            await jsw(clickDone(T_D));
+            await waitW(300);
+            const modalD = await jsw(fillOpen);
+            await jsw('document.getElementById("lateFillSkip").click(); true');
+            await waitW(400);
+            const skipD = await jsw(readM(T_D));
+            const openedD = await jsw(clickWhy(T_D));
+            await waitW(300);
+            const modalD2 = await jsw(fillOpen);
+            await jsw('(function(){var i=document.getElementById("lateFillInput");i.value="事情变多";' +
+              'i.dispatchEvent(new Event("input"));return true;})()');
+            await jsw('document.getElementById("lateFillSave").click(); true');
+            await waitW(400);
+            const fixD = await jsw(readM(T_D));
+            out['2-跳过与事后补'] = {
+              完成时弹窗: modalD, 跳过后: skipD, 卡片按钮点开了: openedD,
+              事后弹窗: modalD2, 补完后: fixD,
+              /* 跳过完成、之后再补原因，都不该再加次数 */
+              次数还是一: skipD.逾期次数 === fixD.逾期次数
+            };
+
+            /* ③ 没延期的（截止在未来）勾完成：直接完成，不许弹补填 */
+            await jsw(mk(T_E, -3));
+            await waitW(400);
+            await jsw(clickDone(T_E));
+            await waitW(400);
+            out['3-没延期不打扰'] = {
+              弹了补填吗: await jsw('!document.getElementById("lateFillOverlay").hidden'),
+              结果: await jsw(readM(T_E))
+            };
+
+            /* ④ 没过期、但提前提醒弹了出来（截止在未来）→ 点「10 分钟后再说」：
+               不该记延期、不该标「延期 N 次」、也不该冒出「补原因」。
+               老 bug 就出在这条路径上 —— 这里会记一笔 lateMs=0 的假延期，
+               于是没过期的备忘全被标成「延期 1 次」还要补原因。 */
+            await jsw(mk(T_F, -0.1));
+            await waitW(3900);
+            const earlyF = await jsw('(function(){var b=document.getElementById("lateBox");' +
+              'return {弹窗开着:!document.getElementById("overlay").hidden,' +
+              ' 标题:document.getElementById("alertTitle").textContent,' +
+              ' 逾期原因块显示:!b.hidden};})()');
+            await jsw('document.getElementById("alertSnooze").click(); true');
+            await waitW(500);
+            const snoozeF = await jsw(readM(T_F));
+            out['4-没过期不记延期'] = {
+              提前提醒时: earlyF, 推后之后: snoozeF,
+              次数是零: snoozeF.逾期次数 === 0,
+              也没标延期: snoozeF.卡片上有逾期标 === false,
+              也没要补原因: snoozeF.卡片上有补原因 === false
+            };
+
+            /* ⑤ 老数据的两种坑，读进来就该是对的（升级后用户已有的备忘能不能恢复就看这段）：
+               a) 假延期：lateCount 有值、lateMs 是 0 → 该整组清掉，不能挂着「延期 N 次」；
+               b) 已完成 + 截止在过去 + 从没延期过（用户真实遇到的那种，例如「实验室聚餐」）
+                  → 不许出现「补原因」，也不能被当成延期过。 */
+            const T_G = '【自检】老数据F';
+            const T_H = '【自检】已完成G';
+            const T_I = '【自检】只写原因H';
+            const T_J = '【自检】晚完成I';
+            await jsw(
+              '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'raw.memos=raw.memos||[];' +
+              'raw.memos.push({id:"diag-fake-late",text:"' + T_G + '",done:false,at:Date.now(),' +
+              ' dueAt:Date.now()+86400000,remindBefore:0,remindEvery:0,remindAt:0,cat:"",' +
+              ' lateCount:1,lateMs:0,lateReason:"",lateOpen:true,lateLog:[{at:Date.now(),ms:0,text:""}]});' +
+              'raw.memos.push({id:"diag-done-pastdue",text:"' + T_H + '",done:true,at:Date.now()-5*86400000,' +
+              ' dueAt:Date.now()-4*86400000,remindBefore:0,remindEvery:0,remindAt:0,cat:"",' +
+              ' lateCount:0,lateMs:0,lateReason:"",lateOpen:false,lateLog:[]});' +
+              /* 老数据补账用的两条（用户报的第二组问题）：
+                 I = 只写了原因、没有完成时间记录、也没有账（真实数据「填写博士学位信息」
+                     就是这个形状：截止 09-28 15:41，其实 11:45 就完成了，原因「忘了」
+                     是被弹窗问出来的）→ 读进来什么都不能变，绝不能凭原因当延期；
+                 J = 确实完成得比截止晚、但没留下记录的（doneAt 比 dueAt 晚 2 小时）。 */
+              'raw.memos.push({id:"diag-reason-norec",text:"' + T_I + '",done:true,at:Date.now()-6*86400000,' +
+              ' dueAt:Date.now()-3*86400000,remindBefore:3600000,remindEvery:86400000,' +
+              ' remindAt:Date.now()-3*86400000-3600000,cat:"",lateCount:0,lateMs:0,lateReason:"开会去了",' +
+              ' lateOpen:false,lateLog:[]});' +
+              'raw.memos.push({id:"diag-late-done",text:"' + T_J + '",done:true,at:Date.now()-7*86400000,' +
+              ' dueAt:Date.now()-5*86400000,doneAt:Date.now()-5*86400000+7200000,remindBefore:0,remindEvery:0,' +
+              ' remindAt:0,cat:"",lateCount:0,lateMs:0,lateReason:"",lateOpen:false,lateLog:[]});' +
+              'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()');
+            win.webContents.reload();
+            await waitW(2600);
+            const readRow = function (text, wantDone) {
+              return '(function(){var rows=document.querySelectorAll(".memo-item");' +
+                'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + text + '")>=0;});' +
+                'return {行在:!!row,显示已完成:!!(row&&row.textContent.indexOf("（已完成）")>=0),' +
+                ' 显示已过期:!!(row&&row.textContent.indexOf("已过期")>=0),' +
+                ' 卡片上有逾期标:!!(row&&row.textContent.indexOf("逾期 ")>=0),' +
+                ' 卡片上有补原因:!!(row&&row.querySelector("[data-role=why]"))};})()';
+            };
+            const fakeG = await jsw(readRow(T_G));
+            const doneH = await jsw(readRow(T_H));
+            /* 顺便验一下「已完成折叠栏」分流：这三条都是已完成的 ——
+               H / I 没有完成时间（老数据）→ 该落进「更早」；J 的 doneAt 是 5 天前 → 留在「最近一周」。
+               一件都不能留在未完成的主列表里，折叠栏默认还得是收着的。 */
+            const doneBox = await jsw('(function(){' +
+              'var where=function(t){' +
+              'var has=function(sel){return Array.prototype.some.call(document.querySelectorAll(sel),' +
+              'function(r){return r.textContent.indexOf(t)>=0;});};' +
+              'if(has("#memoList .memo-item"))return "未完成列表";' +
+              'if(has("#memoDoneList .memo-item"))return "最近一周";' +
+              'if(has("#memoDoneOld .memo-item"))return "更早";' +
+              'return "没渲染";};' +
+              'var bar=document.getElementById("memoDoneBar");' +
+              'return {完成没过期的:where("' + T_H + '"),只写原因的:where("' + T_I + '"),' +
+              '晚完成的:where("' + T_J + '"),折叠条:bar.innerText,' +
+              '默认收着:document.getElementById("memoDoneBox").hidden,' +
+              '更早开关:document.getElementById("memoDoneMore").innerText};})()');
+            out['5-老数据不误伤'] = {
+              假延期那条: fakeG, 已完成没过期那条: doneH, 折叠栏: doneBox,
+              假延期清干净了: fakeG.卡片上有逾期标 === false && fakeG.卡片上有补原因 === false,
+              已完成不追着补原因: doneH.显示已完成 === true && doneH.卡片上有补原因 === false &&
+                doneH.卡片上有逾期标 === false,
+              完成的收进折叠栏: doneBox.完成没过期的 === '更早' && doneBox.只写原因的 === '更早' &&
+                doneBox.晚完成的 === '最近一周' && doneBox.默认收着 === true
+            };
+
+            /* ⑥ 老数据补账：把「写原因」和「记账」重新绑在一起。
+               I：只写了原因、没有任何完成时间记录（真实数据「填写博士学位信息」那种：
+                  截止早过了、原因是当时被弹窗问出来的）→ **不许**自己补账、不许标延期，
+                  也不能冒出「补原因」；用户会被追问时随手写一句，那不能当延期的证据；
+               J：确实晚完成（doneAt 比 dueAt 晚 2 小时）→ 卡片该冒出「补原因」，
+                  补完只记 1 次，时长用真实完成时间，不是「截止到现在」。 */
+            const reasonI = await jsw(readRow(T_I));
+            const lateJ0 = await jsw(readRow(T_J));
+            const clickedJ = await jsw(clickWhy(T_J));
+            await waitW(300);
+            await jsw('(function(){var i=document.getElementById("lateFillInput");i.value="加班";' +
+              'i.dispatchEvent(new Event("input"));return true;})()');
+            await jsw('document.getElementById("lateFillSave").click(); true');
+            await waitW(400);
+            const afterJ = await jsw(readM(T_J));
+            const afterI = await jsw(readM(T_I));   /* 上一步存过盘，这里能读到最新数值 */
+            out['6-老数据补账'] = {
+              只写原因那条: reasonI, 晚完成那条_补原因前: lateJ0, 点开补原因: clickedJ,
+              补完后: afterJ, 补账后: afterI,
+              只写原因不许自己补账: reasonI.卡片上有逾期标 === false &&
+                reasonI.卡片上有补原因 === false && afterI.逾期次数 === 0 && afterI.拖了毫秒 === 0,
+              晚完成的会提示补原因: lateJ0.卡片上有补原因 === true,
+              补完账目正确: afterJ.逾期次数 === 1 && afterJ.原因 === '加班' &&
+                afterJ.拖了毫秒 >= 7100000 && afterJ.拖了毫秒 <= 7300000
+            };
+
+            /* 收尾：把自检造的备忘清掉 */
+            await jsw(
+              '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var keep=(raw.memos||[]).filter(function(x){return x.text.indexOf("【自检】")!==0;});' +
+              'localStorage.setItem("kunkun.todos.v1",JSON.stringify({memos:keep,todos:raw.todos||[]}));' +
+              'return true;})()');
+            out['7-清理'] = { 说明: '自检数据已清掉' };
+            diagLog('why', out);
+          }
+
+          /* ============ 逾期 / 延期两个计数器（--diag-count） ============
+             口径是用户定的，一条条按他的原话验：
+               ① 截止前完成                        → 逾期 0、延期 0
+               ② 没完成、也没改截止时间            → 逾期 1、延期 0
+                                                      （而且不靠点弹窗：tick 自己判定，
+                                                       用 ✕ 关掉提醒也照样记）
+               ③ 截止前把时间往后挪，新期限前完成  → 逾期 0、延期 1
+               ④ 截止后才往后挪，新期限前完成      → 逾期 1、延期 1
+               ⑤ 第二个期限又没赶上                → 逾期 2、延期 1
+               ⑥ 改早 / 清空截止时间               → 不算延期
+               ⑦ 重复待办勾完自动排下一期          → 不算延期（最容易写错的一条）
+               ⑧ 取消完成再勾一次                  → 逾期不会变成 2（按截止时间去重）
+             自检用独立 userData，收尾把造的数据清掉。 */
+          if (DIAG.count) {
+            const waitC = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const jswC = function (code) { return win.webContents.executeJavaScript(code, true); };
+            const pad2 = function (n) { return n < 10 ? '0' + n : String(n); };
+            const dtStr = function (ms) {
+              const d = new Date(ms);
+              return {
+                date: d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()),
+                time: pad2(d.getHours()) + ':' + pad2(d.getMinutes())
+              };
+            };
+            const G = 'var g=function(id){return document.getElementById(id);};';
+            /* 提醒弹出来就点右上角 ✕ 关掉：点「我知道了」也算记一笔，那就分不清是谁记的了 */
+            const closeAlertC = function () {
+              return jswC('(function(){var o=document.getElementById("overlay");' +
+                'if(o&&!o.hidden)document.getElementById("alertClose").click();return true;})()');
+            };
+            /* 建一条备忘（真实弹窗），off = 相对现在的毫秒（负数 = 截止时间已经过去） */
+            const mkMemo = function (text, off) {
+              const t = dtStr(Date.now() + off);
+              return jswC('(function(){' + G +
+                'g("btnAddMemo").click();' +
+                'g("memoText").value=' + JSON.stringify(text) + ';' +
+                'var on=g("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+                'g("memoDueDate").value=' + JSON.stringify(t.date) + ';' +
+                'g("memoDueTime").value=' + JSON.stringify(t.time) + ';' +
+                'g("memoRemindBefore").value="3600000";g("memoRemindEvery").value="0";' +
+                'g("memoSave").click();' +
+                'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var m=(raw.memos||[]).filter(function(x){return x.text===' + JSON.stringify(text) + ';})[0];' +
+                'return m?{id:m.id,dueAt:m.dueAt,逾期次数:m.lateCount||0,延期次数:m.extCount||0}:null;})()');
+            };
+            /* 改一条备忘的截止时间（走真实弹窗的编辑） */
+            const editMemo = function (text, off) {
+              const t = dtStr(Date.now() + off);
+              return jswC('(function(){' + G +
+                'var row=Array.prototype.find.call(document.querySelectorAll(".memo-item"),function(r){' +
+                'return r.textContent.indexOf(' + JSON.stringify(text) + ')>=0;});' +
+                'if(!row)return {error:"没找到那行"};' +
+                'row.querySelector("[data-role=edit]").click();' +
+                'var on=g("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change"));' +
+                'g("memoDueDate").value=' + JSON.stringify(t.date) + ';' +
+                'g("memoDueTime").value=' + JSON.stringify(t.time) + ';' +
+                'g("memoSave").click();' +
+                'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var m=(raw.memos||[]).filter(function(x){return x.text===' + JSON.stringify(text) + ';})[0];' +
+                'return m?{dueAt:m.dueAt,逾期次数:m.lateCount||0,延期次数:m.extCount||0}:null;})()');
+            };
+            /* 清掉截止时间（编辑弹窗里把「截止」开关关掉） */
+            const clearMemoDue = function (text) {
+              return jswC('(function(){' + G +
+                'var row=Array.prototype.find.call(document.querySelectorAll(".memo-item"),function(r){' +
+                'return r.textContent.indexOf(' + JSON.stringify(text) + ')>=0;});' +
+                'if(!row)return {error:"没找到那行"};' +
+                'row.querySelector("[data-role=edit]").click();' +
+                'var on=g("memoDueOn");on.checked=false;on.dispatchEvent(new Event("change"));' +
+                'g("memoSave").click();' +
+                'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var m=(raw.memos||[]).filter(function(x){return x.text===' + JSON.stringify(text) + ';})[0];' +
+                'return m?{dueAt:m.dueAt,逾期次数:m.lateCount||0,延期次数:m.extCount||0}:null;})()');
+            };
+            /* 读一条备忘的两个计数 + 卡片上的两个标（从存档读，说明确实存下来了） */
+            const readMemo = function (text) {
+              return jswC('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var m=(raw.memos||[]).filter(function(x){return x.text===' + JSON.stringify(text) + ';})[0];' +
+                'var row=Array.prototype.find.call(document.querySelectorAll(".memo-item"),function(r){' +
+                'return r.textContent.indexOf(' + JSON.stringify(text) + ')>=0;});' +
+                'var txt=row?row.textContent:"";' +
+                'return {逾期次数:m?(m.lateCount||0):-1, 延期次数:m?(m.extCount||0):-1,' +
+                ' 逾期标:txt.indexOf("逾期 ")!==-1, 延期标:txt.indexOf("延期 ")!==-1,' +
+                ' 完成:!!(m&&m.done)};})()');
+            };
+            /* 勾完成（逾期过的会先弹「补一句」，直接跳过） */
+            const completeMemoC = function (text) {
+              return jswC('(function(){' + G +
+                'var row=Array.prototype.find.call(document.querySelectorAll(".memo-item"),function(r){' +
+                'return r.textContent.indexOf(' + JSON.stringify(text) + ')>=0;});' +
+                'if(!row)return {error:"没找到那行"};' +
+                'row.querySelector("[data-role=done]").click();' +
+                'if(!g("lateFillOverlay").hidden)g("lateFillSkip").click();' +
+                'return {ok:true};})()');
+            };
+            const uncompleteMemoC = function (text) {
+              return jswC('(function(){var row=Array.prototype.find.call(document.querySelectorAll(".memo-item"),function(r){' +
+                'return r.textContent.indexOf(' + JSON.stringify(text) + ')>=0;});' +
+                'if(!row)return {error:"没找到那行"};' +
+                'row.querySelector("[data-role=done]").click();return {ok:true};})()');
+            };
+            /* 建一条「每天」重复的待办（第一次排在明天），勾完成看它会不会被算成延期 */
+            const addRepTodo = function (text) {
+              const t = dtStr(Date.now() + 24 * 3600000);
+              return jswC('(function(){' + G +
+                'g("btnAddTodo").click();' +
+                'g("tdText").value=' + JSON.stringify(text) + ';' +
+                'g("tdDate").value=' + JSON.stringify(t.date) + ';' +
+                'g("tdTime").value=' + JSON.stringify(t.time) + ';' +
+                'var seg=g("tdRepeat");seg.value="daily";seg.dispatchEvent(new Event("change",{bubbles:true}));' +
+                'g("tdSave").click();' +
+                'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var x=(raw.todos||[]).filter(function(y){return y.text===' + JSON.stringify(text) + ';})[0];' +
+                'return x?{id:x.id,dueAt:x.dueAt,重复:!!x.repeat}:null;})()');
+            };
+            const clickTodoDoneC = function (text) {
+              return jswC('(function(){var row=Array.prototype.find.call(document.querySelectorAll(".todo-item"),function(r){' +
+                'return r.textContent.indexOf(' + JSON.stringify(text) + ')>=0;});' +
+                'if(!row)return {error:"没找到那行"};' +
+                'row.querySelector("[data-role=done]").click();return {ok:true};})()');
+            };
+            const readTodoC = function (text) {
+              return jswC('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                'var x=(raw.todos||[]).filter(function(y){return y.text===' + JSON.stringify(text) + ';})[0];' +
+                'var row=Array.prototype.find.call(document.querySelectorAll(".todo-item"),function(r){' +
+                'return r.textContent.indexOf(' + JSON.stringify(text) + ')>=0;});' +
+                'var txt=row?row.textContent:"";' +
+                'return {逾期次数:x?(x.lateCount||0):-1, 延期次数:x?(x.extCount||0):-1,' +
+                ' 逾期标:txt.indexOf("逾期 ")!==-1, 延期标:txt.indexOf("延期 ")!==-1,' +
+                ' 截止时间:x?x.dueAt:0};})()');
+            };
+
+            const outC = {};
+            const A = '【自检】计数-按时完成';
+            const B = '【自检】计数-没改期';
+            const C = '【自检】计数-提前改期';
+            const D = '【自检】计数-过期后改期';
+            const E = '【自检】计数-两次逾期';
+            const F = '【自检】计数-改早';
+            const H = '【自检】计数-清空期限';
+            const R = '【自检】计数-重复待办';
+
+            /* ① 截止在 2 小时后，马上就完成 → 两个计数都该是 0 */
+            await mkMemo(A, 2 * 3600000);
+            await waitC(400);
+            await completeMemoC(A);
+            await waitC(1200);
+            outC['1-截止前完成'] = await readMemo(A);
+
+            /* ② 截止在 1 小时前、没完成也没改时间 → 逾期 1 次。
+               这里是「程序自己判定」而不是「用户点出来的」的**关键证据**：
+               存下盘的那一刻（同一次同步执行里紧接着读）还是 0，用右上角 ✕ 关掉提醒
+               （✕ 不算处理、不记账）等一轮 tick，它就自己变成 1 了。 */
+            await mkMemo(B, -3600000);
+            const bJust = await readMemo(B);
+            await closeAlertC();
+            await waitC(1800);
+            const bSwept = await readMemo(B);
+            outC['2-没完成没改期'] = {
+              存下盘那一刻: bJust, 关掉提醒等tick扫过: bSwept,
+              是程序自己判定出来的: bJust.逾期次数 === 0 && bSwept.逾期次数 === 1 && bSwept.逾期标 === true
+            };
+
+            /* ③ 截止在未来时往后挪，然后在新期限前完成 → 逾期 0、延期 1 */
+            await mkMemo(C, 3 * 3600000);
+            await waitC(400);
+            await editMemo(C, 5 * 3600000);
+            await waitC(1000);
+            await completeMemoC(C);
+            await waitC(1200);
+            outC['3-截止前改期'] = await readMemo(C);
+
+            /* ④ 先真的过掉一次，再往后挪，然后完成 → 逾期 1、延期 1 */
+            await mkMemo(D, -3600000);
+            await waitC(500);
+            await closeAlertC();
+            await waitC(1600);
+            const dMissed = await readMemo(D);
+            await editMemo(D, 4 * 3600000);
+            await waitC(900);
+            const dExtended = await readMemo(D);
+            await completeMemoC(D);
+            await waitC(1200);
+            outC['4-过期后改期'] = {
+              错过之后: dMissed, 改期之后: dExtended, 完成之后: await readMemo(D)
+            };
+
+            /* ⑤ 错过第二个期限 → 逾期 2、延期 1 */
+            await mkMemo(E, -3600000);
+            await waitC(500);
+            await closeAlertC();
+            await waitC(1600);
+            const eExtend = await editMemo(E, 4 * 3600000);    // 往后挪：延期 1（逾期 1 已经记下）
+            await waitC(900);
+            const eBack = await editMemo(E, -2 * 3600000);     // 又改到过去（改早不算延期），新期限也错过
+            await waitC(1800);
+            const eFinal = await readMemo(E);
+            outC['5-两次逾期'] = {
+              第一次改期: eExtend, 第二次改期: eBack, 结果: eFinal,
+              两次都记上了: eFinal.逾期次数 === 2 && eFinal.延期次数 === 1 && eFinal.逾期标 === true
+            };
+
+            /* ⑥ 改早、清空截止时间 → 都不算延期 */
+            await mkMemo(F, 5 * 3600000);
+            await waitC(400);
+            await editMemo(F, 3 * 3600000);
+            await waitC(800);
+            const fEarly = await readMemo(F);
+            await mkMemo(H, 5 * 3600000);
+            await waitC(400);
+            await clearMemoDue(H);
+            await waitC(800);
+            outC['6-改早清空不算延期'] = { 改早: fEarly, 清空: await readMemo(H) };
+
+            /* ⑦ 重复待办勾完自动排下一期 → 绝不能算延期 */
+            const rMade = await addRepTodo(R);
+            await waitC(500);
+            await clickTodoDoneC(R);
+            await waitC(1000);
+            const rAfter = await readTodoC(R);
+            outC['7-重复待办不算延期'] = {
+              建好: rMade, 勾完一期: rAfter,
+              排到下一期了: !!(rMade && rAfter.截止时间 > rMade.dueAt),
+              没被算成延期: rAfter.延期次数 === 0 && rAfter.逾期次数 === 0
+            };
+
+            /* ⑧ 逾期过的备忘：取消完成再勾一次 → 还是 1 次（按截止时间去重，不是按回合） */
+            const bBefore = await readMemo(B);
+            await uncompleteMemoC(B);
+            await waitC(700);
+            await completeMemoC(B);
+            await waitC(1400);
+            const bAfter = await readMemo(B);
+            outC['8-取消完成不重复记'] = {
+              之前: bBefore, 取消再勾之后: bAfter,
+              没有重复记: bAfter.逾期次数 === bBefore.逾期次数 && bAfter.逾期次数 === 1
+            };
+
+            /* 收尾：清掉自检造的备忘和待办 */
+            await jswC('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'raw.memos=(raw.memos||[]).filter(function(x){return (x.text||"").indexOf("【自检】")<0;});' +
+              'raw.todos=(raw.todos||[]).filter(function(x){return (x.text||"").indexOf("【自检】")<0;});' +
+              'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()');
+            outC['9-清理'] = { 说明: '自检数据已清掉' };
+            diagLog('count', outC);
           }
           /* 桌面日历端到端自检：
              1) 用主界面【真实的】新增待办弹窗塞三条待办（高/中/低各一条，日期不同），
@@ -2591,6 +3366,63 @@ function createWindow() {
               ' 弹窗关了:document.getElementById("overlay").hidden};})()', true);
             diagLog('memo-7-我知道了-周期', { 弹窗: ackCycleFired, 点完后: ackCycleAfter });
 
+            /* ⑧ 已完成折叠栏：未完成的留在主列表，已完成的收进折叠条里 ——
+               默认收着（看不见），点一下才展开；最近一周完成的在外面，更早的在二级开关里。
+               老数据没有完成时间（doneAt=0），一律算「更早」。 */
+            await win.webContents.executeJavaScript(
+              '(function(){' +
+              'document.getElementById("btnAddMemo").click();' +
+              'document.getElementById("memoText").value="【自检】折叠-新完成";' +
+              'var on=document.getElementById("memoDueOn");on.checked=false;on.dispatchEvent(new Event("change"));' +
+              'document.getElementById("memoSave").click();' +
+              'return true;})()', true);
+            await waitM(600);
+            const foldBefore = await win.webContents.executeJavaScript(
+              '(function(){var bar=document.getElementById("memoDoneBar");' +
+              'return {折叠条在:!bar.hidden, 折叠条文字:bar.innerText,' +
+              ' 内容默认收着:document.getElementById("memoDoneBox").hidden};})()', true);
+            /* 勾完成 → 应该从主列表消失、进折叠栏 */
+            await win.webContents.executeJavaScript(
+              '(function(){var rows=document.querySelectorAll("#memoList .memo-item");' +
+              'for(var i=0;i<rows.length;i++){if(rows[i].innerText.indexOf("【自检】折叠-新完成")>=0){' +
+              'rows[i].querySelector("[data-role=done]").click();return true;}}return false;})()', true);
+            await waitM(600);
+            const foldAfter = await win.webContents.executeJavaScript(
+              '(function(){' +
+              'var inPend=0,inRecent=0;' +
+              'document.querySelectorAll("#memoList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inPend++;});' +
+              'document.querySelectorAll("#memoDoneList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inRecent++;});' +
+              'var bar=document.getElementById("memoDoneBar");' +
+              'return {主列表里没有了:inPend===0, 收进最近一周:inRecent===1,' +
+              ' 折叠条有字数:bar.innerText.indexOf("已完成")>=0, 折叠条文字:bar.innerText,' +
+              ' 内容还收着:document.getElementById("memoDoneBox").hidden};})()', true);
+            /* 点折叠条 → 展开 */
+            await win.webContents.executeJavaScript(
+              'document.getElementById("memoDoneBar").click(); true', true);
+            await waitM(400);
+            const foldOpen = await win.webContents.executeJavaScript(
+              '(function(){return {展开后看得见:!document.getElementById("memoDoneBox").hidden,' +
+              ' 行在里面:document.getElementById("memoDoneList").innerText.indexOf("【自检】折叠-新完成")>=0,' +
+              ' 条上箭头:document.getElementById("memoDoneBar").innerText.indexOf("▲")>=0};})()', true);
+            /* 「更早的」那一级不在这里验：验它得 reload，而 reload 会让整个自检重跑一遍
+               （did-finish-load 会再触发一次，见上面 ⑦ 的注释），多一条并发链互相搅。
+               老数据落进「更早」这件事放在 --diag-why ⑤ 里一起验，那边本来就要 reload。 */
+            /* 已完成那条自己的按钮也得是活的：行搬出了 #memoList，事件委托必须两处都挂。
+               点它自己的勾 = 取消完成 → 应该回到未完成的主列表。 */
+            const foldUncheck = await win.webContents.executeJavaScript(
+              '(function(){var rows=document.querySelectorAll("#memoDoneList .memo-item");' +
+              'for(var i=0;i<rows.length;i++){if(rows[i].innerText.indexOf("【自检】折叠-新完成")>=0){' +
+              'rows[i].querySelector("[data-role=done]").click();return true;}}return false;})()', true);
+            await waitM(600);
+            const foldBack = await win.webContents.executeJavaScript(
+              '(function(){var inPend=0;' +
+              'document.querySelectorAll("#memoList .memo-item").forEach(function(r){if(r.innerText.indexOf("【自检】折叠-新完成")>=0)inPend++;});' +
+              'return {取消完成的按钮点了:true, 回到未完成列表:inPend===1};})()', true);
+            diagLog('memo-8-已完成折叠', {
+              完成前: foldBefore, 完成后: foldAfter, 展开后: foldOpen,
+              已完成行上的按钮: foldUncheck, 取消完成: foldBack
+            });
+
             /* ⑤ 收尾：清掉自检造的备忘 */
             await win.webContents.executeJavaScript(
               '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
@@ -4386,7 +5218,7 @@ function setPetOn(on) {
 function showPet() {
   const w = createPetWindow();
   layoutPetWin(false);
-  if (petBooted) { w.showInactive(); return; }
+  if (petBooted) { w.showInactive(); petRaise(); return; }
   /* 页面还没画好：等它加载完再显示，避免「先闪一个空窗」 */
   w.webContents.once('did-finish-load', function () {
     if (!petOn || !petWin || petWin.isDestroyed()) return;
@@ -4395,6 +5227,49 @@ function showPet() {
     const ph = petHome || petWin.getBounds();
     petWin.webContents.send('pet-win-display', petDisplayInfo(displayOf(ph.x, ph.y)));
   });
+}
+
+/* ------------------------------------------- 桌宠「始终最前」（可选项，默认关）
+   Windows 上所有置顶窗共享同一个「顶级带」，带内谁在上由最后激活的窗口决定：
+   别的软件的置顶窗、或者本程序的提醒窗一被激活，桌宠就被压到下面，而且系统
+   不会自己把它放回来 —— 用户报过「桌宠有时候不显示在最前面」。
+   勾上这个选项后，定期把桌宠重新提到顶级带最上面；moveTop 只改 Z 序，
+   不激活窗口、不抢焦点。不勾就完全保持系统原本的置顶规则。 */
+const PET_TOP_MS = 3000;
+
+function petRaise() {
+  if (!petTop || !petOn) return false;
+  if (!petWin || petWin.isDestroyed() || !petWin.isVisible()) return false;
+  /* 到点提醒正在前台时让一让，免得把提醒窗盖住 */
+  if (win && !win.isDestroyed() && win.isAlwaysOnTop()) return false;
+  /* 气泡刚被提到最上面（它就贴着宠物），这时候别跟它抢 Z 序 */
+  if (bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()) return false;
+  try {
+    petWin.setAlwaysOnTop(true, 'screen-saver');
+    petWin.moveTop();
+    return true;
+  } catch (e) { return false; }   // 窗口刚销毁等边界情况，忽略
+}
+
+function startPetTopWatch() {
+  if (petTopTimer) return;
+  petTopTimer = setInterval(petRaise, PET_TOP_MS);
+}
+
+function stopPetTopWatch() {
+  if (!petTopTimer) return;
+  clearInterval(petTopTimer);
+  petTopTimer = null;
+}
+
+/* 开/关「始终最前」。关掉时不做任何还原动作：petRaise 不再跑，
+   桌宠就回到「只置顶一次、之后听系统的」原来的规则。 */
+function setPetTop(on) {
+  petTop = !!on;
+  if (petTop) { petRaise(); startPetTopWatch(); }
+  else stopPetTopWatch();
+  if (win && !win.isDestroyed()) win.webContents.send('pet-top-changed', petTop);
+  return petTop;
 }
 
 /* ------------------------------------------------------------ 宠物大小 */
@@ -5028,6 +5903,14 @@ function petMenuTemplate() {
       click: () => setPetSize(k)
     }))
   });
+  /* 桌宠「始终最前」：Windows 上置顶窗共享一个顶级带，别的置顶软件一激活
+     桌宠就会被压住；勾上后程序会定期把它重新提到最上面。默认不勾。 */
+  tpl.push({
+    label: '📌 宠物始终最前',
+    type: 'checkbox',
+    checked: petTop,
+    click: (mi) => { setPetTop(!!mi.checked); }
+  });
   tpl.push({ type: 'separator' });
   tpl.push({ label: '退出', click: quitApp });
   return tpl;
@@ -5076,6 +5959,7 @@ ipcMain.on('pet-win-ready', () => {
   petBooted = true;
   if (!petOn || !petWin || petWin.isDestroyed()) return;
   petWin.showInactive();
+  petRaise();
 });
 
 /* 宠物窗拖动（和主窗口同一个套路：页面发屏幕坐标，主进程算位置并限位） */
@@ -5172,6 +6056,7 @@ ipcMain.handle('dismiss', () => {
   if (!win) return false;
   win.flashFrame(false);
   win.setAlwaysOnTop(false);
+  petRaise();          // 提醒退场后，开了「始终最前」的桌宠立刻回到最上面
 
   /* 提醒前躲在托盘里的话，打完卡自己缩回去（桌面宠物是独立窗口，不受影响） */
   if (wasHidden) {
@@ -5186,6 +6071,9 @@ ipcMain.handle('dismiss', () => {
 /* 桌面宠物开关（主界面上的勾选框 / 托盘菜单都走这里） */
 ipcMain.handle('pet-on', (e, on) => setPetOn(on));
 ipcMain.handle('pet-on-get', () => petOn);
+/* 桌宠「始终最前」（主界面勾选框 / 托盘菜单都走这里） */
+ipcMain.handle('pet-top', (e, on) => setPetTop(on));
+ipcMain.handle('pet-top-get', () => petTop);
 
 /* ------------------------------------------------------ 开机自启动（HKCU Run 键）
    用 Electron 内置的 setLoginItemSettings：Windows 上写的是
@@ -5930,6 +6818,11 @@ ipcMain.on('state', (e, s) => {
     setPetOn(s.petOn);
     changed = true;
   }
+  /* 「桌宠始终最前」也由主界面同步过来（勾选状态存在页面设置里），主进程是权威 */
+  if (typeof s.petTop === 'boolean' && s.petTop !== petTop) {
+    setPetTop(s.petTop);
+    changed = true;
+  }
   /* 桌面日历经开关同理（这条是主界面同步过来的，不是用户点击，所以不抢焦点） */
   if (typeof s.calOn === 'boolean' && s.calOn !== calOn) {
     setCalOn(s.calOn, false);
@@ -5956,7 +6849,11 @@ function bindPowerEvents() {
       powerMonitor.on(ev, function () {
         send('power', map[ev]);
         /* 息屏 / 休眠会让驱动把伽马表复位，醒来要重新调暖 */
-        if (ev === 'resume' || ev === 'unlock-screen') eyeCareReapply(ev === 'resume' ? 1500 : 700);
+        if (ev === 'resume' || ev === 'unlock-screen') {
+          eyeCareReapply(ev === 'resume' ? 1500 : 700);
+          /* 息屏 / 休眠回来时窗口的置顶状态常被系统清掉，补提一次 */
+          setTimeout(petRaise, 1200);
+        }
       });
     } catch (e) { /* 个别平台不支持就跳过 */ }
   });
