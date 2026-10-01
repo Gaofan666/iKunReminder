@@ -1212,10 +1212,16 @@
     return lateReasonMissing(m);
   }
 
-  /* 卡片上要不要留「补原因」按钮？只认「真的记过延期」。 */
+  /* 完成得比截止晚吗？（doneAt 现在会跟着存盘，重启之后依然认得）
+     老数据没有 doneAt，这条自然为假 —— 宁可漏报，也不能把按时完成的当延期去追。 */
+  function wasLateAtCompletion(m) {
+    return !!(m && m.done && m.dueAt && +m.doneAt > m.dueAt);
+  }
+
+  /* 卡片上要不要留「补原因」按钮？认两种：真的记过延期，或者确实完成得比截止晚。 */
   function needLateReason(m) {
     if (!m || !m.dueAt) return false;
-    return hasLateRecord(m) && lateReasonMissing(m);
+    return (hasLateRecord(m) || wasLateAtCompletion(m)) && lateReasonMissing(m);
   }
 
   function lateFillChipPaint() {
@@ -1272,13 +1278,20 @@
     closeLateFill();
     if (!m) return;
     if (wasDone) {
-      /* 只是事后补一句原因，别去碰完成状态 */
+      /* 事后补一句原因（不改完成状态），但原因和账必须一起落 —— 只写原因的话，
+         这条备忘会既没有「延期 N 次」、又因为已有原因而不再提示补，整条在统计里消失。
+         已经记过账的只补原因、不动时长（见 backfillMemoLate）。 */
       const v = String(why || '').trim().slice(0, 60);
-      if (v) {
-        m.lateReason = v;
+      if (v || !hasLateRecord(m)) {
+        const rec = backfillMemoLate(m, v);
         saveTodoStore();
         renderMemos();
-        setCaption('已补上延期原因：<b>' + escapeHtml(v) + '</b>');
+        if (v) {
+          setCaption('已补上延期原因：<b>' + escapeHtml(v) + '</b>' +
+            (rec ? '，并补记了 1 次延期' : ''));
+        } else {
+          setCaption(rec ? '已补记 1 次延期：<b>' + escapeHtml(m.text) + '</b>' : '');
+        }
       }
       return;
     }
@@ -1353,6 +1366,36 @@
     m.lateMs = ms;
     m.lateLog.push({ at: now, ms: ms, text: reason });
     if (m.lateLog.length > 20) m.lateLog = m.lateLog.slice(-20);
+    return true;
+  }
+
+  /* 事后给一条【已验证完成】的备忘补延期原因。和 recordMemoLate 的区别：
+     写原因必须同时把账记上，而且已经记过账的不许再改时长。 */
+  function backfillMemoLate(m, why) {
+    if (!m || !m.dueAt) return false;
+    const v = String(why || '').trim().slice(0, 60);
+    if (hasLateRecord(m)) {
+      /* 那次延期的「拖了多久」在完成那一刻就定死了，事后点一次不该算成「拖到现在」 */
+      if (v) m.lateReason = v;
+      return false;
+    }
+    const now = Date.now();
+    if (now <= m.dueAt) {
+      /* 根本没拖过（完成得比截止早）：只留原因，不记账 */
+      if (v) m.lateReason = v;
+      return false;
+    }
+    /* 光写原因不记账 = 这条备忘在延期统计里隐身（用户真实遇到的「KBS英文论文润色」：
+       lateReason 写着「中秋节休假」，lateCount 却是 0，既没有「延期 N 次」也进不了统计）。
+       时长优先用真实完成时间（doneAt 现在会存盘），没有再退到「截止到现在」。 */
+    const end = (+m.doneAt > m.dueAt) ? +m.doneAt : now;
+    if (!Array.isArray(m.lateLog)) m.lateLog = [];
+    m.lateOpen = true;
+    m.lateCount = (+m.lateCount || 0) + 1;
+    m.lateMs = Math.max(1, end - m.dueAt);
+    m.lateLog.push({ at: now, ms: m.lateMs, text: v });
+    if (m.lateLog.length > 20) m.lateLog = m.lateLog.slice(-20);
+    if (v) m.lateReason = v;
     return true;
   }
 
@@ -2040,6 +2083,9 @@
             done: !!m.done,
             at: +m.at || Date.now(),
             dueAt: +m.dueAt || 0,
+            /* 完成时间也得存住 —— 以前这里漏了它，重启一次就丢，
+               于是「完成得比截止晚多少」永远算不出来，补原因只能按「截止到现在」估。 */
+            doneAt: +m.doneAt || 0,
             remindBefore: +m.remindBefore || 0,
             remindEvery: +m.remindEvery || 0,
             remindAt: +m.remindAt || 0,
@@ -2060,6 +2106,20 @@
             o.lateReason = '';
             o.lateOpen = false;
             o.lateLog = [];
+          } else if (o.dueAt && !hasLateRecord(o) &&
+                     (o.lateReason || o.lateLog.some(function (x) { return x && x.text; }))) {
+            /* 反向修补：写过年期原因、却没记上账的。老的「事后补原因」只存原因不记账，
+               这条备忘就会在延期账上整条隐身 —— 没有「延期 N 次」、进不了统计卡，
+               又因为有原因而不再提示补原因（用户真实遇到的：「KBS英文论文润色」写着
+               原因「中秋节休假」，lateCount 却是 0）。写过原因就说明用户认过这次延期，
+               给它补一笔；时长按「截止 → 完成（有完成时间就用它）/ 现在」算。 */
+            const end = (+o.doneAt > o.dueAt) ? +o.doneAt : Date.now();
+            o.lateCount = 1;
+            o.lateMs = Math.max(1, end - o.dueAt);
+            o.lateOpen = true;
+            if (!o.lateLog.length) {
+              o.lateLog = [{ at: Date.now(), ms: o.lateMs, text: o.lateReason || '' }];
+            }
           }
           return o;
         });
