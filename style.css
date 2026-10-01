@@ -402,17 +402,18 @@ mark.ax-hit{
   background:rgba(217,161,95,.18);border:1px solid rgba(217,161,95,.45);
   color:#B9762A;font-size:11.5px;font-weight:700;
 }
-/* ---- 延期统计（备忘页顶部，点一下展开明细） ---- */
+/* ---- 延期统计（备忘列表最下面的小尾巴：平时低调，点一下展开明细） ---- */
 .late-stat{
-  margin:0 0 10px;padding:9px 12px;border-radius:12px;cursor:pointer;
-  background:rgba(217,161,95,.14);border:1px solid rgba(217,161,95,.42);
-  color:#8a6a2c;font-size:12.5px;line-height:1.7;user-select:none;
+  margin:8px 0 0;padding:7px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.35);
+  color:#A9A49B;font-size:11.5px;line-height:1.6;
 }
-.late-stat b{color:#B9762A}
-.late-stat .ls-toggle{float:right;color:#a8895c}
+.late-stat:hover{color:#8a6a2c}
+.late-stat b{color:#B9762A;font-weight:600}
+.late-stat .ls-toggle{float:right;color:#c3bcb2}
 .late-stat-list{
-  margin:0 0 10px;padding:8px 10px;border-radius:12px;
-  background:rgba(255,255,255,.62);border:1px dashed rgba(217,161,95,.45);
+  margin:6px 0 0;padding:8px 10px;border-radius:10px;max-height:170px;overflow:auto;
+  background:rgba(255,255,255,.55);border:1px dashed rgba(217,161,95,.35);
 }
 .late-row{display:flex;gap:8px;align-items:baseline;padding:5px 2px;font-size:12.5px;color:#5E6B60}
 .late-row + .late-row{border-top:1px dashed rgba(217,161,95,.28)}

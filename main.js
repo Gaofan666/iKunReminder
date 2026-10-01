@@ -959,6 +959,15 @@ function createWindow() {
               'var arr=[];for(var i=0;i<rs.length;i++)arr.push(rs[i].textContent.replace(/\\s+/g," ").trim());' +
               'return {明细显示:!l.hidden,条数:rs.length,行:arr};})()', true);
             diagLog('late-3-明细', detail);
+
+            /* ④ 位置和长相：统计卡要挂在列表【下面】，而且得低调（字号比正文小、没有底色），
+               不能压在备忘列表上面抢位置 */
+            const place = await win.webContents.executeJavaScript(
+              '(function(){var l=document.getElementById("memoList"),s=document.getElementById("memoLateStat");' +
+              'var cs=getComputedStyle(s);' +
+              'return {在列表下面:!!(l.compareDocumentPosition(s)&Node.DOCUMENT_POSITION_FOLLOWING),' +
+              ' 字号:cs.fontSize,没有底色:cs.backgroundColor==="rgba(0, 0, 0, 0)"};})()', true);
+            diagLog('late-4-低调位置', place);
           }
           /* ============ 待办 / 备忘分类（--diag-cat） ============
              1) 在设置页真建两个分类（工作 / 学习）→ 管理区两行 + 存进 localStorage；
@@ -1084,6 +1093,7 @@ function createWindow() {
             const T_C = '【自检】补原因A';
             const T_D = '【自检】补原因B';
             const T_E = '【自检】没延期C';
+            const T_F = '【自检】没延期D';
             /* hoursAgo > 0 = 截止在过去（会弹提醒）；负数 = 截止在未来 */
             const mk = function (text, hoursAgo) {
               return '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
@@ -1106,8 +1116,9 @@ function createWindow() {
                 'if(!m)return {没找到:true};' +
                 'var rows=document.querySelectorAll(".memo-item");' +
                 'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + text + '")>=0;});' +
-                'return {完成:m.done,延期次数:m.lateCount||0,原因:m.lateReason||"",' +
-                ' 卡片上有补原因:!!(row&&row.querySelector("[data-role=why]"))};})()';
+                'return {完成:m.done,延期次数:m.lateCount||0,拖了毫秒:m.lateMs||0,原因:m.lateReason||"",' +
+                ' 卡片上有补原因:!!(row&&row.querySelector("[data-role=why]")),' +
+                ' 卡片上有延期标:!!(row&&row.textContent.indexOf("延期 ")>=0)};})()';
             };
             const fillOpen = '(function(){var ov=document.getElementById("lateFillOverlay");' +
               'return {弹窗开着:!ov.hidden,' +
@@ -1184,13 +1195,55 @@ function createWindow() {
               结果: await jsw(readM(T_E))
             };
 
+            /* ④ 没过期、但提前提醒弹了出来（截止在未来）→ 点「10 分钟后再说」：
+               不该记延期、不该标「延期 N 次」、也不该冒出「补原因」。
+               老 bug 就出在这条路径上 —— 这里会记一笔 lateMs=0 的假延期，
+               于是没过期的备忘全被标成「延期 1 次」还要补原因。 */
+            await jsw(mk(T_F, -0.1));
+            await waitW(3900);
+            const earlyF = await jsw('(function(){var b=document.getElementById("lateBox");' +
+              'return {弹窗开着:!document.getElementById("overlay").hidden,' +
+              ' 标题:document.getElementById("alertTitle").textContent,' +
+              ' 逾期原因块显示:!b.hidden};})()');
+            await jsw('document.getElementById("alertSnooze").click(); true');
+            await waitW(500);
+            const snoozeF = await jsw(readM(T_F));
+            out['4-没过期不记延期'] = {
+              提前提醒时: earlyF, 推后之后: snoozeF,
+              次数是零: snoozeF.延期次数 === 0,
+              也没标延期: snoozeF.卡片上有延期标 === false,
+              也没要补原因: snoozeF.卡片上有补原因 === false
+            };
+
+            /* ⑤ 老数据里的「假延期」（lateCount 有值、lateMs 是 0）读进来就该自动清掉，
+               不能还挂着「延期 N 次」要人补原因 —— 这是升级后已经存在的备忘能不能恢复的关键。 */
+            const T_G = '【自检】老数据F';
+            await jsw(
+              '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'raw.memos=raw.memos||[];' +
+              'raw.memos.push({id:"diag-fake-late",text:"' + T_G + '",done:false,at:Date.now(),' +
+              ' dueAt:Date.now()+86400000,remindBefore:0,remindEvery:0,remindAt:0,cat:"",' +
+              ' lateCount:1,lateMs:0,lateReason:"",lateOpen:true,lateLog:[{at:Date.now(),ms:0,text:""}]});' +
+              'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()');
+            win.webContents.reload();
+            await waitW(2600);
+            const fakeG = await jsw(
+              '(function(){var rows=document.querySelectorAll(".memo-item");' +
+              'var row=Array.prototype.find.call(rows,function(r){return r.textContent.indexOf("' + T_G + '")>=0;});' +
+              'return {行在:!!row,卡片上有延期标:!!(row&&row.textContent.indexOf("延期 ")>=0),' +
+              ' 卡片上有补原因:!!(row&&row.querySelector("[data-role=why]"))};})()');
+            out['5-老数据假延期自动清掉'] = {
+              清理后: fakeG,
+              两样都没了: fakeG.卡片上有延期标 === false && fakeG.卡片上有补原因 === false
+            };
+
             /* 收尾：把自检造的备忘清掉 */
             await jsw(
               '(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
               'var keep=(raw.memos||[]).filter(function(x){return x.text.indexOf("【自检】")!==0;});' +
               'localStorage.setItem("kunkun.todos.v1",JSON.stringify({memos:keep,todos:raw.todos||[]}));' +
               'return true;})()');
-            out['4-清理'] = { 说明: '自检数据已清掉' };
+            out['6-清理'] = { 说明: '自检数据已清掉' };
             diagLog('why', out);
           }
           /* 桌面日历端到端自检：

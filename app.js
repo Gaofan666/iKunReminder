@@ -1197,7 +1197,8 @@
      写过一次就不再问 —— 补填是帮忙，不能变成骚扰。 */
   function needLateReason(m) {
     if (!m || !m.dueAt) return false;
-    if (!(+m.lateCount > 0 || Date.now() > m.dueAt)) return false;
+    /* 真的延期过（有 lateMs 的记录），或者现在已经过了截止 —— 后者是「正拖着」，也该问一句 */
+    if (!(hasLateRecord(m) || Date.now() > m.dueAt)) return false;
     if (m.lateReason) return false;
     if (Array.isArray(m.lateLog) && m.lateLog.some(function (x) { return x && x.text; })) return false;
     return true;
@@ -1314,10 +1315,16 @@
      刷新到最新，不再加次数。why 不传就从提醒弹窗那个输入框取。 */
   function recordMemoLate(m, why) {
     if (!m || !m.dueAt) return false;
+    const now = Date.now();
+    /* 「没真的过截止」就不算延期，直接不记 —— 这是唯一的硬防线，下面所有调用点都靠它兜底。
+       以前没有这一句：截止前的提前提醒弹出时点「我知道了 / 10 分钟后再说」也会记一笔，
+       那时 lateMs 算出来是 0，于是没过期的备忘被标成「延期 1 次」、还被要求补原因，
+       而统计卡按 lateMs>0 过滤又把它排除掉，「卡片说延期、统计里没有」就是这么来的。
+       真延期过一定有 lateMs > 0。 */
+    if (now <= m.dueAt) return false;
     if (why === undefined) why = lateInputVal();
     const reason = String(why || '').trim().slice(0, 60);
-    const now = Date.now();
-    const ms = Math.max(0, now - m.dueAt);
+    const ms = now - m.dueAt;
     if (!Array.isArray(m.lateLog)) m.lateLog = [];
     if (reason) m.lateReason = reason;
     if (m.lateOpen) {
@@ -1335,10 +1342,18 @@
     return true;
   }
 
-  /* 延期统计：只算已经记过延期（处理过逾期提醒）的备忘 */
+  /* 真的延期过吗：记过延期 **并且** 确实拖了时间（lateMs > 0）。
+     必须是两个条件 —— 老版本会把「没过期」的也记成延期（lateCount 加了但 lateMs = 0），
+     光看 lateCount 的话，卡片上就会冒出「延期 N 次」和补原因提示。
+     卡片小标、补原因提示、延期统计卡统一走这一个判断，免得三处口径不一致。 */
+  function hasLateRecord(m) {
+    return !!m && (+m.lateCount || 0) > 0 && (+m.lateMs || 0) > 0;
+  }
+
+  /* 延期统计：只算真的延期过的备忘 */
   function lateStatRows() {
     return memos
-      .filter(function (m) { return (+m.lateCount || 0) > 0 && (+m.lateMs || 0) > 0; })
+      .filter(hasLateRecord)
       .map(function (m) { return { m: m, ms: +m.lateMs || 0, why: m.lateReason || '' }; })
       .sort(function (a, b) { return b.ms - a.ms; });
   }
@@ -1554,7 +1569,9 @@
     if (alertKind === 'memo') {
       const mm = memoById(id);
       if (mm) {
-        recordMemoLate(mm);            // 又往后推了一次，同样算延期
+        /* 只有真的过了截止才算延期（提前提醒时点「10 分钟后再说」不算），
+           判断交给 recordMemoLate 兜底，这里不再自己算一遍 */
+        recordMemoLate(mm);
         mm.remindAt = Date.now() + 10 * 60 * 1000;
         saveTodoStore();
         renderMemos();
@@ -2003,7 +2020,7 @@
       const raw = JSON.parse(localStorage.getItem(STORE_KEY.todos) || '{}');
       if (Array.isArray(raw.memos)) {
         memos = raw.memos.filter(m => m && m.text).map(function (m) {
-          return {
+          const o = {
             id: String(m.id || newLocalId('m')),
             text: String(m.text).slice(0, 500),
             done: !!m.done,
@@ -2020,6 +2037,17 @@
             lateOpen: !!m.lateOpen,
             lateLog: Array.isArray(m.lateLog) ? m.lateLog.slice(-20) : []
           };
+          /* 修补老数据里的「假延期」：早先的 bug 会把截止前点「10 分钟后再说」也记一笔，
+             这些记录 lateCount 有值、lateMs 却是 0（没真拖时间）。留着的话卡片会显示
+             「延期 N 次」、还一直要人补原因。真延期过一定有 lateMs > 0，所以整组清掉。 */
+          if ((+o.lateCount || 0) > 0 && !((+o.lateMs || 0) > 0)) {
+            o.lateCount = 0;
+            o.lateMs = 0;
+            o.lateReason = '';
+            o.lateOpen = false;
+            o.lateLog = [];
+          }
+          return o;
         });
       }
       if (Array.isArray(raw.todos)) {
@@ -2769,7 +2797,7 @@
         ct.appendChild(document.createTextNode(cm.name));
         meta.insertBefore(ct, meta.firstChild);
       }
-      if (+m.lateCount > 0) {
+      if (hasLateRecord(m)) {
         const tag = document.createElement('span');
         tag.className = 'late-tag';
         tag.textContent = '延期 ' + m.lateCount + ' 次';
