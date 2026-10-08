@@ -2036,14 +2036,42 @@
      这样基准屏上的观感与老版【完全一致】，跨屏也精确恒定。 */
   let layoutH = DESIGN_H;
   let measured = false;
+  /* 量「主界面」那一页的布局高。
+     ⚠️ 不能直接量当前打开的那一页：#app 就是主界面本身（见 TAB_PAGES.home），
+     停在待办/日记/科研/设置页时它是 hidden 的、scrollHeight 量出来是 0，
+     于是 layoutH 会在「实测值」和「默认 801」之间来回跳 —— 界面缩放跟着差 3% 左右，
+     同一台机器不同次启动观感不一致（用户报的「有时候字体过小」有这一份）。
+     所以量之前先把主界面单独露出来，量完把原来的显示状态还回去。 */
   function measureLayout() {
     const app = $('#app');
     if (!app) return;
-    const saved = app.style.transform;
-    app.style.transform = 'none';            // 量的是布局尺寸，必须先把缩放摘掉
-    const natural = app.scrollHeight || app.offsetHeight || 0;
-    app.style.transform = saved;
-    if (natural > DESIGN_H + 24) layoutH = natural;   // 只是变高才采用（含 24px 容差）
+    let restored = null;
+    try {
+      /* 只留主界面可见：其它页先统统藏起来（记下原来的状态，量完还原） */
+      const pages = document.querySelectorAll('#view > main.page');
+      restored = [];
+      for (let i = 0; i < pages.length; i++) {
+        restored.push({ el: pages[i], hidden: pages[i].hidden });
+        pages[i].hidden = true;
+      }
+      const appWasHidden = app.hidden;
+      app.hidden = false;
+      const saved = app.style.transform;
+      app.style.transform = 'none';            // 量的是布局尺寸，必须先把缩放摘掉
+      const natural = app.scrollHeight || app.offsetHeight || 0;
+      app.style.transform = saved;
+      app.hidden = appWasHidden;
+      /* 只认「设计真的长高了」，而且最多按 +20% 采信：
+         列表里条目多了也会把这一页撑高，那是数据不是设计 —— 照单全收会把整个界面缩小。 */
+      const cap = Math.round(DESIGN_H * 1.2);
+      if (natural > DESIGN_H + 24) layoutH = Math.min(natural, cap);
+    } catch (e) {
+      /* 量不出来就保持默认设计高，绝不让它把界面缩小 */
+    }
+    if (restored) {
+      restored.forEach(function (r) { r.el.hidden = r.hidden; });
+    }
+    document.documentElement.dataset.layoutH = String(layoutH);   // 自检与排障读这个值
   }
 
   /* 宠物本体那一块的尺寸：只在「进入宠物模式」和「改宠物大小」时量一次。
@@ -2073,6 +2101,58 @@
     const topChrome = tbShown ? tbH : 0;
     const availW = Math.max(1, window.innerWidth);
     const availH = Math.max(1, window.innerHeight - topChrome);
+
+    /* ---------------------------------------------------------- 顶栏自适应
+       顶栏是「品牌 + 5 个标签 + 日期/时钟/窗口按钮」的一条 flex，标签按钮
+       white-space:nowrap 又不会收缩 —— 窗口比设计宽窄的时候它们就会互相压住
+       （用户报的「导航栏按钮重叠」）。而窗口确实可能比设计窄：开在分辨率/缩放
+       较小的那块屏上时，主进程会把窗口夹进那块屏的工作区（尺寸本来就存不住那么大），
+       用户自己把窗口拉小也一样。
+       做法：先按原尺寸量一遍「顶栏到底需要多宽」，再按实际可用宽求一个缩放比，
+       把它写进 --tb-k，CSS 里所有顶栏尺寸都乘这个系数（自校准，不写死数字）；
+       缩到地板 0.78 还塞不下，就依次让出日期、版本号（最不重要的先走）。
+       正常宽度（≥ 需求）时 --tb-k 正好是 1，观感和以前一模一样。 */
+    const tbK = function () {
+      if (!tbShown || !tb) return 1;
+      const setK = function (v) {
+        document.documentElement.style.setProperty('--tb-k', v.toFixed(4));
+      };
+      const date = $('#dateLine');
+      const ver = $('#tbVer');
+      const name = tb.querySelector('.tb-name');
+      /* 窗口变宽时要把让出去的东西收回来，所以每次先全部还原 */
+      if (date) date.hidden = false;
+      if (ver) ver.hidden = false;
+      if (name) name.hidden = false;
+      const need = function () {
+        const left = tb.querySelector('.tb-left');
+        const right = tb.querySelector('.tb-right');
+        /* 标签那一栏不能用 scrollWidth（它是被 flex 撑开的宽度，不是内容需要的宽度），
+           直接累加每个按钮的实际宽 + 间隙 —— 这样「放得下就不缩」，只在真放不下时才收 */
+        const btns = tb.querySelectorAll('#tabbar .tab-btn');
+        let bar = 0;
+        for (let i = 0; i < btns.length; i++) bar += btns[i].offsetWidth;
+        if (btns.length > 1) bar += 2 * (btns.length - 1);
+        const cs = getComputedStyle(tb);
+        const gap = (parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0) * 2;
+        const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+        return (left ? left.offsetWidth : 0) + bar + (right ? right.offsetWidth : 0) + gap + pad;
+      };
+      const fitOnce = function () {
+        const n = Math.max(1, need());
+        const v = Math.max(0.78, Math.min(1, availW / n));
+        setK(v);
+        return n * v <= availW + 1;
+      };
+      setK(1);
+      if (fitOnce()) return 1;
+      if (date) { date.hidden = true; if (fitOnce()) return 0; }
+      if (ver) { ver.hidden = true; if (fitOnce()) return 0; }
+      if (name) name.hidden = true;
+      fitOnce();
+      return 0;
+    };
+    tbK();
 
     /* 内容高：只用「主界面实测的设计高」这个固定值，故意不看 view.scrollHeight。
        为什么：设置页那张卡的高度是由 --page-view-h 控制的，而 --page-view-h = availH / s。

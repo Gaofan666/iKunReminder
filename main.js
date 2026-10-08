@@ -124,6 +124,8 @@ const DIAG = (function () {
     if (a === '--diag-cat') out.cat = true;
     /* --diag-why：延期原因补填端到端自检（完成时补填 / 跳过 / 事后从卡片补） */
     if (a === '--diag-why') out.why = true;
+    /* --diag-dpi：双屏/混合缩放下界面缩放与顶栏自检（字体过小 / 导航栏重叠） */
+    if (a === '--diag-dpi') out.dpi = true;
     /* --diag-count：逾期 / 延期两个计数器的口径自检（按用户定的规矩逐条验） */
     if (a === '--diag-count') out.count = true;
     /* --diag-sleep：睡眠/息屏后「休息」计时重置自检（≥5 分钟算休息过 → 唤醒重置） */
@@ -174,6 +176,8 @@ let diagAlertStage = 0;           // 弹窗自检：要重载两次数据，用�
 let diagMusicStage = 0;           // 提醒音乐自检：换成自定义音乐/坏路径/还原各要重载一次
 let diagBubbleStage = 0;          // 气泡自检：种待办 → 重载 → 看气泡里有没有今日待办
 let diagToneStage = 0;            // 「提示音放完才放音乐」自检：塞完提示音要重载一次
+let diagDpiStage = 0;             // 双屏/缩放自检：要重载一次（从「停在设置页」的状态启动）
+let diagDpiKeep = null;           // 双屏/缩放自检：重载前记下的窗口尺寸与页面
 /* 自检产物的落脚点：和 diagLog 一样，打包后 __dirname 在 app.asar 里写不进去，
    依次退回「exe 同级目录」和 userData，保证打包版的自检也能把文件落下来。 */
 function diagFilePath(name) {
@@ -347,6 +351,10 @@ function applyDisplay(force) {
   const wantX = Math.min(Math.max(b.x, wa.x), wa.x + Math.max(0, wa.width - wantW) - inset);
   const wantY = Math.min(Math.max(b.y, wa.y), wa.y + Math.max(0, wa.height - wantH) - inset);
   if (wantW !== b.width || wantH !== b.height || wantX !== b.x || wantY !== b.y) {
+    /* 尺寸被夹小了：这是环境逼的，别让它写进窗口状态（见 scheduleWinStateSave） */
+    if (wantW !== b.width || wantH !== b.height) {
+      appImposedSize = { width: wantW, height: wantH };
+    }
     win.setBounds({ x: wantX, y: wantY, width: wantW, height: wantH });
   }
 
@@ -481,12 +489,29 @@ function winStateStillUsable(st) {
 
 /* resize / move 结束后把窗口状态写盘（节流，避免拖动时疯狂写盘） */
 let winStateSaveTimer = null;
+/* 「这个尺寸是程序自己夹出来的」（不是用户选的）——开在小分辨率那块的屏上时，
+   我们不得不把窗口夹进那块屏的工作区，但那个小尺寸是环境的产物：一旦存下来，
+   下次在大屏上打开也变成那个小窗口（用户报的「有时候字体过小 / 导航栏按钮重叠」
+   就是这么来的：窗口被夹小 → 小尺寸存盘 → 换回大屏还按小尺寸开）。
+   所以存盘时如果发现「当前尺寸正好就是我们强加的那个」，就只更新位置、
+   尺寸沿用上一次真正由用户定下的值。用户一旦自己拖过大小，尺寸就对不上了，
+   那条路径自然恢复正常（他自己定的大小照存不误）。 */
+let appImposedSize = null;
 function scheduleWinStateSave() {
   if (winStateSaveTimer) clearTimeout(winStateSaveTimer);
   winStateSaveTimer = setTimeout(function () {
     winStateSaveTimer = null;
     if (win && !win.isDestroyed() && !win.isMinimized()) {
-      saveWinState(win.getBounds());
+      const b = win.getBounds();
+      if (appImposedSize && b.width === appImposedSize.width && b.height === appImposedSize.height) {
+        const prev = loadWinState();
+        if (prev && prev.width > 0 && prev.height > 0 &&
+          (prev.width > b.width || prev.height > b.height)) {
+          saveWinState({ x: b.x, y: b.y, width: prev.width, height: prev.height });
+          return;
+        }
+      }
+      saveWinState(b);
     }
   }, 600);
 }
@@ -538,11 +563,33 @@ function createWindow() {
     }
     : null;
 
+  /* 开窗之前先按「窗口会落在哪块屏」夹一次：两块屏分辨率/缩放不一样时，上次在另一块屏
+     上存下的尺寸可能比这块屏的工作区还大 —— 等显示出来再夹会看到「先大后小」的跳变，
+     直接从合适的尺寸开出来更稳。夹小只改尺寸（位置照旧保留，还是按存档走），
+     并且记下「这个尺寸是程序夹的」，不让它写回窗口状态（见 scheduleWinStateSave）。 */
+  const tgt = savedBox
+    ? displayOf(savedBox.x + savedBox.width / 2, savedBox.y + 20)
+    : d;
+  const openWa = tgt.workArea;
+  const openInset = Math.round(10 * ((tgt && tgt.scaleFactor) || 1));
+  const baseW = savedBox ? savedBox.width : box.width;
+  const baseH = savedBox ? savedBox.height : box.height;
+  const fitW = Math.min(baseW, Math.max(1, openWa.width - openInset));
+  const fitH = Math.min(baseH, Math.max(1, openWa.height - openInset));
+  const openBox = UI.clampBox(
+    savedBox ? savedBox.x : openWa.x + Math.round((openWa.width - fitW) / 2),
+    savedBox ? savedBox.y : openWa.y + Math.round((openWa.height - fitH) / 2),
+    fitW, fitH, openWa
+  );
+  if (fitW !== baseW || fitH !== baseH) {
+    appImposedSize = { width: openBox.width, height: openBox.height };
+  }
+
   win = new BrowserWindow({
-    x: savedBox ? savedBox.x : undefined,
-    y: savedBox ? savedBox.y : undefined,
-    width: savedBox ? savedBox.width : box.width,
-    height: savedBox ? savedBox.height : box.height,
+    x: openBox.x,
+    y: openBox.y,
+    width: openBox.width,
+    height: openBox.height,
     minWidth: box.minWidth,
     minHeight: box.minHeight,
     frame: false,
@@ -1606,6 +1653,206 @@ function createWindow() {
               'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()');
             outC['10-清理'] = { 说明: '自检数据已清掉' };
             diagLog('count', outC);
+          }
+
+          /* ============ 双屏 / 混合缩放：界面缩放与顶栏（--diag-dpi） ============
+             用户报的：两块分辨率不同的屏，打开时「有时候界面字体过小 / 导航栏按钮重叠」。
+             把三条可能的机制逐条量出来：
+               ① 顶栏在窄窗口下会不会互相压住（标签按钮矩形两两求交 + 有没有越出窗口边界）；
+               ② 界面缩放（layoutH）会不会跟着「上次停在哪个页面」变 —— 停在设置页时
+                  #app 是 hidden 的，老代码量到 0 → layoutH 退回默认 801，界面跟着差 3%；
+               ③ 窗口被工作区夹小之后，那个小尺寸会不会写回窗口状态 —— 会的话它就跟着
+                  用户跑到大屏上，下次在大屏打开也是个小窗口（这条正是「过小 + 重叠」的源头）。 */
+          if (DIAG.dpi) {
+            const waitP = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+            const jswP = function (code) { return win.webContents.executeJavaScript(code, true); };
+            const probeP = function () {
+              return jswP('(function(){' +
+                'var t=document.getElementById("titlebar");' +
+                'var cs=getComputedStyle(document.documentElement);' +
+                'var view=document.getElementById("view");' +
+                'var m=/scale\\(([0-9.]+)\\)/.exec(view.style.transform||"");' +
+                'var btns=Array.prototype.slice.call(document.querySelectorAll("#tabbar .tab-btn"));' +
+                'var rects=btns.map(function(b){var r=b.getBoundingClientRect();' +
+                'return {n:b.textContent.trim(),l:+r.left.toFixed(1),r:+r.right.toFixed(1)};});' +
+                'var ov=[];' +
+                'for(var i=0;i<rects.length;i++){for(var j=i+1;j<rects.length;j++){' +
+                'var x=Math.min(rects[i].r,rects[j].r)-Math.max(rects[i].l,rects[j].l);' +
+                'if(x>0.5)ov.push(rects[i].n+"×"+rects[j].n+"="+x.toFixed(1));}}' +
+                'var kids=Array.prototype.slice.call(t.children);' +
+                'var right=Math.max.apply(null,kids.map(function(c){return c.getBoundingClientRect().right;}));' +
+                'var left=Math.min.apply(null,kids.map(function(c){return c.getBoundingClientRect().left;}));' +
+                /* 设置页左侧那条导航（.set-nav，6 个按钮）—— 它也是一种「导航栏」，
+                   量它有没有按钮互相压住、有没有溢出自己的容器 */
+                'var nav=Array.prototype.slice.call(document.querySelectorAll("#setNav .set-nav-item"));' +
+                'var nr=nav.map(function(b){var r=b.getBoundingClientRect();' +
+                'return {n:b.textContent.trim(),t:+r.top.toFixed(1),b:+r.bottom.toFixed(1),l:+r.left.toFixed(1),r:+r.right.toFixed(1)};});' +
+                'var nov=[];' +
+                'for(var i=0;i<nr.length;i++){for(var j=i+1;j<nr.length;j++){' +
+                'var oh=Math.min(nr[i].b,nr[j].b)-Math.max(nr[i].t,nr[j].t);' +
+                'var ow=Math.min(nr[i].r,nr[j].r)-Math.max(nr[i].l,nr[j].l);' +
+                'if(oh>0.5&&ow>0.5)nov.push(nr[i].n+"×"+nr[j].n+"="+oh.toFixed(1));}}' +
+                'var nb=document.getElementById("setNav");' +
+                'return {窗口:window.innerWidth+"x"+window.innerHeight,' +
+                ' 顶栏缩放:cs.getPropertyValue("--tb-k").trim(), 内容缩放:m?parseFloat(m[1]):0,' +
+                ' layoutH:document.documentElement.dataset.layoutH||"", 标签重叠:ov,' +
+                ' 右边越界:+(right-window.innerWidth).toFixed(1), 左边越界:+(0-left).toFixed(1),' +
+                ' 设置导航按钮数:nr.length, 设置导航重叠:nov,' +
+                ' 设置导航溢出: nb?+(nb.scrollHeight-nb.clientHeight).toFixed(1):0,' +
+                ' 设置导航高: nb?nb.clientHeight:0};})()');
+            };
+            /* 主界面自己的自然高（把其它页藏起来单独量，跟 measureLayout 同一套算法） */
+            const homeNaturalP = function () {
+              return jswP('(function(){var app=document.getElementById("app");' +
+                'var pages=Array.prototype.slice.call(document.querySelectorAll("#view > main.page"));' +
+                'var was=pages.map(function(p){return p.hidden;});' +
+                'pages.forEach(function(p){p.hidden=true;});' +
+                'var wa=app.hidden;app.hidden=false;' +
+                'var tr=app.style.transform;app.style.transform="none";' +
+                'var h=app.scrollHeight||app.offsetHeight||0;' +
+                'app.style.transform=tr;app.hidden=wa;' +
+                'pages.forEach(function(p,i){p.hidden=was[i];});return h;})()');
+            };
+
+            if (diagDpiStage === 0) {
+              diagDpiStage = 1;
+              const homeH = await homeNaturalP();
+              const tabNow = await jswP('(function(){try{return (JSON.parse(localStorage.getItem("kunkun.ui.v1")||"{}").tab)||"home";}catch(e){return "home";}})()');
+              diagDpiKeep = { bounds: win.getBounds(), tab: tabNow, homeH: homeH };
+
+              /* ① 顶栏在各种窗口宽度下都不许重叠、不许越出窗口 */
+              const widths = [1180, 1040, 920, 820, 760];
+              const rows = [];
+              for (let i = 0; i < widths.length; i++) {
+                const b0 = win.getBounds();
+                win.setBounds({
+                  x: b0.x, y: b0.y,
+                  width: widths[i], height: Math.max(560, Math.min(b0.height, 849))
+                });
+                await waitP(500);
+                const p = await probeP();
+                p.目标宽 = widths[i];
+                rows.push(p);
+              }
+              win.setBounds(diagDpiKeep.bounds);
+              await waitP(500);
+              /* 对照组：把 --tb-k 强制回 1 就是「修复前的顶栏」（尺寸不随窗口收），
+                 在最窄的 760 宽下量一次 —— 那时标签按钮是压在一起的。 */
+              const b1 = win.getBounds();
+              win.setBounds({ x: b1.x, y: b1.y, width: 760, height: Math.max(560, Math.min(b1.height, 849)) });
+              await waitP(500);
+              await jswP('document.documentElement.style.setProperty("--tb-k","1");true');
+              await waitP(300);
+              const preFix = await probeP();
+              win.setBounds(diagDpiKeep.bounds);
+              await waitP(500);
+              diagLog('dpi-0-顶栏', {
+                各宽度: rows,
+                全程无重叠: rows.every(function (r) { return r.标签重叠.length === 0; }),
+                全程没越界: rows.every(function (r) { return r.右边越界 <= 0.5 && r.左边越界 <= 0.5; }),
+                修复前的对照_760宽不缩放: { 标签重叠: preFix.标签重叠, 重叠对数: preFix.标签重叠.length, 右边越界: preFix.右边越界 },
+                主界面自然高: homeH, 启动时停在: tabNow
+              });
+
+              /* ② 种上「停在设置页」再重载：下次启动就该是这个状态。
+                 用主进程 reload（页面里 location.reload 会让这次执行上下文失效、promise 直接失败） */
+              await jswP('(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.ui.v1")||"{}");}catch(e){}' +
+                'raw.tab="settings";localStorage.setItem("kunkun.ui.v1",JSON.stringify(raw));return true;})()');
+              win.webContents.reload();
+              await waitP(8000);
+            } else {
+              /* 重载后：程序是从「停在设置页」的状态启动的 */
+              const curTab = await jswP('(function(){var ids=["app","pageTodo","pageDiary","pageArxiv","pageSettings"];' +
+                'for(var i=0;i<ids.length;i++){var e=document.getElementById(ids[i]);if(e&&!e.hidden)return ids[i];}' +
+                'return "?";})()');
+              const homeH2 = await homeNaturalP();
+              const p2 = await probeP();
+              /* 先落关键结论（这一段是「重载后台」里跑的，后面的等待有可能被退出流程截断） */
+              diagLog('dpi-1-重载后', {
+                启动时停在: curTab, 主界面自然高: homeH2, 现在的layoutH: p2.layoutH, 内容缩放: p2.内容缩放,
+                layoutH等于主界面高: String(p2.layoutH) === String(homeH2),
+                顶栏缩放: p2.顶栏缩放, 标签重叠: p2.标签重叠,
+                设置导航: { 按钮数: p2.设置导航按钮数, 重叠: p2.设置导航重叠, 溢出: p2.设置导航溢出, 高: p2.设置导航高 }
+              });
+              /* ③ 被工作区夹小的尺寸不许写回窗口状态 */
+              saveWinState({ x: 60, y: 60, width: 1180, height: 849 });
+              const fakeKeep = DIAG.avail;
+              DIAG.avail = { w: 1000, h: 620 };      // 临时假装那块屏只有 1000×620 可用
+              applyDisplay(true);
+              await waitP(600);
+              scheduleWinStateSave();
+              await waitP(1200);
+              const clamped = win.getBounds();
+              let savedState = null;
+              try { savedState = JSON.parse(fs.readFileSync(winStateFile(), 'utf8')); } catch (e) { }
+              DIAG.avail = fakeKeep;
+
+              diagLog('dpi-2-夹出来的尺寸', {
+                夹取后窗口: clamped.width + 'x' + clamped.height,
+                存档里的尺寸: savedState ? (savedState.width + 'x' + savedState.height) : '(没有)',
+                夹出来的尺寸没落盘: !!savedState && savedState.width === 1180 && savedState.height === 849
+              });
+
+              /* ③ 真正换屏：把窗口挪到每一块显示器上各量一次（这段最接近实机场景 ——
+                 用户说的就是两块分辨率/缩放不一样的屏）。每块屏量完都走一遍 applyDisplay，
+                 跟「系统改缩放 / 插拔屏 / 从一块屏拖到另一块」是同一段代码。 */
+              const allDisp = screen.getAllDisplays();
+              const dispRows = [];
+              for (let i = 0; i < allDisp.length; i++) {
+                const dd = allDisp[i];
+                win.setBounds({
+                  x: dd.workArea.x + 40, y: dd.workArea.y + 40,
+                  width: Math.max(760, Math.min(1180, dd.workArea.width - 80)),
+                  height: Math.max(560, Math.min(849, dd.workArea.height - 80))
+                });
+                await waitP(700);
+                applyDisplay(true);
+                await waitP(500);
+                const p = await probeP();
+                dispRows.push({
+                  第几块屏: i + 1, 屏分辨率: dd.bounds.width + 'x' + dd.bounds.height,
+                  系统缩放: dd.scaleFactor, 工作区: dd.workArea.width + 'x' + dd.workArea.height,
+                  窗口: p.窗口, 内容缩放: p.内容缩放, 顶栏缩放: p.顶栏缩放, layoutH: p.layoutH,
+                  标签重叠: p.标签重叠, 设置导航重叠: p.设置导航重叠, 右边越界: p.右边越界
+                });
+              }
+              diagLog('dpi-4-每块屏各量一次', {
+                屏数: allDisp.length, 各屏: dispRows,
+                每块屏都无重叠: dispRows.every(function (r) {
+                  return r.标签重叠.length === 0 && r.设置导航重叠.length === 0;
+                })
+              });
+              if (diagDpiKeep && diagDpiKeep.bounds) win.setBounds(diagDpiKeep.bounds);
+              await waitP(300);
+              /* ④ 矮窗口（被小屏工作区夹矮时）下，设置页那条导航还正不正常 */
+              const bShort = win.getBounds();
+              const shortRows = [];
+              const shortSizes = [[1180, 700], [1180, 600], [900, 620]];
+              for (let i = 0; i < shortSizes.length; i++) {
+                win.setBounds({ x: bShort.x, y: bShort.y, width: shortSizes[i][0], height: shortSizes[i][1] });
+                await waitP(400);
+                const p = await probeP();
+                shortRows.push({
+                  尺寸: shortSizes[i][0] + 'x' + shortSizes[i][1], 内容缩放: p.内容缩放,
+                  标签重叠: p.标签重叠, 设置导航重叠: p.设置导航重叠,
+                  设置导航溢出: p.设置导航溢出, 设置导航高: p.设置导航高
+                });
+              }
+              if (diagDpiKeep && diagDpiKeep.bounds) win.setBounds(diagDpiKeep.bounds);
+              diagLog('dpi-3-矮窗口', {
+                各尺寸: shortRows,
+                导航没重叠: shortRows.every(function (r) { return r.设置导航重叠.length === 0; }),
+                导航没溢出: shortRows.every(function (r) { return r.设置导航溢出 <= 0.5; })
+              });
+
+              /* 还原页面和窗口尺寸，别把自检状态留在这儿 */
+              if (diagDpiKeep) {
+                await jswP('(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.ui.v1")||"{}");}catch(e){}' +
+                  'raw.tab=' + JSON.stringify(diagDpiKeep.tab || 'home') + ';' +
+                  'localStorage.setItem("kunkun.ui.v1",JSON.stringify(raw));return true;})()');
+                if (diagDpiKeep.bounds) win.setBounds(diagDpiKeep.bounds);
+              }
+            }
           }
           /* 桌面日历端到端自检：
              1) 用主界面【真实的】新增待办弹窗塞三条待办（高/中/低各一条，日期不同），

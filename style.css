@@ -103,12 +103,12 @@ body.anim-off *::after{animation-play-state:paused !important}
 /* ---------- 顶部标签页（并入标题栏：软件名+版本 | 三个标签 | 时间+按钮） ----------
    标签页现在是标题栏中间的 flex 项，不再单独占一条。 */
 .tabbar{
-  display:flex;align-items:center;gap:2px;
+  display:flex;align-items:center;gap:calc(2px * var(--tb-k,1));
   flex:1;min-width:0;
 }
 .tab-btn{
-  border:0;border-radius:9px;padding:6px 12px;
-  font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.3px;
+  border:0;border-radius:9px;padding:calc(6px * var(--tb-k,1)) calc(12px * var(--tb-k,1));
+  font-family:inherit;font-size:calc(13px * var(--tb-k,1));font-weight:600;letter-spacing:.3px;
   color:var(--dim);background:transparent;cursor:pointer;transition:.15s;
   white-space:nowrap;
 }
@@ -118,9 +118,10 @@ body.anim-off *::after{animation-play-state:paused !important}
   box-shadow:0 1px 0 var(--lake) inset, 0 1px 6px rgba(74,120,150,.12);
 }
 .tab-badge{
-  display:inline-block;min-width:17px;margin-left:6px;padding:1px 5px;
+  display:inline-block;min-width:calc(17px * var(--tb-k,1));margin-left:calc(6px * var(--tb-k,1));
+  padding:1px calc(5px * var(--tb-k,1));
   border-radius:9px;background:#e5484d;color:#fff;
-  font-size:11px;font-style:normal;font-weight:700;vertical-align:1px;
+  font-size:calc(11px * var(--tb-k,1));font-style:normal;font-weight:700;vertical-align:1px;
 }
 .page{padding-top:2px}
 
@@ -909,25 +910,27 @@ kbd{
 /* ---------- 顶部一条（合并标题栏 + 标签页） ----------
    左=软件名+版本，中=标签页（flex:1 占满中间），右=时间+窗口按钮。
    高度用 --tb-h：高 DPI 屏上按 1/缩放 缩，物理高度恒定。 */
+/* 顶栏尺寸全部乘 --tb-k（由 app.js 按「实际可用宽 ÷ 顶栏需要多宽」算出来）：
+   窗口比设计窄时整条一起收，标签按钮就不会互相压住。正常宽度下它是 1，观感不变。 */
 .titlebar{
   display:none;height:var(--tb-h,46px);flex:none;align-items:center;
-  padding:0 8px 0 12px;position:relative;z-index:40;
+  padding:0 calc(8px * var(--tb-k,1)) 0 calc(12px * var(--tb-k,1));position:relative;z-index:40;
   background:linear-gradient(180deg,#ffffff,#f4f7fd);
   border-bottom:1px solid var(--line);
   cursor:move;
-  gap:10px;
+  gap:calc(10px * var(--tb-k,1));
 }
 body.desktop .titlebar{display:flex;transform-origin:top left}
-.tb-left{display:flex;align-items:center;gap:8px;flex:none}
-.tb-ico{font-size:16px}
-.tb-name{font-size:12.5px;letter-spacing:1.2px;color:var(--text);font-weight:700}
-.tb-ver{font-size:11px;color:var(--dim);font-weight:600;background:rgba(74,120,150,.12);padding:1px 7px;border-radius:9px}
-.tb-right{display:flex;align-items:center;gap:6px;flex:none}
-.tb-date{font-size:12px;color:var(--dim);white-space:nowrap;margin-right:6px}
-.tb-clock{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
+.tb-left{display:flex;align-items:center;gap:calc(8px * var(--tb-k,1));flex:none}
+.tb-ico{font-size:calc(16px * var(--tb-k,1))}
+.tb-name{font-size:calc(12.5px * var(--tb-k,1));letter-spacing:1.2px;color:var(--text);font-weight:700}
+.tb-ver{font-size:calc(11px * var(--tb-k,1));color:var(--dim);font-weight:600;background:rgba(74,120,150,.12);padding:1px calc(7px * var(--tb-k,1));border-radius:9px}
+.tb-right{display:flex;align-items:center;gap:calc(6px * var(--tb-k,1));flex:none}
+.tb-date{font-size:calc(12px * var(--tb-k,1));color:var(--dim);white-space:nowrap;margin-right:calc(6px * var(--tb-k,1))}
+.tb-clock{font-size:calc(12px * var(--tb-k,1));color:var(--dim);font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
 .tb-btn{
-  width:34px;height:28px;border:0;border-radius:8px;background:transparent;
-  color:var(--dim);font-family:inherit;font-size:13px;cursor:pointer;transition:.15s;
+  width:calc(34px * var(--tb-k,1));height:calc(28px * var(--tb-k,1));border:0;border-radius:8px;background:transparent;
+  color:var(--dim);font-family:inherit;font-size:calc(13px * var(--tb-k,1));cursor:pointer;transition:.15s;
 }
 .tb-btn:hover{background:rgba(74,120,150,.12);color:var(--text)}
 .tb-close:hover{background:#D9534F;color:#fff}
