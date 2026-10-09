@@ -478,9 +478,18 @@ mark.ax-hit{
 }
 .cat-new-row input:focus{outline:none;border-color:rgba(62,154,168,.6)}
 .cat-new-row[hidden]{display:none}
-/* 待办页最下面那坨分类管理：展开后给它一点内边距，别贴着上面那条标题 */
-.cat-sec{margin:8px 0 0}
+/* 分类管理区：用一个大框把这块和下面的备忘列表分开。
+   以前只有 margin-top，展开后两层文字直接贴在一起，看不出边界（用户反馈）。 */
+.cat-sec{
+  margin:10px 0 12px;padding:10px 12px;border-radius:12px;
+  background:rgba(255,255,255,.55);
+  border:1px solid var(--line);
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset;
+}
 .cat-sec[hidden]{display:none}
+/* 框里第一条说明别在顶部再顶一段，最后一项也别在底部留一截空白 */
+.cat-sec > .set-desc:first-child{margin-top:0}
+.cat-sec > *:last-child{margin-bottom:0}
 .cat-manage{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
 .cat-item{
   display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;

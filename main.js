@@ -1159,6 +1159,9 @@ function createWindow() {
                   默认收着、点一下展开；设置页里不再有分类那一节。 */
             out['8-管理入口位置'] = await jsc(
               '(function(){var o={};' +
+              /* 先切到待办页：分类管理区和备忘列表都在 #pageTodo 里，
+                 页面藏着时 getBoundingClientRect 全是 0，量间距就没意义了 */
+              'var tab=document.getElementById("tabTodo");if(tab)tab.click();' +
               'var btn=document.getElementById("btnCatManage");' +
               'var addBtn=document.getElementById("btnAddMemo");' +
               'o.待办页里有管理区=!!document.querySelector("#pageTodo #catManage");' +
@@ -1180,6 +1183,12 @@ function createWindow() {
               'if(btn)btn.click();' +
               'o.点一下就展开=!!sec&&sec.hidden===false;' +
               'o.按钮字变了=!!btn&&btn.textContent.indexOf("收起")>=0;' +
+              /* 展开后必须有明确边界：一个框（边框 + 底色）+ 和下面备忘列表之间的间距 */
+              'var cs=getComputedStyle(sec);' +
+              'o.有框=cs.borderTopWidth!=="0px"&&cs.borderTopStyle!=="none";' +
+              'o.和列表有间隔=Math.round(document.getElementById("memoList").getBoundingClientRect().top' +
+              '-sec.getBoundingClientRect().bottom)>=6;' +
+              'o.有内边距=(parseFloat(cs.paddingTop)||0)>0;' +
               'if(btn)btn.click();' +
               'o.再点一下收起=!!sec&&sec.hidden===true;' +
               'return o;})()');
