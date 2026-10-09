@@ -19,7 +19,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v4.3</span>
+    <span class="tb-ver" id="tbVer">v4.4</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -149,9 +149,26 @@
   <section class="card todo-col">
     <div class="col-head">
       <h2>📌 备忘录</h2>
-      <button class="btn sm primary" id="btnAddMemo">＋ 新增备忘</button>
+      <!-- 分类管理：和「＋ 新增备忘」并排放在右边、同一套样式（分类是这一页两栏共用的东西，
+           摆在栏目头上一点就能点到，比塞进「设置」直观）。
+           注意：这两个按钮必须包一层，不然 .col-head 的 space-between 会把「分类」甩到中间。 -->
+      <div class="col-head-btns">
+        <button class="btn sm primary" id="btnCatManage" title="待办和备忘共用这一套分类：命名 / 配色 / 删除">🧩 分类</button>
+        <button class="btn sm primary" id="btnAddMemo">＋ 新增备忘</button>
+      </div>
     </div>
     <p class="col-sub">随手记点东西，想到了就写下来；点一下可以改，前面的勾是「做完了」。</p>
+    <!-- 分类管理区：点上面那个「🗂 分类」展开/收起（默认收起，不占列表的地方）。
+         弹窗下拉里的「＋ 新建分类…」走的就是这里那套新建逻辑（只建，改名/换色/删除在这里）。 -->
+    <div class="cat-sec" id="secCat" hidden>
+      <p class="set-desc">建好之后，「新增 / 编辑」弹窗里就能选分类，两个列表上方也会出现分类筛选。<b>删除分类不会删掉内容</b>，那些条目会变成「未分类」。</p>
+      <div class="cat-manage" id="catManage"></div>
+      <div class="cat-add">
+        <input type="text" id="catNewName" maxlength="12" placeholder="新分类名字，比如：工作">
+        <button class="btn sm primary" id="btnCatAdd">＋ 新建分类</button>
+      </div>
+      <p class="set-desc" id="catMsg" hidden></p>
+    </div>
     <!-- 分类筛选：有分类时才显示（点一下只看这一类） -->
     <div class="cat-filter" id="memoCatFilter" hidden></div>
     <div class="memo-list" id="memoList"></div>
@@ -353,7 +370,6 @@
     <button class="set-nav-item" data-target="secMoyu">🐟 一键摸鱼</button>
     <button class="set-nav-item" data-target="secEye">🌙 护眼模式</button>
     <button class="set-nav-item" data-target="secCal">📅 桌面日历</button>
-    <button class="set-nav-item" data-target="secCat">🏷 分类</button>
   </nav>
 
   <section class="card set-col" id="setCard">
@@ -525,20 +541,9 @@
       <p class="set-desc">往左更透明，往右更实。</p>
     </div>
 
-    <hr class="set-sep">
-
-    <!-- 分类：待办和备忘共用同一套（可命名 + 配色），列表上方按分类筛选 -->
-    <div class="col-head set-head" id="secCat"><h2>🏷 分类</h2></div>
-    <div class="set-row">
-      <p class="set-desc">待办和备忘<b>共用这一套分类</b>。建好之后，「新增/编辑」弹窗里就能选分类，
-        两个列表上方也会出现分类筛选。<b>删除分类不会删掉内容</b>，那些条目会变成「未分类」。</p>
-      <div class="cat-manage" id="catManage"></div>
-      <div class="cat-add">
-        <input type="text" id="catNewName" maxlength="12" placeholder="新分类名字，比如：工作">
-        <button class="btn sm primary" id="btnCatAdd">＋ 新建分类</button>
-      </div>
-      <p class="set-desc" id="catMsg" hidden></p>
-    </div>
+    <!-- 分类：待办和备忘共用同一套（可命名 + 配色），列表上方按分类筛选。
+         ⚠️ 管理区放在【待办页】最下面（见 #pageTodo）：分类是待办/备忘自己的事，
+         挂在「设置」里太绕；弹窗下拉里也能就地新建（只建，不改不删）。 -->
 
   </section>
 </main>
@@ -570,7 +575,12 @@
     </div>
     <div class="it-row">
       <span class="it-label">分类</span>
-      <select class="skin-sel cat-sel" id="memoCat" title="给这条备忘归个类。分类在设置页「🏷 分类」里管理，待办和备忘共用同一套"></select>
+      <select class="skin-sel cat-sel" id="memoCat" title="给这条备忘归个类。分类在【待办页 →「🗂 分类管理」】里管理；下拉最后一项可以就地新建"></select>
+    </div>
+    <!-- 下拉里选「＋ 新建分类…」时露出来：就地新建一个（只建；改名/换色/删除去待办页的分类管理） -->
+    <div class="cat-new-row" id="memoCatNewRow" hidden>
+      <input type="text" id="memoCatNew" maxlength="12" placeholder="新分类名字，比如：工作">
+      <button class="btn sm primary" id="memoCatNewOk">＋ 建好</button>
     </div>
     <div class="it-row">
       <span class="it-label">截止</span>
@@ -641,7 +651,12 @@
     </div>
     <div class="it-row">
       <span class="it-label">分类</span>
-      <select class="skin-sel cat-sel" id="todoCat" title="给这条待办归个类。分类在设置页「🏷 分类」里管理，待办和备忘共用同一套"></select>
+      <select class="skin-sel cat-sel" id="todoCat" title="给这条待办归个类。分类在【待办页 →「🗂 分类管理」】里管理；下拉最后一项可以就地新建"></select>
+    </div>
+    <!-- 下拉里选「＋ 新建分类…」时露出来：就地新建一个（只建；改名/换色/删除去下面的分类管理） -->
+    <div class="cat-new-row" id="todoCatNewRow" hidden>
+      <input type="text" id="todoCatNew" maxlength="12" placeholder="新分类名字，比如：工作">
+      <button class="btn sm primary" id="todoCatNewOk">＋ 建好</button>
     </div>
     <div class="it-row">
       <span class="it-label">提醒日期</span>

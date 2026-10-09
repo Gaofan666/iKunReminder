@@ -690,6 +690,8 @@
     memoCatFilter: $('#memoCatFilter'),
     todoCatFilter: $('#todoCatFilter'),
     catManage: $('#catManage'),
+    btnCatManage: $('#btnCatManage'),
+    secCat: $('#secCat'),
     catNewName: $('#catNewName'),
     btnCatAdd: $('#btnCatAdd'),
     catMsg: $('#catMsg'),
@@ -2375,6 +2377,7 @@
      那些条目自然变成「未分类」。 */
   const CAT_COLORS = ['#4A9BD4', '#6FB56B', '#E8B843', '#D99B5F', '#B47FD1', '#4FB3A8', '#E07A6B', '#7FA8D9'];
   let cats = [];
+  let catBarOpen = false;          // 待办页最下面那条「🗂 分类管理」展开着吗（默认收起，不跨重启）
   let catFilter = { memo: '', todo: '' };    // '' = 全部；'__none' = 未分类
   let catToast = 0;
 
@@ -2416,13 +2419,18 @@
     return n;
   }
 
-  /* 弹窗里的分类下拉：第一项固定是「未分类」 */
+  /* 弹窗下拉里那一项的取值：选中它 = 就地新建一个分类（不是真分类 id） */
+  const CAT_NEW_VALUE = '__new';
+
+  /* 弹窗里的分类下拉：第一项「未分类」，最后一项「＋ 新建分类…」（选中它展开一行就地新建）。
+     分类只有一套（cats），新建也只走 createCat 一个入口 —— 这里只是把入口挪到手边；
+     改名 / 换色 / 删除仍然只在待办页的「🗂 分类管理」里做。 */
   function fillCatSelect(sel, cur) {
     if (!sel) return;
     sel.innerHTML = '';
     const o0 = document.createElement('option');
     o0.value = '';
-    o0.textContent = cats.length ? '未分类' : '未分类（还没建分类）';
+    o0.textContent = '未分类';
     sel.appendChild(o0);
     cats.forEach(function (c) {
       const o = document.createElement('option');
@@ -2430,7 +2438,14 @@
       o.textContent = c.name;
       sel.appendChild(o);
     });
+    const oNew = document.createElement('option');
+    oNew.value = CAT_NEW_VALUE;
+    oNew.textContent = '＋ 新建分类…';
+    sel.appendChild(oNew);
     sel.value = (cur && catById(cur)) ? cur : '';
+    /* 每次打开弹窗都把「就地新建」那一行收起来 */
+    const row = document.getElementById(sel.id === 'memoCat' ? 'memoCatNewRow' : 'todoCatNewRow');
+    if (row) row.hidden = true;
   }
 
   /* 某个条目在当前筛选下该不该显示 */
@@ -2498,6 +2513,26 @@
     renderCatManage();
     renderMemos();
     renderTodos();
+  }
+
+  /* 新建一个分类 —— 待办页「🗂 分类管理」里的「＋ 新建分类」和弹窗下拉里的
+     「＋ 新建分类…」共用这一个入口（用户要的就是「下拉能建，但管理仍在分类管理里」）。
+     名字空 / 重名返回 null，并通过 msgFn 给出提示（管理区用 catMsg，弹窗里用底部那行字幕）。 */
+  function createCat(rawName, msgFn) {
+    const v = String(rawName || '').trim().slice(0, 12);
+    const say = function (m) { if (msgFn) msgFn(m); };
+    if (!v) { say('先写个分类名字'); return null; }
+    if (cats.some(function (c) { return c.name === v; })) {
+      say('已经有叫「' + escapeHtml(v) + '」的分类了');
+      return null;
+    }
+    const c = { id: newCatId(), name: v, color: CAT_COLORS[cats.length % CAT_COLORS.length] };
+    cats.push(c);
+    saveCats();
+    renderCats();
+    say('已新建分类「' + escapeHtml(v) + '」');
+    Sound.click();
+    return c;
   }
 
   /* 把待办推给桌面日历窗（只推日历要用的字段；没设日期的待办不进日历）。
@@ -3219,17 +3254,24 @@
     if (!on && el.memoRemindBefore) el.memoRemindBefore.value = String(DEFAULT_MEMO_REMIND_BEFORE);
   }
 
-  function openMemoModal(id) {
+  /* 同 openTodoModal：onDateKey 是「从日历某一天点进来的」，日期预填那一天，
+     而且自动把「截止」开关打开（在日历上给某天加备忘，意思就是那天到期）。 */
+  function openMemoModal(id, onDateKey) {
     editingMemoId = id || null;
     const m = id ? memoById(id) : null;
     el.memoTitle.textContent = m ? '修改备忘' : '新增备忘';
     el.memoText.value = m ? m.text : '';
     /* 截止时间 + 提醒周期 */
-    const hasDue = !!(m && m.dueAt);
+    const hasDue = !!(m && m.dueAt) || (!m && !!onDateKey);
     if (el.memoDueOn) el.memoDueOn.checked = hasDue;
-    const due = hasDue ? new Date(m.dueAt) : (function () {
+    const due = (m && m.dueAt) ? new Date(m.dueAt) : (function () {
       const d = new Date(Date.now() + 24 * 3600 * 1000);   // 默认「明天这个点」
       d.setSeconds(0, 0);
+      const p = onDateKey ? String(onDateKey).split('-') : null;
+      if (!m && p && p.length === 3) {
+        const dd = new Date(+p[0], +p[1] - 1, +p[2], d.getHours(), d.getMinutes(), 0, 0);
+        if (isFinite(dd.getTime())) return dd;
+      }
       return d;
     })();
     if (el.memoDueDate) el.memoDueDate.value = localDateValue(due);
@@ -3431,15 +3473,24 @@
     return null;
   }
 
-  function openTodoModal(id) {
+  /* id 有值 = 改某条；onDateKey（YYYY-MM-DD）= 新增时把日期预填成那一天。
+     日历上点某天 → 当天清单右上角 ＋ → 走的就是这里：同一个弹窗、同一条保存路径，
+     存完照常推回日历同步，不另做一套表单。 */
+  function openTodoModal(id, onDateKey) {
     editingTodoId = id || null;
     const t = id ? todoById(id) : null;
     el.tdTitle.textContent = t ? '修改待办' : '新增待办';
     el.tdText.value = t ? t.text : '';
     paintTodoPrio(t ? t.prio : 'mid');
-    const due = t && t.dueAt ? new Date(t.dueAt) : (function () {
+    const due = (t && t.dueAt) ? new Date(t.dueAt) : (function () {
       const d = new Date(Date.now() + 60 * 60 * 1000);   // 默认「一小时后」
       d.setSeconds(0, 0);
+      /* 从日历点进来：只把日期换成那一天，时刻沿用默认（不改「正常新增」的手感） */
+      const p = onDateKey ? String(onDateKey).split('-') : null;
+      if (!t && p && p.length === 3) {
+        const dd = new Date(+p[0], +p[1] - 1, +p[2], d.getHours(), d.getMinutes(), 0, 0);
+        if (isFinite(dd.getTime())) return dd;
+      }
       return d;
     })();
     el.tdDate.value = localDateValue(due);
@@ -3775,7 +3826,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v4.3 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v4.4 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -4495,20 +4546,54 @@
     }
     if (el.btnCatAdd) {
       el.btnCatAdd.addEventListener('click', function () {
-        const v = (el.catNewName && el.catNewName.value || '').trim().slice(0, 12);
-        if (!v) { catMsg('先写个分类名字'); try { el.catNewName.focus(); } catch (e) { } return; }
-        if (cats.some(function (c) { return c.name === v; })) {
-          catMsg('已经有叫「' + escapeHtml(v) + '」的分类了');
-          return;
-        }
-        cats.push({ id: newCatId(), name: v, color: CAT_COLORS[cats.length % CAT_COLORS.length] });
-        saveCats();
+        const c = createCat(el.catNewName && el.catNewName.value, catMsg);
+        if (!c) { try { if (el.catNewName) el.catNewName.focus(); } catch (e) { } return; }
         if (el.catNewName) el.catNewName.value = '';
-        renderCats();
-        catMsg('已新建分类「' + escapeHtml(v) + '」');
+      });
+    }
+    /* 备忘栏头上那个「🗂 分类」按钮（和「＋ 新增备忘」平级）：点一下展开/收起下面的管理区 */
+    if (el.btnCatManage) {
+      el.btnCatManage.addEventListener('click', function () {
+        catBarOpen = !catBarOpen;
+        if (el.secCat) el.secCat.hidden = !catBarOpen;
+        el.btnCatManage.textContent = catBarOpen ? '🧩 收起分类' : '🧩 分类';
         Sound.click();
       });
     }
+    /* 弹窗下拉里的「＋ 新建分类…」：就地展开一行输入，建完立刻选中它。
+       建分类只走 createCat（和分类管理里那个按钮是同一份代码）；改名/换色/删除不在这儿做。 */
+    const bindCatNew = function (sel, rowId, inputId, okId, curFn) {
+      if (!sel) return;
+      const row = document.getElementById(rowId);
+      const inp = document.getElementById(inputId);
+      const ok = document.getElementById(okId);
+      sel.addEventListener('change', function () {
+        if (sel.value !== CAT_NEW_VALUE) return;
+        sel.value = curFn();                       // 别让「＋ 新建分类…」真成了选中值
+        if (row) row.hidden = false;
+        if (inp) { inp.value = ''; try { inp.focus(); } catch (e) { } }
+      });
+      const submit = function () {
+        const c = createCat(inp && inp.value, function (m) { setCaption(m); });
+        if (!c) { try { if (inp) inp.focus(); } catch (e) { } return; }
+        if (inp) inp.value = '';
+        if (row) row.hidden = true;
+        fillCatSelect(sel, c.id);                  // 下拉重建，新分类直接选中
+      };
+      if (ok) ok.addEventListener('click', submit);
+      if (inp) inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); if (row) row.hidden = true; }
+      });
+    };
+    bindCatNew(el.memoCat, 'memoCatNewRow', 'memoCatNew', 'memoCatNewOk', function () {
+      const m = editingMemoId ? memoById(editingMemoId) : null;
+      return (m && m.cat && catById(m.cat)) ? m.cat : '';
+    });
+    bindCatNew(el.todoCat, 'todoCatNewRow', 'todoCatNew', 'todoCatNewOk', function () {
+      const t = editingTodoId ? todoById(editingTodoId) : null;
+      return (t && t.cat && catById(t.cat)) ? t.cat : '';
+    });
     if (el.catNewName) {
       el.catNewName.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && el.btnCatAdd) el.btnCatAdd.click();
@@ -4708,6 +4793,22 @@
         showWindowSelf();
         openTab('todo');
         openTodoModal(null);
+      });
+    }
+    /* 日历「点某天 → 当天清单右上角 ＋ → 加待办 / 加备忘」：
+       走的就是正常的新增弹窗，只把日期预填成那一天；存完 saveTodoStore 会推回日历同步。 */
+    if (native && native.onCalAddTodoOn) {
+      native.onCalAddTodoOn(function (key) {
+        showWindowSelf();
+        openTab('todo');
+        openTodoModal(null, String(key || ''));
+      });
+    }
+    if (native && native.onCalAddMemoOn) {
+      native.onCalAddMemoOn(function (key) {
+        showWindowSelf();
+        openTab('home');
+        openMemoModal(null, String(key || ''));
       });
     }
     /* 日历当天清单里点「✏️」：打开修改弹窗（标题栏那个页签也切到待办页） */

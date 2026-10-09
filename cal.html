@@ -62,10 +62,19 @@
       </div>
     </section>
 
-    <!-- 点某天 → 当天清单（盖在月历上，能直接勾完成） -->
+    <!-- 点某天 → 当天清单（盖在月历上，能直接勾完成；右上角 ＋ 给这一天加待办/备忘） -->
     <div class="panel" id="panel" hidden>
       <div class="panel-head">
         <span class="panel-title" id="panelTitle">—</span>
+        <!-- 这一天的右上角 ＋：加待办 / 加备忘。点了是把主界面那个正常的新增弹窗叫出来
+             （日期预填这一天），不在日历里另做一套表单 -->
+        <div class="panel-add">
+          <button class="icon sm" id="panelAdd" title="在这一天加一条">＋</button>
+          <div class="panel-add-menu" id="panelAddMenu" hidden>
+            <button type="button" data-kind="todo">＋ 待办</button>
+            <button type="button" data-kind="memo">＋ 备忘</button>
+          </div>
+        </div>
         <button class="icon x" id="panelClose" title="关闭">✕</button>
       </div>
       <div class="panel-list" id="panelList"></div>

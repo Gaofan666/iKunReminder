@@ -216,6 +216,9 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .todo-col{display:flex;flex-direction:column;padding:14px 16px 16px}
 .col-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* 栏目头上并排的一组按钮（右对齐、贴在一起）。为什么要包一层：
+   .col-head 是 space-between，直接往里塞第三个孩子会被甩到中间去。 */
+.col-head-btns{display:flex;align-items:center;gap:8px;flex:none}
 .col-head h2{margin:0;font-size:15px;letter-spacing:1.2px;color:var(--text)}
 .col-sub{margin:6px 2px 10px;font-size:12px;line-height:1.7;color:var(--dim)}
 
@@ -467,6 +470,17 @@ mark.ax-hit{
 }
 .item-meta .cat-tag i{width:7px;height:7px;border-radius:50%;display:inline-block}
 .cat-sel{min-width:132px}
+/* 弹窗下拉里选了「＋ 新建分类…」之后就地展开的一行（只建，改名/换色/删除在待办页的分类管理里） */
+.cat-new-row{display:flex;gap:8px;align-items:center;margin:6px 0 0}
+.cat-new-row input{
+  flex:1;min-width:0;padding:7px 10px;border-radius:9px;
+  border:1px solid var(--line);background:#fff;font-family:inherit;font-size:13px;color:var(--text);
+}
+.cat-new-row input:focus{outline:none;border-color:rgba(62,154,168,.6)}
+.cat-new-row[hidden]{display:none}
+/* 待办页最下面那坨分类管理：展开后给它一点内边距，别贴着上面那条标题 */
+.cat-sec{margin:8px 0 0}
+.cat-sec[hidden]{display:none}
 .cat-manage{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
 .cat-item{
   display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;

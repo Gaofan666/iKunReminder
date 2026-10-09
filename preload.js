@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   onCalZoom: (cb) => ipcRenderer.on('cal-zoom', (e, scale) => cb(scale)),
   onCalToggleLock: (cb) => ipcRenderer.on('cal-toggle-lock', () => cb()),
   onCalAddTodo: (cb) => ipcRenderer.on('cal-add-todo', () => cb()),
+  /* 日历「点某天 → 当天清单右上角 ＋」：带那一天（YYYY-MM-DD）过来，开正常的新增弹窗 */
+  onCalAddTodoOn: (cb) => ipcRenderer.on('cal-add-todo-on', (e, key) => cb(key)),
+  onCalAddMemoOn: (cb) => ipcRenderer.on('cal-add-memo-on', (e, key) => cb(key)),
   /* 宠物点了说话 → 主进程来要文字，页面用 petTalkData 回过去 */
   onPetTalkRequest: (cb) => ipcRenderer.on('pet-talk-request', () => cb()),
   petTalkData: (data) => ipcRenderer.send('pet-talk-data', data),

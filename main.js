@@ -1030,7 +1030,7 @@ function createWindow() {
             const jsc = function (code) { return win.webContents.executeJavaScript(code, true); };
             const out = {};
 
-            /* ① 建两个分类：走设置页真实的输入框 + 按钮 */
+            /* ① 建两个分类：走待办页「🗂 分类」里那套真实的输入框 + 按钮 */
             out['1-新建分类'] = await jsc(
               '(function(){var o={};' +
               'var add=function(n){document.getElementById("catNewName").value=n;' +
@@ -1044,12 +1044,12 @@ function createWindow() {
               'return o;})()');
             await waitC(250);
 
-            /* ② 备忘弹窗的分类下拉 */
+            /* ② 备忘弹窗的分类下拉（最后一项应该是「＋ 新建分类…」） */
             out['2-弹窗下拉'] = await jsc(
               '(function(){document.getElementById("btnAddMemo").click();' +
               'var sel=document.getElementById("memoCat");var opts=[];' +
               'for(var i=0;i<sel.options.length;i++)opts.push(sel.options[i].textContent);' +
-              'return {选项:opts};})()');
+              'return {选项:opts, 最后一项是新建:opts[opts.length-1].indexOf("新建分类")>=0};})()');
 
             /* ③ 建备忘录（工作）+ 待办（学习） */
             out['3-建条目'] = await jsc(
@@ -1127,6 +1127,61 @@ function createWindow() {
               'var trows=document.querySelectorAll(".todo-item");' +
               'var trow=Array.prototype.find.call(trows,function(r){return r.textContent.indexOf("【自检】分类待办")>=0;});' +
               'o.卡片小标没了=!!trow&&!trow.querySelector(".cat-tag");' +
+              'return o;})()');
+
+            /* ⑦ 弹窗下拉里能就地新建（用户要的「下拉能建，但管理仍在分类管理里」）：
+                  下拉最后一项是「＋ 新建分类…」，选中它就地展开一行输入，
+                  建完下拉重建、新分类直接选中，而且管理区/筛选条同时跟上。 */
+            out['7-下拉里就地新建'] = await jsc(
+              '(function(){var o={};' +
+              'document.getElementById("btnAddTodo").click();' +      // 开待办弹窗
+              'var sel=document.getElementById("todoCat");' +
+              'var opts=[];for(var i=0;i<sel.options.length;i++)opts.push(sel.options[i].textContent);' +
+              'o.下拉选项=opts;' +
+              'o.最后一项是新建=opts[opts.length-1].indexOf("新建分类")>=0;' +
+              'o.输入行默认藏着=document.getElementById("todoCatNewRow").hidden===true;' +
+              'sel.value="__new";sel.dispatchEvent(new Event("change",{bubbles:true}));' +
+              'o.选中后露出来了=document.getElementById("todoCatNewRow").hidden===false;' +
+              'o.没被当成选中值=sel.value!=="__new";' +
+              'document.getElementById("todoCatNew").value="【自检】临时分类";' +
+              'document.getElementById("todoCatNewOk").click();' +
+              'o.建完输入行收回=document.getElementById("todoCatNewRow").hidden===true;' +
+              'var cats=JSON.parse(localStorage.getItem("kunkun.cats.v1")||"[]");' +
+              'var made=cats.filter(function(c){return c.name==="【自检】临时分类";})[0];' +
+              'o.分类存下来了=!!made;' +
+              'o.下拉自动选中了它=!!made&&sel.value===made.id;' +
+              'o.管理区也跟上了=document.querySelectorAll("#catManage .cat-item").length===cats.length;' +
+              'document.getElementById("tdCancel").click();' +        // 这条不真存，关掉弹窗
+              'return o;})()');
+            await waitC(300);
+
+            /* ⑧ 分类管理入口的位置：跟「＋ 新增备忘」平级的一个按钮（用户要的），
+                  默认收着、点一下展开；设置页里不再有分类那一节。 */
+            out['8-管理入口位置'] = await jsc(
+              '(function(){var o={};' +
+              'var btn=document.getElementById("btnCatManage");' +
+              'var addBtn=document.getElementById("btnAddMemo");' +
+              'o.待办页里有管理区=!!document.querySelector("#pageTodo #catManage");' +
+              'o.待办页里有新建输入框=!!document.querySelector("#pageTodo #catNewName");' +
+              'o.设置页里没有了=!document.querySelector("#pageSettings #catManage");' +
+              'o.设置页导航里没有分类了=!document.querySelector(".set-nav-item[data-target=secCat]");' +
+              'o.提示那行已经删了=!document.getElementById("memoCatTip")&&!document.getElementById("todoCatTip");' +
+              'o.底部那条已经没有=!document.getElementById("catBar");' +
+              'o.按钮在备忘栏头上=!!btn&&!!btn.closest(".col-head");' +
+              /* 和「＋ 新增备忘」同一套样式（大小 + 配色）、同一个容器里挨在一起 */
+              'o.和新增同款样式=!!btn&&!!addBtn&&btn.className===addBtn.className;' +
+              'o.和新增挨在一起=!!btn&&!!addBtn&&btn.parentNode===addBtn.parentNode;' +
+              'o.图标是拼块=!!btn&&btn.textContent.indexOf("🧩")>=0;' +
+              /* 它必须在「＋ 新增备忘」前面（用户明确要求的顺序） */
+              'o.排在新增备忘前面=!!btn&&!!addBtn&&' +
+              '!!(btn.compareDocumentPosition(addBtn)&Node.DOCUMENT_POSITION_FOLLOWING);' +
+              'var sec=document.getElementById("secCat");' +
+              'o.默认是收着的=!!sec&&sec.hidden===true;' +
+              'if(btn)btn.click();' +
+              'o.点一下就展开=!!sec&&sec.hidden===false;' +
+              'o.按钮字变了=!!btn&&btn.textContent.indexOf("收起")>=0;' +
+              'if(btn)btn.click();' +
+              'o.再点一下收起=!!sec&&sec.hidden===true;' +
               'return o;})()');
             diagLog('cat', out);
           }
@@ -4508,6 +4563,94 @@ function createWindow() {
                 主界面存下来了: memoStored
               });
 
+              /* 4c) 「点某天 → 当天清单右上角 ＋ → 加待办 / 加备忘」：
+                     必须直接走主界面那套正常的新增弹窗（日期预填这一天），存完再推回日历。
+                     四个环节都验：面板/菜单 → 主界面弹窗日期对得上 → 存档落在那一天 → 日历同步出来。 */
+              const dayAdd = {};
+              {
+                const pick = await calWin.webContents.executeJavaScript(
+                  '(function(){var all=Array.prototype.slice.call(document.querySelectorAll(".cell"));' +
+                  'var t=new Date();var p=function(n){return n<10?"0"+n:String(n);};' +
+                  'var today=p(t.getFullYear())+"-"+p(t.getMonth()+1)+"-"+p(t.getDate());' +
+                  /* 优先挑「将来 + 空白」的格子：过去的日期加待办会立刻算逾期、还会弹提醒，干扰自检 */
+                  'var empty=all.filter(function(c){return !c.querySelector(".ev")&&c.dataset.key>today;});' +
+                  'var c=empty.length?empty[0]:all[all.length-1];' +
+                  'if(!c)return null;' +
+                  'c.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
+                  'c.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
+                  'return {key:c.dataset.key, 是空白格:empty.length>0,' +
+                  ' 面板开了:!document.getElementById("panel").hidden,' +
+                  ' 加号在:!!document.getElementById("panelAdd")};})()', true);
+                dayAdd.选格子并开面板 = pick;
+                if (pick && pick.key) {
+                  const menu = await calWin.webContents.executeJavaScript(
+                    '(function(){document.getElementById("panelAdd").click();' +
+                    'var m=document.getElementById("panelAddMenu");' +
+                    'var items=Array.prototype.slice.call(m.querySelectorAll("button[data-kind]")).map(function(x){return x.dataset.kind;});' +
+                    'return {菜单展开了:!m.hidden, 条目:items};})()', true);
+                  dayAdd.加号菜单 = menu;
+                  /* ＋ 待办 → 主界面弹出「新增待办」，日期应该是这一天 */
+                  await calWin.webContents.executeJavaScript(
+                    'document.querySelector("#panelAddMenu button[data-kind=todo]").click(); true', true);
+                  await wait2(700);
+                  const todoModal = await win.webContents.executeJavaScript(
+                    '(function(){var g=function(id){return document.getElementById(id);};' +
+                    'return {弹窗开了:!g("todoOverlay").hidden, 标题:g("tdTitle").textContent,' +
+                    ' 日期:g("tdDate").value, 时间:g("tdTime").value, 期望日期:' + JSON.stringify(pick.key) + '};})()', true);
+                  todoModal.日期对上了 = todoModal.日期 === pick.key && todoModal.弹窗开了 === true;
+                  await win.webContents.executeJavaScript(
+                    '(function(){var g=function(id){return document.getElementById(id);};' +
+                    'g("tdText").value="【自检】日历点天加待办";g("tdSave").click();return true;})()', true);
+                  await wait2(800);
+                  const savedTodo = await win.webContents.executeJavaScript(
+                    '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                    'var t=(raw.todos||[]).filter(function(x){return x.text.indexOf("日历点天加待办")>=0;})[0];' +
+                    'if(!t)return null;var d=new Date(t.dueAt);var p=function(n){return n<10?"0"+n:String(n);};' +
+                    'return {日期:p(d.getFullYear())+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()), 文本:t.text};})()', true);
+                  dayAdd.存下来的待办 = savedTodo;
+                  dayAdd.待办落在了那一天 = !!savedTodo && savedTodo.日期 === pick.key;
+
+                  /* 再来一次：＋ → ＋ 备忘。截止开关该自动打开、日期也是这一天 */
+                  await calWin.webContents.executeJavaScript(
+                    '(function(){document.getElementById("panelAdd").click();' +
+                    'document.querySelector("#panelAddMenu button[data-kind=memo]").click();return true;})()', true);
+                  await wait2(700);
+                  const memoModal = await win.webContents.executeJavaScript(
+                    '(function(){var g=function(id){return document.getElementById(id);};' +
+                    'return {弹窗开了:!g("memoOverlay").hidden, 标题:g("memoTitle").textContent,' +
+                    ' 截止开关:g("memoDueOn").checked, 日期:g("memoDueDate").value};})()', true);
+                  memoModal.日期对上了 = memoModal.日期 === pick.key &&
+                    memoModal.截止开关 === true && memoModal.弹窗开了 === true;
+                  await win.webContents.executeJavaScript(
+                    '(function(){var g=function(id){return document.getElementById(id);};' +
+                    'g("memoText").value="【自检】日历点天加备忘";g("memoSave").click();return true;})()', true);
+                  await wait2(800);
+                  const savedMemo = await win.webContents.executeJavaScript(
+                    '(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                    'var m=(raw.memos||[]).filter(function(x){return x.text.indexOf("日历点天加备忘")>=0;})[0];' +
+                    'if(!m)return null;var d=new Date(m.dueAt);var p=function(n){return n<10?"0"+n:String(n);};' +
+                    'return {日期:p(d.getFullYear())+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()), 有截止:m.dueAt>0};})()', true);
+                  dayAdd.存下来的备忘 = savedMemo;
+                  dayAdd.备忘落在了那一天 = !!savedMemo && savedMemo.日期 === pick.key && savedMemo.有截止 === true;
+
+                  /* 数据推回日历：这一格应该立刻多出两条（待办条 + 备忘截止条） */
+                  await wait2(900);
+                  const onCal = await calWin.webContents.executeJavaScript(
+                    '(function(){var c=document.querySelector(".cell[data-key=\'' + pick.key + '\']");' +
+                    'var bars=c?Array.prototype.slice.call(c.querySelectorAll(".ev")).map(function(b){return b.textContent.trim();}):[];' +
+                    'var rows=Array.prototype.slice.call(document.querySelectorAll("#panelList .pi .txt")).map(function(x){return x.textContent.trim();});' +
+                    'return {格子里的条数:bars.length, 格子内容:bars, 面板行:rows,' +
+                    ' 面板还开着:!document.getElementById("panel").hidden};})()', true);
+                  dayAdd.日历同步 = onCal;
+                  dayAdd.日历上出现了 = onCal.格子里的条数 >= 2;
+                  dayAdd.全部对 = !!(todoModal.日期对上了 && memoModal.日期对上了 &&
+                    dayAdd.待办落在了那一天 && dayAdd.备忘落在了那一天 && dayAdd.日历上出现了);
+                  await calWin.webContents.executeJavaScript(
+                    'document.getElementById("panelClose").click(); true', true);
+                }
+                diagLog('cal-4c-addon', dayAdd);
+              }
+
               /* 5) 截图（先把当天清单面板关掉再截，它是盖在月历上的覆盖层）。
                   离屏窗抓 'paint' 那一帧最稳：可见窗会被 DWM 淡出/旧帧坑。 */
               try {
@@ -6094,6 +6237,25 @@ ipcMain.on('cal-add-todo', () => {
   if (!win || win.isDestroyed()) return;
   showWindow();
   win.webContents.send('cal-add-todo');
+});
+
+/* 「点某天 → 当天清单右上角 ＋ → 加待办 / 加备忘」：
+   把那一天（YYYY-MM-DD）转给主界面，由它打开正常的新增弹窗、日期预填那一天 ——
+   只有一套表单、一条保存路径，存完主界面照常把数据推回日历同步。
+   日期先在这儿做个格式校验，别让乱七八糟的东西进到弹窗里。 */
+function calDayKeyArg(v) {
+  const s = String(v || '');
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+}
+ipcMain.on('cal-add-todo-on-req', (e, key) => {
+  if (!win || win.isDestroyed()) return;
+  showWindow();
+  win.webContents.send('cal-add-todo-on', calDayKeyArg(key));
+});
+ipcMain.on('cal-add-memo-on-req', (e, key) => {
+  if (!win || win.isDestroyed()) return;
+  showWindow();
+  win.webContents.send('cal-add-memo-on', calDayKeyArg(key));
 });
 
 /* 右上角「⚙」：打开主界面的设置页 */
