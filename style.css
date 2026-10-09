@@ -757,6 +757,8 @@ mark.ax-hit{
 
 /* 宠物默认大小选择 */
 .pet-size-row{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap}
+/* 这两项要待在同一行：不允许换行（桌宠始终最前 + 气泡显示时长） */
+.pet-size-row.nowrap{flex-wrap:nowrap;white-space:nowrap;gap:16px}
 .psr-label{font-size:12.5px;color:var(--dim);letter-spacing:.5px;white-space:nowrap}
 /* 护眼模式的状态提示：成功时闪一下自动隐掉，失败（驱动不支持）要一直留着 */
 .psr-label.bad{color:#cf574d;white-space:normal}

@@ -699,6 +699,16 @@ function createWindow() {
               下拉生效: bubbleMsUser === 8000,
               默认是3秒: BUBBLE_MS === 3000
             });
+            /* 「桌宠始终最前」和「气泡显示时长」必须在同一行（用户要求不换行） */
+            diagLog('pet-one-row', await win.webContents.executeJavaScript(
+              '(function(){var a=document.getElementById("chkPetTop"),b=document.getElementById("petBubbleSel");' +
+              'if(!a||!b)return {error:"找不到控件"};' +
+              'var ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();' +
+              'var rowA=a.closest(".pet-size-row"),rowB=b.closest(".pet-size-row");' +
+              'return {在同一个容器里:!!rowA&&rowA===rowB,' +
+              ' 同一行:Math.abs((ra.top+ra.height/2)-(rb.top+rb.height/2))<16,' +
+              ' 复选框在左:ra.left<rb.left,' +
+              ' 容器不许换行:rowA?!getComputedStyle(rowA).flexWrap.indexOf("wrap")>=0||getComputedStyle(rowA).flexWrap==="nowrap":false};})()', true));
             try {
               await win.webContents.executeJavaScript(
                 '(function(){var s=document.getElementById("petBubbleSel");s.value="3";' +

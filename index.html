@@ -19,7 +19,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v4.5</span>
+    <span class="tb-ver" id="tbVer">v4.4</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -103,14 +103,12 @@
     <!-- 桌宠「始终最前」：Windows 上所有置顶窗共享一个「顶级带」，别的置顶软件
          一被激活桌宠就被压住、而且不会自己回来；勾上后程序会定期把它重新提到最上面。
          默认不勾，保持系统原本的置顶规则。 -->
-    <div class="pet-size-row" id="petTopRow" hidden>
+    <!-- 桌宠始终最前 + 气泡显示时长：放同一行（nowrap，不换行） -->
+    <div class="pet-size-row nowrap" id="petTopRow" hidden>
       <label class="chk big" title="勾上后桌宠会一直保持在最前面：被别的置顶窗口（播放器、其他桌面挂件等）盖住时，程序会自动把它重新提到最上面。默认不勾，保持系统原本的置顶规则。">
         <input type="checkbox" id="chkPetTop"><span>📌 桌宠始终最前</span>
       </label>
-    </div>
-    <!-- 桌宠说话的气泡显示多久自动收起（默认 3 秒） -->
-    <div class="pet-size-row" id="petBubbleRow" hidden>
-      <label class="chk big" title="桌宠说话的气泡显示多久后自动收起。默认 3 秒。">
+      <label class="chk big" id="petBubbleRow" title="桌宠说话的气泡显示多久后自动收起。默认 3 秒。">
         <span>💬 气泡显示时长</span>
         <select class="skin-sel" id="petBubbleSel" style="margin-left:8px">
           <option value="3">3 秒</option>
