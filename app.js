@@ -3311,14 +3311,18 @@
         if (m.dueAt !== dueAt) {
           recordExtend(m, m.dueAt, dueAt);
           m.lateOpen = false;
+          /* ⚠️ 「重新变回未完成」只能在真的改了截止时间时做。
+             这一句以前写在这个 if 外面 —— 结果是「只改个分类 / 只改个文字」也会把
+             「已完成」抹成未完成；备忘本来又过了截止，下一轮 tick 的逾期扫描就会
+             凭空记一笔「逾期 1 次」、还会弹一次提醒（用户报的就是这个）。 */
+          if (m.done) { m.done = false; m.doneAt = 0; }
         }
         m.dueAt = dueAt;
         m.remindBefore = remindBefore;
         m.remindEvery = remindEvery;
-        m.remindAt = remindAt;
+        /* 已完成的备忘不该因为改个分类又被排上提醒（完成时本来就把 remindAt 清零了） */
+        m.remindAt = m.done ? 0 : remindAt;
         m.cat = catPick;
-        /* 改了截止时间就重新变回未完成（不然勾掉完成还挂个截止时间会很怪） */
-        if (m.done) { m.done = false; m.doneAt = 0; }
       }
     } else {
       memos.unshift({

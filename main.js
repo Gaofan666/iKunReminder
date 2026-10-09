@@ -1701,12 +1701,38 @@ function createWindow() {
               更早能放出来: foldMore.更早放出来了 === true && foldMore.更早几条 > 0
             };
 
+            /* ⑩ 编辑一条「已完成」的备忘（不动截止时间）→ 不能被抹成未完成、更不能冒出一笔逾期。
+                 这是用户报的 bug：saveMemoModal 里那句「重新变回未完成」以前写在
+                 「改了截止时间」的判断外面，只改个分类也会触发；而备忘本来就过了截止，
+                 下一轮 tick 的逾期扫描就会凭空记一笔「逾期 1 次」、还弹一次提醒。 */
+            const K = '【自检】已完成别再冒逾期';
+            await mkMemo(K, -3600000);              // 先造一条过期一点的
+            await waitC(500);
+            await closeAlertC();
+            await waitC(1600);                      // 让它正常记下这一笔逾期
+            await completeMemoC(K);                 // 勾完成
+            await waitC(1300);
+            const kBefore = await readMemo(K);
+            /* 打开编辑弹窗、什么都不改、直接保存（用户当时改的是分类，走的是同一条保存路径） */
+            await jswC('(function(){var row=Array.prototype.find.call(document.querySelectorAll(".memo-item"),' +
+              'function(r){return r.textContent.indexOf(' + JSON.stringify(K) + ')>=0;});' +
+              'if(!row)return false;row.querySelector("[data-role=edit]").click();' +
+              'document.getElementById("memoSave").click();return true;})()');
+            await waitC(1400);
+            const kAfter = await readMemo(K);
+            outC['10-编辑已完成不改截止'] = {
+              改之前: kBefore, 改之后: kAfter,
+              还是已完成: kAfter.完成 === true,
+              逾期次数没变: kAfter.逾期次数 === kBefore.逾期次数,
+              没冒出新逾期: kAfter.逾期标 === kBefore.逾期标
+            };
+
             /* 收尾：清掉自检造的备忘和待办 */
             await jswC('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
               'raw.memos=(raw.memos||[]).filter(function(x){return (x.text||"").indexOf("【自检】")<0;});' +
               'raw.todos=(raw.todos||[]).filter(function(x){return (x.text||"").indexOf("【自检】")<0;});' +
               'localStorage.setItem("kunkun.todos.v1",JSON.stringify(raw));return true;})()');
-            outC['10-清理'] = { 说明: '自检数据已清掉' };
+            outC['11-清理'] = { 说明: '自检数据已清掉' };
             diagLog('count', outC);
           }
 
