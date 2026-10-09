@@ -3948,11 +3948,6 @@
 
   const UPD_DEFAULT_DESC = '有新版本时会在这里告诉你，但不会自动下载、更不会自动安装 —— 下载和安装都要你点一下。';
 
-  /* 📌 TODO（细节见仓库根目录 AGENTS.md 与 README 末尾「待办（TODO）」）——
-     这一块是设置页「软件更新」的渲染处，是「本版更新要点」的**回看入口**该待的地方；
-     另外还需要：启动时把 localStorage 里的「上次运行版本」和当前版本比一下，
-     不一样且这一版有要点，就弹一次窗（要点文字按版本写在仓库里）。
-     主进程那边的锚点在 main.js 的 updateInfo 附近。 */
   function renderUpdate(s) {
     if (!s) return;
 

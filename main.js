@@ -7355,11 +7355,6 @@ const UPDATE_EVERY = 6 * 60 * 60 * 1000;      // 之后每 6 小时查一次
 
 let updateSupported = false;
 let updateState = 'unsupported';  // unsupported|idle|checking|available|downloading|downloaded|none|error
-/* 📌 TODO（细节见仓库根目录 AGENTS.md 与 README 末尾「待办（TODO）」）——
-   更新完成后弹一个「本版更新要点」的窗：用「上次运行版本 ≠ 当前版本」判断、只弹一次；
-   要点文字按版本写在仓库里（跟着代码进 PR），不依赖 GitHub release 的正文。
-   ⚠️ 就加在这一块（更新信息的汇聚处，updateInfo 拿到的就是新版本）：
-   顺手把「上次运行版本」记进 localStorage，并在 app.js 的 renderUpdate 那边加个回看入口。 */
 let updateInfo = null;            // { version, releaseNotes, releaseDate }
 let updatePercent = 0;
 let updateError = '';
