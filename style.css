@@ -103,12 +103,12 @@ body.anim-off *::after{animation-play-state:paused !important}
 /* ---------- 顶部标签页（并入标题栏：软件名+版本 | 三个标签 | 时间+按钮） ----------
    标签页现在是标题栏中间的 flex 项，不再单独占一条。 */
 .tabbar{
-  display:flex;align-items:center;gap:2px;
+  display:flex;align-items:center;gap:calc(2px * var(--tb-k,1));
   flex:1;min-width:0;
 }
 .tab-btn{
-  border:0;border-radius:9px;padding:6px 12px;
-  font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.3px;
+  border:0;border-radius:9px;padding:calc(6px * var(--tb-k,1)) calc(12px * var(--tb-k,1));
+  font-family:inherit;font-size:calc(13px * var(--tb-k,1));font-weight:600;letter-spacing:.3px;
   color:var(--dim);background:transparent;cursor:pointer;transition:.15s;
   white-space:nowrap;
 }
@@ -118,9 +118,10 @@ body.anim-off *::after{animation-play-state:paused !important}
   box-shadow:0 1px 0 var(--lake) inset, 0 1px 6px rgba(74,120,150,.12);
 }
 .tab-badge{
-  display:inline-block;min-width:17px;margin-left:6px;padding:1px 5px;
+  display:inline-block;min-width:calc(17px * var(--tb-k,1));margin-left:calc(6px * var(--tb-k,1));
+  padding:1px calc(5px * var(--tb-k,1));
   border-radius:9px;background:#e5484d;color:#fff;
-  font-size:11px;font-style:normal;font-weight:700;vertical-align:1px;
+  font-size:calc(11px * var(--tb-k,1));font-style:normal;font-weight:700;vertical-align:1px;
 }
 .page{padding-top:2px}
 
@@ -215,6 +216,9 @@ body.anim-off *::after{animation-play-state:paused !important}
 }
 .todo-col{display:flex;flex-direction:column;padding:14px 16px 16px}
 .col-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* 栏目头上并排的一组按钮（右对齐、贴在一起）。为什么要包一层：
+   .col-head 是 space-between，直接往里塞第三个孩子会被甩到中间去。 */
+.col-head-btns{display:flex;align-items:center;gap:8px;flex:none}
 .col-head h2{margin:0;font-size:15px;letter-spacing:1.2px;color:var(--text)}
 .col-sub{margin:6px 2px 10px;font-size:12px;line-height:1.7;color:var(--dim)}
 
@@ -396,6 +400,126 @@ mark.ax-hit{
 .item-meta{margin-top:4px;font-size:12px;color:#3A505C;letter-spacing:.3px}
 .item-meta b{color:var(--lake)}
 .item-meta .late{color:#c0392b;font-weight:700}
+/* 卡片上的「逾期 N 次」小标（错过过截止时间） */
+.item-meta .late-tag{
+  display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;
+  background:rgba(217,161,95,.18);border:1px solid rgba(217,161,95,.45);
+  color:#B9762A;font-size:11.5px;font-weight:700;
+}
+/* 卡片上的「延期 N 次」小标（把截止时间往后挪过）—— 换个冷色，和「逾期」一眼分得开 */
+.item-meta .ext-tag{
+  display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;
+  background:rgba(120,150,180,.16);border:1px solid rgba(120,150,180,.45);
+  color:#5B7C9B;font-size:11.5px;font-weight:700;
+}
+/* ---- 已完成那栏（未完成的留在主列表，已完成的收进这条）----
+   做成一条「小标题」的样子：图标 + 加粗 + 独立底色 + 右侧箭头，别太不显眼 */
+.done-bar{
+  margin:14px 0 0;padding:8px 12px;cursor:pointer;user-select:none;
+  display:flex;align-items:center;gap:8px;
+  background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(255,255,255,.6));
+  border:1px solid rgba(217,161,95,.42);border-radius:10px;
+  color:#6E6152;font-size:13px;font-weight:700;line-height:1.5;
+}
+.done-bar:hover{border-color:rgba(217,161,95,.72);color:#8a6a2c;background:rgba(255,255,255,.96)}
+.done-bar .done-title{flex:1;min-width:0}
+.done-bar .done-caret{flex:none;color:#B9762A;font-size:11.5px;font-weight:700}
+.done-box{margin:6px 0 0}
+.done-more{
+  margin:4px 0 0;padding:5px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.22);
+  color:#B4AFA7;font-size:11.5px;text-align:center;
+}
+.done-more:hover{color:#8a6a2c}
+/* 已完成的行压暗一点，一眼能和待办中的区分开 */
+.done-list .memo-item,.done-old .memo-item,
+.done-list .todo-item,.done-old .todo-item{opacity:.72}
+/* ---- 延期统计（备忘列表最下面的小尾巴：平时低调，点一下展开明细） ---- */
+.late-stat{
+  margin:8px 0 0;padding:7px 2px 0;cursor:pointer;user-select:none;
+  border-top:1px dashed rgba(217,161,95,.35);
+  color:#A9A49B;font-size:11.5px;line-height:1.6;
+}
+.late-stat:hover{color:#8a6a2c}
+.late-stat b{color:#B9762A;font-weight:600}
+.late-stat .ls-toggle{float:right;color:#c3bcb2}
+.late-stat-list{
+  margin:6px 0 0;padding:8px 10px;border-radius:10px;max-height:170px;overflow:auto;
+  background:rgba(255,255,255,.55);border:1px dashed rgba(217,161,95,.35);
+}
+.late-row{display:flex;gap:8px;align-items:baseline;padding:5px 2px;font-size:12.5px;color:#5E6B60}
+.late-row + .late-row{border-top:1px dashed rgba(217,161,95,.28)}
+.late-row .lr-text{flex:1;min-width:0;color:#16242E;word-break:break-word}
+.late-row .lr-ms{flex:none;color:#B9762A;font-weight:700}
+.late-row .lr-why{flex:none;max-width:46%;color:#8a6a2c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---- 分类（待办和备忘共用：筛选条 + 卡片小标 + 设置页管理） ---- */
+.cat-filter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.cat-chip{
+  padding:4px 11px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:12px;
+  border:1px solid var(--line);background:#fff;color:#4E6675;transition:.15s;
+}
+.cat-chip:hover{border-color:var(--lake)}
+.cat-chip.on{background:var(--lake);border-color:var(--lake);color:#fff;font-weight:700}
+.cat-chip .cc-dot{
+  display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;
+}
+.cat-chip.on .cc-dot{box-shadow:0 0 0 1.5px rgba(255,255,255,.75)}
+.item-meta .cat-tag{
+  display:inline-flex;align-items:center;gap:4px;margin-right:6px;padding:1px 7px;border-radius:99px;
+  background:rgba(74,155,212,.12);border:1px solid var(--line);color:#4E6675;font-size:11.5px;font-weight:600;
+}
+.item-meta .cat-tag i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.cat-sel{min-width:132px}
+/* 弹窗下拉里选了「＋ 新建分类…」之后就地展开的一行（只建，改名/换色/删除在待办页的分类管理里） */
+.cat-new-row{display:flex;gap:8px;align-items:center;margin:6px 0 0}
+.cat-new-row input{
+  flex:1;min-width:0;padding:7px 10px;border-radius:9px;
+  border:1px solid var(--line);background:#fff;font-family:inherit;font-size:13px;color:var(--text);
+}
+.cat-new-row input:focus{outline:none;border-color:rgba(62,154,168,.6)}
+.cat-new-row[hidden]{display:none}
+/* 分类管理区：用一个大框把这块和下面的备忘列表分开。
+   以前只有 margin-top，展开后两层文字直接贴在一起，看不出边界（用户反馈）。 */
+.cat-sec{
+  margin:10px 0 12px;padding:10px 12px;border-radius:12px;
+  background:rgba(255,255,255,.55);
+  border:1px solid var(--line);
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset;
+}
+.cat-sec[hidden]{display:none}
+/* 框里第一条说明别在顶部再顶一段，最后一项也别在底部留一截空白 */
+.cat-sec > .set-desc:first-child{margin-top:0}
+.cat-sec > *:last-child{margin-bottom:0}
+.cat-manage{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
+.cat-item{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;
+  background:rgba(255,255,255,.72);border:1px solid var(--line);
+}
+.cat-item .cat-dot{flex:none;width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+.cat-item .cat-name{
+  flex:1;min-width:0;font-size:13.5px;color:#16242E;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cat-item .cat-count{flex:none;font-size:12px;color:var(--dim)}
+.cat-item input[type=color]{
+  flex:none;width:26px;height:24px;padding:0;border:1px solid var(--line);
+  border-radius:7px;background:#fff;cursor:pointer;
+}
+.cat-item .cat-btn{
+  flex:none;height:26px;padding:0 10px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--line);border-radius:8px;background:#EEF6FB;
+  color:#4E6675;font-size:12px;font-weight:600;font-family:inherit;transition:.15s;white-space:nowrap;
+}
+.cat-item .cat-btn:hover{color:var(--text);background:#DFEDF6;border-color:var(--lake)}
+.cat-item .cat-btn.del{color:#B93B2C;background:#FDECE9;border-color:rgba(185,59,44,.45)}
+.cat-item .cat-btn.del:hover{color:#fff;background:#B93B2C}
+.cat-empty{font-size:12.5px;color:var(--dim);padding:6px 2px}
+.cat-add{display:flex;gap:8px;align-items:center}
+.cat-add input{
+  flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:10px;
+  font-family:inherit;font-size:13.5px;color:var(--text);background:#fff;outline:none;
+}
+.cat-add input:focus{border-color:var(--lake)}
 .item-tools{flex:none;display:flex;gap:4px}
 .item-tools button{
   height:26px;padding:0 10px;display:grid;place-items:center;cursor:pointer;
@@ -410,6 +534,14 @@ mark.ax-hit{
 .item-tools button.del:hover{
   background:#D9534F;border-color:transparent;color:#fff;
   box-shadow:0 3px 10px rgba(217,83,79,.35);
+}
+/* 「补原因」：延期过、还没写原因的备忘卡片上才有 */
+.item-tools button.why{
+  color:#B9762A;background:rgba(217,161,95,.16);border-color:rgba(217,161,95,.5);
+}
+.item-tools button.why:hover{
+  color:#fff;background:#D9A15F;border-color:transparent;
+  box-shadow:0 3px 10px rgba(217,161,95,.35);
 }
 
 .empty-tip{
@@ -625,6 +757,8 @@ mark.ax-hit{
 
 /* 宠物默认大小选择 */
 .pet-size-row{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap}
+/* 这两项要待在同一行：不允许换行（桌宠始终最前 + 气泡显示时长） */
+.pet-size-row.nowrap{flex-wrap:nowrap;white-space:nowrap;gap:16px}
 .psr-label{font-size:12.5px;color:var(--dim);letter-spacing:.5px;white-space:nowrap}
 /* 护眼模式的状态提示：成功时闪一下自动隐掉，失败（驱动不支持）要一直留着 */
 .psr-label.bad{color:#cf574d;white-space:normal}
@@ -801,25 +935,27 @@ kbd{
 /* ---------- 顶部一条（合并标题栏 + 标签页） ----------
    左=软件名+版本，中=标签页（flex:1 占满中间），右=时间+窗口按钮。
    高度用 --tb-h：高 DPI 屏上按 1/缩放 缩，物理高度恒定。 */
+/* 顶栏尺寸全部乘 --tb-k（由 app.js 按「实际可用宽 ÷ 顶栏需要多宽」算出来）：
+   窗口比设计窄时整条一起收，标签按钮就不会互相压住。正常宽度下它是 1，观感不变。 */
 .titlebar{
   display:none;height:var(--tb-h,46px);flex:none;align-items:center;
-  padding:0 8px 0 12px;position:relative;z-index:40;
+  padding:0 calc(8px * var(--tb-k,1)) 0 calc(12px * var(--tb-k,1));position:relative;z-index:40;
   background:linear-gradient(180deg,#ffffff,#f4f7fd);
   border-bottom:1px solid var(--line);
   cursor:move;
-  gap:10px;
+  gap:calc(10px * var(--tb-k,1));
 }
 body.desktop .titlebar{display:flex;transform-origin:top left}
-.tb-left{display:flex;align-items:center;gap:8px;flex:none}
-.tb-ico{font-size:16px}
-.tb-name{font-size:12.5px;letter-spacing:1.2px;color:var(--text);font-weight:700}
-.tb-ver{font-size:11px;color:var(--dim);font-weight:600;background:rgba(74,120,150,.12);padding:1px 7px;border-radius:9px}
-.tb-right{display:flex;align-items:center;gap:6px;flex:none}
-.tb-date{font-size:12px;color:var(--dim);white-space:nowrap;margin-right:6px}
-.tb-clock{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
+.tb-left{display:flex;align-items:center;gap:calc(8px * var(--tb-k,1));flex:none}
+.tb-ico{font-size:calc(16px * var(--tb-k,1))}
+.tb-name{font-size:calc(12.5px * var(--tb-k,1));letter-spacing:1.2px;color:var(--text);font-weight:700}
+.tb-ver{font-size:calc(11px * var(--tb-k,1));color:var(--dim);font-weight:600;background:rgba(74,120,150,.12);padding:1px calc(7px * var(--tb-k,1));border-radius:9px}
+.tb-right{display:flex;align-items:center;gap:calc(6px * var(--tb-k,1));flex:none}
+.tb-date{font-size:calc(12px * var(--tb-k,1));color:var(--dim);white-space:nowrap;margin-right:calc(6px * var(--tb-k,1))}
+.tb-clock{font-size:calc(12px * var(--tb-k,1));color:var(--dim);font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
 .tb-btn{
-  width:34px;height:28px;border:0;border-radius:8px;background:transparent;
-  color:var(--dim);font-family:inherit;font-size:13px;cursor:pointer;transition:.15s;
+  width:calc(34px * var(--tb-k,1));height:calc(28px * var(--tb-k,1));border:0;border-radius:8px;background:transparent;
+  color:var(--dim);font-family:inherit;font-size:calc(13px * var(--tb-k,1));cursor:pointer;transition:.15s;
 }
 .tb-btn:hover{background:rgba(74,120,150,.12);color:var(--text)}
 .tb-close:hover{background:#D9534F;color:#fff}
@@ -893,6 +1029,25 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 }
 
 .alert-desc{margin:0 0 20px;color:#5E6B60;font-size:13.5px;line-height:1.8}
+/* 备忘已经过了截止时间才弹的提醒：顺手问一句延期原因（统计用，留空也行） */
+.late-box{
+  margin:0 0 18px;padding:10px 13px;border-radius:12px;text-align:left;
+  background:rgba(217,161,95,.12);border:1px solid rgba(217,161,95,.42);
+}
+.late-head{margin:0 0 8px;font-size:12.5px;color:#8a6a2c}
+.late-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.late-chips button{
+  padding:4px 11px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:12px;
+  border:1px solid rgba(217,161,95,.5);background:#fff;color:#8a6a2c;transition:.15s;
+}
+.late-chips button:hover{border-color:#D9A15F}
+.late-chips button.on{background:#D9A15F;border-color:#D9A15F;color:#fff;font-weight:700}
+.late-input{
+  width:100%;box-sizing:border-box;padding:7px 10px;border-radius:9px;font-family:inherit;
+  font-size:12.5px;color:var(--text);background:#fff;border:1px solid rgba(217,161,95,.5);
+  outline:none;
+}
+.late-input:focus{border-color:#D9A15F}
 .alert-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 /* 「还有 N 条也到点了」：提示后面还排着几条，别让用户以为处理完这条就没了 */
 .alert-more{

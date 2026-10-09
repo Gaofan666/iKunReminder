@@ -19,7 +19,7 @@
   <div class="tb-left">
     <span class="tb-ico">🐣</span>
     <span class="tb-name">别感冒提醒器</span>
-    <span class="tb-ver" id="tbVer">v4.2</span>
+    <span class="tb-ver" id="tbVer">v4.4</span>
   </div>
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn on" data-tab="home" id="tabHome">🏀 主界面</button>
@@ -99,6 +99,25 @@
       <select class="skin-sel" id="skinSel" title="想用自己画的形象，就放进 skins 文件夹（每个形象一个子文件夹），放好后点右边「刷新」"></select>
       <button class="btn skin-ref" id="btnSkinRefresh" title="刚放了新形象？点一下就能看到，不用重启软件">🔄 刷新</button>
     </div>
+
+    <!-- 桌宠「始终最前」：Windows 上所有置顶窗共享一个「顶级带」，别的置顶软件
+         一被激活桌宠就被压住、而且不会自己回来；勾上后程序会定期把它重新提到最上面。
+         默认不勾，保持系统原本的置顶规则。 -->
+    <!-- 桌宠始终最前 + 气泡显示时长：放同一行（nowrap，不换行） -->
+    <div class="pet-size-row nowrap" id="petTopRow" hidden>
+      <label class="chk big" title="勾上后桌宠会一直保持在最前面：被别的置顶窗口（播放器、其他桌面挂件等）盖住时，程序会自动把它重新提到最上面。默认不勾，保持系统原本的置顶规则。">
+        <input type="checkbox" id="chkPetTop"><span>📌 桌宠始终最前</span>
+      </label>
+      <label class="chk big" id="petBubbleRow" title="桌宠说话的气泡显示多久后自动收起。默认 3 秒。">
+        <span>💬 气泡显示时长</span>
+        <select class="skin-sel" id="petBubbleSel" style="margin-left:8px">
+          <option value="3">3 秒</option>
+          <option value="5">5 秒</option>
+          <option value="8">8 秒</option>
+          <option value="15">15 秒</option>
+        </select>
+      </label>
+    </div>
     <div class="toolbar toggles">
       <label class="chk"><input type="checkbox" id="chkSound" checked><span>音效</span></label>
       <label class="chk"><input type="checkbox" id="chkMusic" checked><span>提醒音乐</span></label>
@@ -140,10 +159,39 @@
   <section class="card todo-col">
     <div class="col-head">
       <h2>📌 备忘录</h2>
-      <button class="btn sm primary" id="btnAddMemo">＋ 新增备忘</button>
+      <!-- 分类管理：和「＋ 新增备忘」并排放在右边、同一套样式（分类是这一页两栏共用的东西，
+           摆在栏目头上一点就能点到，比塞进「设置」直观）。
+           注意：这两个按钮必须包一层，不然 .col-head 的 space-between 会把「分类」甩到中间。 -->
+      <div class="col-head-btns">
+        <button class="btn sm primary" id="btnCatManage" title="待办和备忘共用这一套分类：命名 / 配色 / 删除">🧩 分类</button>
+        <button class="btn sm primary" id="btnAddMemo">＋ 新增备忘</button>
+      </div>
     </div>
     <p class="col-sub">随手记点东西，想到了就写下来；点一下可以改，前面的勾是「做完了」。</p>
+    <!-- 分类管理区：点上面那个「🗂 分类」展开/收起（默认收起，不占列表的地方）。
+         弹窗下拉里的「＋ 新建分类…」走的就是这里那套新建逻辑（只建，改名/换色/删除在这里）。 -->
+    <div class="cat-sec" id="secCat" hidden>
+      <p class="set-desc">建好之后，「新增 / 编辑」弹窗里就能选分类，两个列表上方也会出现分类筛选。<b>删除分类不会删掉内容</b>，那些条目会变成「未分类」。</p>
+      <div class="cat-manage" id="catManage"></div>
+      <div class="cat-add">
+        <input type="text" id="catNewName" maxlength="12" placeholder="新分类名字，比如：工作">
+        <button class="btn sm primary" id="btnCatAdd">＋ 新建分类</button>
+      </div>
+      <p class="set-desc" id="catMsg" hidden></p>
+    </div>
+    <!-- 分类筛选：有分类时才显示（点一下只看这一类） -->
+    <div class="cat-filter" id="memoCatFilter" hidden></div>
     <div class="memo-list" id="memoList"></div>
+    <!-- 已完成那栏：默认收纳成一条小标题，点一下展开（先摆最近完成的几条，剩下的再点「更早的」） -->
+    <div class="done-bar" id="memoDoneBar" hidden><span class="done-title"></span><span class="done-caret"></span></div>
+    <div class="done-box" id="memoDoneBox" hidden>
+      <div class="done-list" id="memoDoneList"></div>
+      <div class="done-old" id="memoDoneOld" hidden></div>
+      <div class="done-more" id="memoDoneMore" hidden></div>
+    </div>
+    <!-- 逾期统计：挂在列表最下面当个小尾巴，不占列表的位置（点一下展开明细；原因在提醒弹窗里填） -->
+    <div class="late-stat" id="memoLateStat" hidden></div>
+    <div class="late-stat-list" id="memoLateList" hidden></div>
   </section>
 
   <section class="card todo-col">
@@ -155,7 +203,16 @@
       </div>
     </div>
     <p class="col-sub">设好日期和时间，到点会自动跳出来提醒你（过期未完成的，下次打开程序时补提醒一次）。</p>
+    <!-- 分类筛选：有分类时才显示（点一下只看这一类） -->
+    <div class="cat-filter" id="todoCatFilter" hidden></div>
     <div class="todo-list" id="todoList"></div>
+    <!-- 已完成那栏：和备忘一样，默认收纳成一条小标题 -->
+    <div class="done-bar" id="todoDoneBar" hidden><span class="done-title"></span><span class="done-caret"></span></div>
+    <div class="done-box" id="todoDoneBox" hidden>
+      <div class="done-list" id="todoDoneList"></div>
+      <div class="done-old" id="todoDoneOld" hidden></div>
+      <div class="done-more" id="todoDoneMore" hidden></div>
+    </div>
   </section>
 </main>
 
@@ -494,6 +551,10 @@
       <p class="set-desc">往左更透明，往右更实。</p>
     </div>
 
+    <!-- 分类：待办和备忘共用同一套（可命名 + 配色），列表上方按分类筛选。
+         ⚠️ 管理区放在【待办页】最下面（见 #pageTodo）：分类是待办/备忘自己的事，
+         挂在「设置」里太绕；弹窗下拉里也能就地新建（只建，不改不删）。 -->
+
   </section>
 </main>
 
@@ -521,6 +582,15 @@
     <div class="it-row col">
       <span class="it-label">内容</span>
       <textarea id="memoText" rows="4" maxlength="500" placeholder="想到什么就写什么，比如：周五交周报 / 买牛奶"></textarea>
+    </div>
+    <div class="it-row">
+      <span class="it-label">分类</span>
+      <select class="skin-sel cat-sel" id="memoCat" title="给这条备忘归个类。分类在【待办页 →「🗂 分类管理」】里管理；下拉最后一项可以就地新建"></select>
+    </div>
+    <!-- 下拉里选「＋ 新建分类…」时露出来：就地新建一个（只建；改名/换色/删除去待办页的分类管理） -->
+    <div class="cat-new-row" id="memoCatNewRow" hidden>
+      <input type="text" id="memoCatNew" maxlength="12" placeholder="新分类名字，比如：工作">
+      <button class="btn sm primary" id="memoCatNewOk">＋ 建好</button>
     </div>
     <div class="it-row">
       <span class="it-label">截止</span>
@@ -564,6 +634,22 @@
   </div>
 </div>
 
+<!-- 补填逾期原因：备忘逾期过、但当时没写原因时，完成的时候补一句（也能事后从卡片上补） -->
+<div class="overlay modal" id="lateFillOverlay" hidden>
+  <div class="overlay-card item-card">
+    <button class="close" id="lateFillClose" title="关闭">✕</button>
+    <h3 class="it-title">这条备忘逾期了</h3>
+    <p class="col-sub" id="lateFillDesc"></p>
+    <div class="late-chips" id="lateFillChips"></div>
+    <input class="late-input" id="lateFillInput" type="text" maxlength="60"
+           placeholder="也可以自己写一句（留空也行）">
+    <div class="alert-btns">
+      <button class="btn primary big" id="lateFillSave">保存并完成</button>
+      <button class="btn big" id="lateFillSkip">跳过，直接完成</button>
+    </div>
+  </div>
+</div>
+
 <!-- 添加 / 编辑待办 -->
 <div class="overlay modal" id="todoOverlay" hidden>
   <div class="overlay-card item-card">
@@ -572,6 +658,15 @@
     <div class="it-row col">
       <span class="it-label">要做的事</span>
       <input type="text" id="tdText" maxlength="60" placeholder="例如：给客户回邮件">
+    </div>
+    <div class="it-row">
+      <span class="it-label">分类</span>
+      <select class="skin-sel cat-sel" id="todoCat" title="给这条待办归个类。分类在【待办页 →「🗂 分类管理」】里管理；下拉最后一项可以就地新建"></select>
+    </div>
+    <!-- 下拉里选「＋ 新建分类…」时露出来：就地新建一个（只建；改名/换色/删除去下面的分类管理） -->
+    <div class="cat-new-row" id="todoCatNewRow" hidden>
+      <input type="text" id="todoCatNew" maxlength="12" placeholder="新分类名字，比如：工作">
+      <button class="btn sm primary" id="todoCatNewOk">＋ 建好</button>
     </div>
     <div class="it-row">
       <span class="it-label">提醒日期</span>
@@ -672,6 +767,14 @@
     <div class="alert-stage-wrap"><canvas id="alertStage"></canvas></div>
     <div class="alert-title" id="alertTitle">该喝水啦！</div>
     <p class="alert-desc" id="alertDesc"></p>
+    <!-- 备忘已经过了截止时间才弹的提醒：顺手问一句逾期原因（统计用，留空也行）。
+         只有 alertKind==='memo' 且确实逾期时才会显示。 -->
+    <div class="late-box" id="lateBox" hidden>
+      <p class="late-head">这条已经过了截止时间 —— 记一下逾期原因？</p>
+      <div class="late-chips" id="lateChips"></div>
+      <input class="late-input" id="lateInput" type="text" maxlength="60"
+             placeholder="也可以自己写一句（留空也行）">
+    </div>
     <div class="alert-btns">
       <button class="btn primary big" id="alertDone">我完成了</button>
       <button class="btn big" id="alertAck" hidden>我知道了</button>

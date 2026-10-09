@@ -306,6 +306,20 @@ body.locked .head button:not(#btnLock):hover{
 @keyframes panelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .panel-head{display:flex;align-items:center;gap:9px;height:38px;flex:none}
 .panel-title{flex:1;min-width:0;font-size:19px;font-weight:700;letter-spacing:.3px}
+/* 当天清单右上角的 ＋：点开「加待办 / 加备忘」两个入口（真正的表单在主界面，日期预填这一天） */
+.panel-add{position:relative;flex:none}
+.panel-add-menu{
+  position:absolute;top:32px;right:0;z-index:9;display:flex;flex-direction:column;gap:2px;
+  padding:5px;border-radius:10px;min-width:96px;
+  background:linear-gradient(168deg,rgb(var(--panel-rgb-top)),rgb(var(--panel-rgb-bot)));
+  border:1px solid var(--line);box-shadow:0 8px 20px rgba(30,50,60,.18);
+}
+.panel-add-menu[hidden]{display:none}
+.panel-add-menu button{
+  border:0;background:transparent;color:var(--ink);font-family:inherit;font-size:14px;
+  text-align:left;padding:7px 10px;border-radius:7px;cursor:pointer;white-space:nowrap;
+}
+.panel-add-menu button:hover{background:var(--btn-hover);color:var(--lake)}
 .panel-list{flex:1;min-height:0;overflow-y:auto;margin-top:10px;padding-right:4px}
 .panel-list::-webkit-scrollbar{width:6px}
 .panel-list::-webkit-scrollbar-thumb{background:var(--bar-bg);border-radius:3px}

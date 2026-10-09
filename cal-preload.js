@@ -40,6 +40,11 @@ contextBridge.exposeInMainWorld('kunkunCalWindow', {
   /* 左栏 ＋：直接新增一条备忘（文字转给主界面写进同一份数据） */
   addMemo: (text) => ipcRenderer.send('cal-add-memo-req', String(text)),
 
+  /* 当天清单右上角 ＋：把「这一天」交给主界面，由它打开正常的新增待办/备忘弹窗
+     （日期预填那一天；只有一套表单，存完主界面会把数据推回来同步） */
+  addTodoOn: (key) => ipcRenderer.send('cal-add-todo-on-req', String(key || '')),
+  addMemoOn: (key) => ipcRenderer.send('cal-add-memo-on-req', String(key || '')),
+
   /* 主进程 → 日历窗 */
   onTodos: (cb) => ipcRenderer.on('cal-todos', (e, list) => cb(list)),
   onMemos: (cb) => ipcRenderer.on('cal-memos', (e, list) => cb(list)),

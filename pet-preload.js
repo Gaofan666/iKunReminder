@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('kunkunPetWindow', {
   talk: () => ipcRenderer.invoke('pet-win-talk'),
   hideTalk: () => ipcRenderer.send('pet-win-talk-hide'),
 
+  /* 命中测试：pet.js 拿画布 alpha 判断鼠标是不是真的压在小鸡身上。
+     桌宠窗整个矩形比本体大（四周是透明留白），主进程默认让鼠标穿透过去，
+     只有这里报 true 时才把那个窗口的鼠标事件打开。 */
+  petHit: (hit) => ipcRenderer.send('pet-hit', !!hit),
+
   /* 主进程 → 宠物窗 */
   onSkin: (cb) => ipcRenderer.on('pet-win-skin', (e, id) => cb(id)),
   onSize: (cb) => ipcRenderer.on('pet-win-size', (e, name) => cb(name)),

@@ -20,6 +20,90 @@
 
 ---
 
+## 🆕 v4.4.2 修正
+
+- **桌宠的点击范围缩到「小鸡本体」**：桌宠窗整个矩形比小鸡大一圈（四周是透明留白），以前那一圈也算桌宠 —— 鼠标离小鸡还有一段距离就变"手掌"、点了也会触发。现在默认整窗鼠标穿透，只有真的压在小鸡身上（拿画布 alpha 判的，留 3px 容差）才打开鼠标事件；本体上的单击 / 拖动 / 右键菜单完全不受影响。
+- **气泡显示时长默认 6 秒 → 3 秒**，并在设置页「桌面宠物」里可调（3 / 5 / 8 / 15 秒）；可点的科研推送气泡仍是 15 秒。
+- 自检 `--diag-pet` 补两段：`pet-hit`（小鸡身上 true、上方留白 false）、`pet-bubble-ms`（默认 3000、下拉选 8 秒主进程收到 8000）。
+
+## 🆕 v4.4.1 修正
+
+- **编辑一条「已完成」的备忘（比如只改个分类）会把它变回未完成** —— 而它本来就过了截止时间，于是下一轮扫描凭空记一笔「逾期 1 次」、还弹一次提醒。原因是「改了截止时间才重新变回未完成」那句判断写错了位置，对所有编辑都生效。现在**只有真的改了截止时间**才会重新变回未完成；顺便让已完成的备忘不会因为改个分类又被排上提醒。
+- **分类管理区加了框**：展开后用一个带边框和底色的框把它和下面的备忘列表分开（以前只有一点点上边距，两层内容贴在一起看不出边界）。
+- 自检：`--diag-count` 加第 ⑩ 段（编辑已完成项 → 仍是已完成、逾期次数不变）；`--diag-cat` 第 ⑧ 段补「有框 / 有内边距 / 和列表有间隔」。
+
+## 🆕 v4.4.0 更新
+
+- **桌面日历上点某天就能加**：点日历上任意一天 → 当天清单 → 右上角「＋」→「＋ 待办 / ＋ 备忘」，**直接调出正常的新增弹窗、日期预填那一天**（只有一套表单，存完推回日历同步）。顺带修了「备忘变了月历格子不刷新」。
+- **分类入口从设置页搬到待办页**：「🧩 分类」按钮和「＋ 新增备忘」并排放在「📌 备忘录」栏头右边，同样大小配色，点开是管理区（命名 / 配色 / 删除），默认收起。图标 🏷 → 🧩。
+- **弹窗的分类下拉最后多了「＋ 新建分类…」**：选中就地输入、当场建好并自动选中（只建；改名/换色/删除仍在管理区，两边共用同一个新建函数）。原来那行"到设置页去建"的提示随之删掉。
+- 自检：`--diag-cal` 加 `cal-4c-addon`，`--diag-cat` 加 `7-下拉里就地新建`、`8-管理入口位置`。
+
+---
+
+## 🆕 v4.3.1 修正
+
+- **双屏 / 混合缩放下界面忽大忽小**：窗口被工作区「夹小」的尺寸**不再写进窗口状态**（以前会跟着你跑到大屏上，界面整体变小）；量设计高**固定只量主界面那一页**（以前停在哪页就量哪页，两次启动能差 3%）；设计高最多按 +20% 采信；开窗时就按目标屏夹一次，不再先大后小跳一下。
+- 顶栏加了防挤保护（窗口窄时等比收，真挤不下依次让出日期、版本号）。
+- 新增自检 `--diag-dpi`（各种宽高 + 每块显示器各量一遍）。
+
+---
+
+## 🆕 v4.3.0 更新（桌宠置顶开关 + 逾期/延期分开统计 + 待办/备忘分类）
+
+### 🐣 桌宠被压住了？现在有个开关
+
+1. **新增「📌 桌宠始终最前」开关（默认关闭）**：桌宠原来用的是最低一档的置顶，而 Windows 上**所有置顶窗口共用同一层，谁最后被激活谁就在最上面** —— 被别的置顶软件（或者软件自己的提醒窗）压住之后，它就再也回不来了。勾上这个开关之后，桌宠会自己盯着层级，**一旦被压住就重新提到最前**：只改层级，**不抢焦点、不打断你打字**。
+   **默认不开，原来的规则一点都不变**；设置页「桌面宠物」里能勾，托盘菜单和桌宠右键菜单里也有同一项。睡眠唤醒、提醒窗关掉之后都会自动重新提一次；**全屏提醒正在显示的时候它会主动让位**，不挡提醒。
+
+### 📝 逾期和延期是两件事，分开记
+
+2. **先说清楚两个词**（待办、备忘一视同仁）：
+
+   | 计数 | 什么时候 +1 |
+   | --- | --- |
+   | **逾期** | **一个截止时间被错过** —— 到点了还没完成，就一定算一次 |
+   | **延期** | **你把截止时间往后挪了一次** |
+
+   两件事互相独立，所以「错过旧期限之后又改期」就是**逾期 1 次 + 延期 1 次**；改期之后又没赶上新期限，就是**逾期 2 次 + 延期 1 次**。
+
+   - **截止前完成** → 两个都是 0。
+   - **在截止前就把时间往后挪**（主动顺延），新期限前完成 → **不算逾期**，只记 1 次延期。
+   - **改早、清空截止时间** → **不算延期**（只有往后挪才算）。
+   - **重复待办勾完自动排下一期** → **不算延期**，那一期没完成才算逾期。
+   - **逾期由程序自己判定，不看你点没点提醒**：到点那一刻还没完成就记一笔，提醒弹窗被你晾着、或者被 12 小时宽限静默清掉，都不会漏记。
+   - **同一个截止时间最多记一次**：同一个期限里反复点「我知道了 / 10 分钟后再说」，或者「取消完成再勾一次」，都只算 1 次 —— 去重键是截止时间本身，重启也不会重复记。
+
+3. **逾期提醒里可以顺手写一句原因**：5 个快捷原因（时间不够 / 被打断 / 等别人 / 忘了 / 事情变多）+ 可以自己写，**留空也行**。
+4. **备忘列表最下面挂了一条逾期统计**（做得低调，不抢列表的位置）：`📊 逾期备忘 N 条 · 累计 X · 平均 Y · 逾期共 N 次 · 延期 N 次 · 原因分布`，**点一下展开明细**（每条拖了多久、当时写的原因）。
+5. **卡片上挂「逾期 N 次」和「延期 M 次」两个小标**（颜色不同，一眼分得开），鼠标停上去能看到拖了多久 / 什么原因 / 最近一次挪到了哪天。
+6. **逾期过、又一直没写原因的，完成的时候会让你补一句**：勾完成时会先弹「这条备忘逾期了 —— 补一句？（不写也行）」，可以点快捷原因、自己写，或者**点「跳过，直接完成」**。跳过的也没关系 —— 卡片上会留一个「**补原因**」按钮，什么时候想补都行（已经完成的备忘补原因不会改变它的完成状态）。这个按钮**只认真的逾期过的备忘**（确实错过了截止时间才算）—— 截止时间早已过去、但当时并没拖的备忘不会被追着补原因，也不会被标成逾期。
+**老数据只补有据可查的**：只有「确实完成得比截止晚」（存着完成时间、且真晚于截止）的备忘才会被补记一笔逾期，时长按「截止 → 完成时间」算。没有完成时间的老数据**不会被翻旧账** —— 包括**写过逾期原因的也不算数**：那可能只是当时被弹窗问出来的，并不代表真拖过（早期版本只要有截止时间过去就会追问原因，所以「有原因」不能当证据）。
+
+### 🗂 做完的自动收起来，列表只留没做完的
+
+7. **已完成的收进一条折叠栏**（待办、备忘都有）：列表默认**只留未完成的**，最下面多一条象小标题的 `🗂 已完成 N 条 展开 ▼`（图标 + 加粗 + 独立底色 + 右侧箭头，不是那种一划而过的小灰字），**点一下才展开**。展开**先摆最近完成的 5 条**，多出来的再有一个 `更早的 N 条 ▾` 二级开关放出来。
+   **不按「最近一周」分组** —— 早期版本没存完成时间，老数据全都算不出「一周内」，那样点开会一条都看不到；现在按完成时间（没有完成时间的就按记录时间）从新到旧取前 5 条，**点开一定有东西看**。**折叠状态不跨重启记住**（和分类筛选一样，每次打开都是干净的收起状态）。
+
+### 🏷 待办和备忘可以分类了
+
+8. **自定义分类，待办和备忘共用一套**：入口在 **设置页左侧导航的「🏷 分类」**（也可以把设置页拉到最下面找它），可以**新建 / 改名 / 换色（直接调色盘）/ 删除**，每一项还显示有多少条内容在用它。**删除分类不会删内容** —— 那些内容会自动回到「未分类」。
+9. **新增 / 编辑弹窗里可以选分类**；列表上方多出一条**彩色分类筛选条**（全部 / 各个分类 / 未分类），点一下只看这一类；卡片上显示彩色分类小标（待办、备忘都有）。
+
+### 🛠 其他
+
+10. **新增 5 个自检开关**：`--diag-pettop`（桌宠置顶）、`--diag-late`（逾期统计）、`--diag-cat`（分类）、`--diag-why`（补填逾期原因）、`--diag-count`（逾期 / 延期两个计数器的口径），都是照真实界面点一遍的端到端自检。
+
+---
+
+## 🆕 v4.0 ～ v4.2 更新（更新链路修复 + 提示音可自选）
+
+1. **v4.0 修「老版本只能一个版本一个版本地升」**：自动更新除了读仓库里的更新清单，还会**直接问 GitHub / Gitee 的「最新发行版」接口**，两边取更新的那个当提示（清单有可能被 CDN 缓存住、停在上一版）。更新那一栏也多了 **「🌐 打开发布页」** 兜底按钮。**版本号从这版起按 `x.x` 显示**（安装包名和更新清单内部仍然是三段，如 `4.2.0` —— 更新器只认标准三段版本号，写 `4.2` 会失效）。
+2. **v4.1 提示音可以自己指定了**：提醒事项卡片右上角多了 **🔔** 按钮、待办卡片「＋ 新增待办」左边多了 **「🔔 提示音」** 按钮，可以挑电脑里的音乐文件当提示音；文件被删掉、或者格式放不出来时**自动退回内置提示音**。它和设置里的「提醒音乐」是两回事。
+3. **v4.2 提示音和提醒音乐不再叠在一起**：自己指定的提示音会**完整放完**（语音也说完）→ 再等 3 秒 → 才放提醒音乐；没指定提示音的跟以前一模一样。
+
+---
+
 ## 🆕 v3.11.0 综合更新（并入主分支 3.9.x 线：科研动态 + 备忘升级 + 多轮修复）
 
 本次把主分支（v3.9.8 ~ v3.9.11）的开发内容整体并入，和备忘录系列升级合成一个大版本。
@@ -291,32 +375,44 @@ v3.2.2 的「一键摸鱼」是「把所有有标题的可见窗口都最小化�
 
 **方式一：GitHub Releases（推荐）**
 
-> **v3.2.6（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.6
-> 直接下载：[`iKunReminder-setup-v3.2.6.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.6/iKunReminder-setup-v3.2.6.exe)（约 110 MB，安装版）
+> **v4.2（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.2
+> 直接下载：[`iKunReminder-setup-v4.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.2/iKunReminder-setup-v4.2.0.exe)（约 116 MB，安装版）
 >
 > ⚠️ **v3.2.1 及更早的版本需要手动装一次**（它们里面没有更新器，没法自己更新自己）。
 > 装上 v3.2.2 或更高之后就不用了 —— 以后的新版本都能在「设置 → 软件更新」里一键更新。
 >
+> 历史版本 **v4.1 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.1
+> 直接下载：[`iKunReminder-setup-v4.1.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.1/iKunReminder-setup-v4.1.0.exe)（约 116 MB，安装版）
+>
+> 历史版本 **v4.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.0
+> 直接下载：[`iKunReminder-setup-v4.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.0/iKunReminder-setup-v4.0.0.exe)（约 116 MB，安装版）
+>
+> 历史版本 **v3.11.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.11.0
+> 直接下载：[`iKunReminder-setup-v3.11.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.11.0/iKunReminder-setup-v3.11.0.exe)（约 116 MB，安装版）
+>
+> 历史版本 **v3.2.6 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.6
+> 直接下载：[`iKunReminder-setup-v3.2.6.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.6/iKunReminder-setup-v3.2.6.exe)（约 110 MB，安装版）
+>
 > 历史版本 **v3.2.5 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.5
-> 直接下载：[`iKunReminder-setup-v3.2.5.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.5/iKunReminder-setup-v3.2.5.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.5.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.5/iKunReminder-setup-v3.2.5.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.4 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.4
-> 直接下载：[`iKunReminder-setup-v3.2.4.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.4/iKunReminder-setup-v3.2.4.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.4.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.4/iKunReminder-setup-v3.2.4.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.3 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.3
-> 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.3.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.3/iKunReminder-setup-v3.2.3.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.2 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.2
-> 直接下载：[`iKunReminder-setup-v3.2.2.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.2/iKunReminder-setup-v3.2.2.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.2.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.2/iKunReminder-setup-v3.2.2.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.1 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.1
-> 直接下载：[`iKunReminder-setup-v3.2.1.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.1/iKunReminder-setup-v3.2.1.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.1.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.1/iKunReminder-setup-v3.2.1.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.2.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.2.0
-> 直接下载：[`iKunReminder-setup-v3.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.0/iKunReminder-setup-v3.2.0.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.2.0/iKunReminder-setup-v3.2.0.exe)（约 110 MB，安装版）
 >
 > 历史版本 **v3.0.0 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v3.0.0
-> 直接下载：[`iKunReminder-setup-v3.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.0.0/iKunReminder-setup-v3.0.0.exe)`（约 110 MB，安装版）
+> 直接下载：[`iKunReminder-setup-v3.0.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v3.0.0/iKunReminder-setup-v3.0.0.exe)（约 110 MB，安装版）
 
 **方式二：百度网盘**
 
@@ -481,6 +577,12 @@ npm run build:portable   # 便携版  → dist\iKunReminder-便携版.exe
 | 🪟 任务栏/托盘图标 | 两张图**完全同一张**角色头像；宠物模式下任务栏图标自动隐藏，只留托盘 |
 | 📥 收进托盘 | 后台常驻计时，到点自动跳出来 |
 | ⏱ 独立计时 | 两个提醒各自倒计时，可单独启用 / 停用 |
+| 📝 备忘录 | 可设截止时间，截止前按周期提醒；逾期会问你原因、统计逾期次数与时长，另有一个独立的延期（往后挪截止时间）次数；列表按截止排序、过期标红置顶 |
+| ✅ 待办事项 | 优先级、重复（每天 / 每周 / 每月……）、到点提醒，左边勾一下就完成 |
+| 🧩 分类 | 待办和备忘共用一套自定义分类（自己命名 + 配色）：待办页「📌 备忘录」栏头的「🧩 分类」里建 / 改名 / 换色 / 删除（增改弹窗的分类下拉最后一项也能就地新建），弹窗里选，列表上方按分类筛选 |
+| 🗂 已完成折叠 | 列表默认只留未完成的，做完的收进 `🗂 已完成 N 条` 小标题里（展开先看最近 5 条，更早的再点一下） |
+| 📌 桌宠始终最前 | 可选开关（**默认关**）：桌宠被别的置顶窗压住时自动重新提到最前，只改层级、不抢焦点 |
+| 📚 科研动态 | 按英文关键词抓 arXiv 论文，命中词标红 + 评分 / 评论 / 忽略名单，抓到新的用宠物气泡推送 |
 | 📊 今日统计 | 记录今天喝了几次水、休息几次，带进度条和目标值 |
 | 💾 自动保存 | 设置与统计存本地，关掉再开还在 |
 | 📏 等比缩放 | 主界面按 1180 设计宽度排版，窗口多大就整体缩放，文字面板角色一起变 |
@@ -633,3 +735,16 @@ Windows 会把不常用的图标折叠进「隐藏的图标」小三角里，拖
   呼吸、头发延迟半拍的跟随甩动；篮球被持球手用两段式 IK 真实跟随（运球 / 抱起 / 欢呼三种状态）。
 - **音效**：Web Audio `OscillatorNode` 实时合成，没有音频文件。
 - **安全**：`contextIsolation: true` + `nodeIntegration: false` + 严格 CSP。
+
+---
+
+## 📌 待办（TODO）
+
+- **更新完成后弹一个「本版更新要点」的窗**（还没做，留给后续版本）
+  - 判断方式：把「上次运行时的版本号」存起来（localStorage），启动时和当前版本比 —— 不一样就弹一次。
+  - **要点文字写在仓库里**（按版本号一张小表），**不要**依赖 GitHub release 的正文 —— 那需要 owner 每次手写，
+    而写在仓库里的话，每版说明跟着代码进 PR，弹窗内容自己可控、也不用联网。
+  - 顺手在「设置 → 软件更新」里放一个「本版更新内容」入口，随时能回看。
+  - 自检想法：模拟版本变化 → 断言弹窗出现、文案对、只弹一次。
+  - 注意：这个改动**不影响**「用户能不能收到更新」—— 那取决于仓库 owner 是否在 GitHub 发了带安装包资产的 Release。
+

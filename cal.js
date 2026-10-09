@@ -24,6 +24,7 @@
     btnAdd: $('#btnAdd'), btnSet: $('#btnSet'), btnHide: $('#btnHide'),
     btnAddMemo: $('#btnAddMemo'), memoNewRow: $('#memoNewRow'),
     memoNew: $('#memoNew'), memoNewOk: $('#memoNewOk'),
+    panelAdd: $('#panelAdd'), panelAddMenu: $('#panelAddMenu'),
     panelClose: $('#panelClose')
   };
 
@@ -315,6 +316,7 @@
     selected = null;
     pendingDelete = null;
     el.panel.hidden = true;
+    if (el.panelAddMenu) el.panelAddMenu.hidden = true;
     const sel = el.grid.querySelector('.cell.sel');
     if (sel) sel.classList.remove('sel');
   }
@@ -510,6 +512,27 @@
     }, true);
   }
   el.panelClose.addEventListener('click', closePanel);
+  /* 当天清单右上角 ＋：展开「＋ 待办 / ＋ 备忘」。
+     点了不在日历里建东西，而是把这一天交给主界面，由它打开正常的新增弹窗（日期预填这一天）——
+     表单只有一套、保存路径也只有一条，存完主界面照常把数据推回来同步。 */
+  const closeAddMenu = function () { if (el.panelAddMenu) el.panelAddMenu.hidden = true; };
+  if (el.panelAdd) {
+    el.panelAdd.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (el.panelAddMenu) el.panelAddMenu.hidden = !el.panelAddMenu.hidden;
+    });
+  }
+  if (el.panelAddMenu) {
+    el.panelAddMenu.addEventListener('click', function (e) {
+      const b = e.target.closest ? e.target.closest('button[data-kind]') : null;
+      if (!b) return;
+      e.stopPropagation();
+      const key = selected || todayKey;
+      if (b.dataset.kind === 'todo') { if (bridge.addTodoOn) bridge.addTodoOn(key); }
+      else if (b.dataset.kind === 'memo') { if (bridge.addMemoOn) bridge.addMemoOn(key); }
+      closeAddMenu();
+    });
+  }
   el.panel.addEventListener('click', function (e) {
     if (e.target === el.panel || e.target === el.panelList) closePanel();
   });
@@ -542,6 +565,10 @@
     bridge.onMemos(function (list) {
       memos = Array.isArray(list) ? list : [];
       renderMemos();
+      /* ⚠️ 备忘变了也要刷月历格子：以前这里只刷左栏，于是新加 / 改动的备忘
+         在月历格子上看不到 📌 条，非得等下次翻月或待办也变了才补上。
+         （在日历里给某天加备忘时最容易撞见：加完当天那一格还是空的。） */
+      render();
     });
   }
   if (bridge.onNav) {
