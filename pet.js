@@ -65,6 +65,49 @@
     if (ms) moodTimer = setTimeout(function () { pet.setMood('idle'); }, ms);
   }
 
+  /* ---------------------------------------------------------- 命中测试
+     桌宠窗整个矩形比小鸡本体大（四周是透明的留白）。主进程默认让鼠标穿透过去，
+     这里用画布 alpha 判断鼠标是不是真的压在小鸡身上，只在状态变化时报给主进程 ——
+     不然每次 mousemove 都发一条 IPC 太吵。
+     注意画布是按物理像素画的（有 DPR 缩放），坐标要换算到画布像素。 */
+  var HIT_TOL = 3;                     // 边缘 3px 容差，免得贴着边点不中
+  var hitLast = null, hitDown = false;
+  var HIT_OFFS = [[0, 0], [HIT_TOL, 0], [-HIT_TOL, 0], [0, HIT_TOL], [0, -HIT_TOL],
+    [HIT_TOL, HIT_TOL], [-HIT_TOL, -HIT_TOL], [HIT_TOL, -HIT_TOL], [-HIT_TOL, HIT_TOL]];
+
+  function overPet(clientX, clientY) {
+    try {
+      var r = canvas.getBoundingClientRect();
+      if (!r.width || !r.height) return false;
+      var sx = (clientX - r.left) * canvas.width / r.width;
+      var sy = (clientY - r.top) * canvas.height / r.height;
+      var ctx = canvas.getContext('2d');
+      for (var i = 0; i < HIT_OFFS.length; i++) {
+        var x = Math.round(sx + HIT_OFFS[i][0]), y = Math.round(sy + HIT_OFFS[i][1]);
+        if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) continue;
+        if (ctx.getImageData(x, y, 1, 1).data[3] > 12) return true;   // 有一点点不透明就算命中
+      }
+      return false;
+    } catch (e) {
+      return true;    // 量不出来时按「可点」处理，别把桌宠变成点不动的
+    }
+  }
+
+  function reportHit(hit) {
+    if (hit === hitLast) return;
+    hitLast = hit;
+    if (bridge.petHit) bridge.petHit(hit);
+  }
+
+  window.addEventListener('mousemove', function (e) {
+    if (hitDown) return;              // 按住/拖动期间不切状态，免得把拖动打断
+    reportHit(overPet(e.clientX, e.clientY));
+  });
+  window.addEventListener('mousedown', function () { hitDown = true; });
+  window.addEventListener('mouseup', function () { hitDown = false; });
+  window.addEventListener('mouseleave', function () { if (!hitDown) reportHit(false); });
+  reportHit(false);                   // 初始按穿透处理，鼠标压上来自然会打开
+
   /* ---------------------------------------------------------- 形象 / 音效 */
   PET.setCaptionHandler(function () { });      // 宠物窗没有文字可以提示，静默即可
 

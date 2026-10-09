@@ -185,6 +185,7 @@
     petSize: 'max',            // 桌面宠物大小：max 迷你 / mid 小小 / min 超小
     petOn: false,              // 桌面宠物是否显示（独立小窗，可与主界面同时存在）
     petTop: false,             // 桌宠是否「始终最前」（默认关：保持系统原本的置顶规则）
+    bubbleSec: 3,              // 桌宠说话的气泡显示几秒后自动收起（默认 3 秒，设置里可调）
     calOn: false,              // 桌面日历是否显示（独立小窗，可与主界面同时存在）
     calTheme: 'light',         // 桌面日历主题：light / dark
     calOpacity: 97,            // 桌面日历卡片不透明度（35~100，只影响底色）
@@ -741,6 +742,8 @@
     desktopPetRow: $('#desktopPetRow'),
     chkPetTop: $('#chkPetTop'),
     petTopRow: $('#petTopRow'),
+    petBubbleRow: $('#petBubbleRow'),
+    petBubbleSel: $('#petBubbleSel'),
     chkDesktopCal: $('#chkDesktopCal'),
     calThemeSeg: $('#calThemeSeg'),
     calOpa: $('#calOpa'),
@@ -986,6 +989,7 @@
         if (s.petSize && PET_SIZE_KEYS.indexOf(s.petSize) >= 0) settings.petSize = s.petSize;
         if (typeof s.petOn === 'boolean') settings.petOn = s.petOn;
         if (typeof s.petTop === 'boolean') settings.petTop = s.petTop;
+        if (+s.bubbleSec > 0) settings.bubbleSec = Math.max(1, Math.min(60, Math.round(+s.bubbleSec)));
         if (typeof s.calOn === 'boolean') settings.calOn = s.calOn;
         if (s.calTheme === 'dark' || s.calTheme === 'light') settings.calTheme = s.calTheme;
         if (isFinite(+s.calOpacity) && +s.calOpacity > 0) {
@@ -3830,7 +3834,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v4.4 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v4.5 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }
@@ -5974,6 +5978,20 @@
     }
     updatePetSizeUI();
     if (native && native.setPetSize) native.setPetSize(settings.petSize);
+    /* 桌宠气泡显示时长：默认 3 秒，这里把存下来的值推给主进程并同步下拉框 */
+    if (el.petBubbleRow) el.petBubbleRow.hidden = !native;
+    if (el.petBubbleSel) {
+      el.petBubbleSel.value = String(settings.bubbleSec || 3);
+      el.petBubbleSel.addEventListener('change', function () {
+        settings.bubbleSec = Math.max(1, Math.min(60, Math.round(+el.petBubbleSel.value) || 3));
+        el.petBubbleSel.value = String(settings.bubbleSec);
+        saveSettings();
+        pushState();
+        if (native && native.setPetBubbleSec) native.setPetBubbleSec(settings.bubbleSec);
+        setCaption('桌宠气泡显示时长：' + settings.bubbleSec + ' 秒');
+      });
+    }
+    if (native && native.setPetBubbleSec) native.setPetBubbleSec(settings.bubbleSec || 3);
 
     /* 皮肤：列出可选形象，并载入上次选的那个 */
     initSkin();

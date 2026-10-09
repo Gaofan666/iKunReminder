@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('kunkunNative', {
   /* 桌宠「始终最前」：默认关，保持系统原本的置顶规则 */
   setPetTop: (on) => ipcRenderer.invoke('pet-top', !!on),
   getPetTop: () => ipcRenderer.invoke('pet-top-get'),
+  /* 桌宠说话气泡显示多久（秒；设置页「💬 气泡显示时长」，默认 3 秒） */
+  setPetBubbleSec: (sec) => ipcRenderer.send('pet-bubble-sec', sec),
 
   /* 桌面日历：另一个独立小窗（透明月历挂件：左备忘录 + 右月历）。
      待办/备忘录的真数据在页面这边，所以是页面把清单推给主进程，

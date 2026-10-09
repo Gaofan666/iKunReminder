@@ -655,6 +655,56 @@ function createWindow() {
             await new Promise(function (r) { setTimeout(r, 1400); });
             /* 护眼模式还没开的时候，宠物右键菜单里那一项应该是没勾的 */
             diagLog('pet-menu', { 菜单: petMenuSummary(), 用的形象: currentSkin });
+
+            /* 桌宠的点击范围（这一版修的）：本体上可点、四周透明留白要穿透。
+               做法：先在宠物页里扫出小鸡最上面那一行不透明像素，再分别把小鸡身上
+               和它上方留白处的坐标塞进 mousemove，看主进程收到的 petHitLast。 */
+            if (petWin && !petWin.isDestroyed()) {
+              const probeHit = async function (dy, tag) {
+                const r = await petWin.webContents.executeJavaScript(
+                  '(function(){var c=document.getElementById("pet");var ctx=c.getContext("2d");' +
+                  'var rect=c.getBoundingClientRect();var k=c.width/rect.width;' +
+                  'var cx=Math.round(c.width/2),top=-1;' +
+                  'for(var y=0;y<c.height&&top<0;y++){if(ctx.getImageData(cx,y,1,1).data[3]>12)top=y;}' +
+                  'if(top<0)return {error:"画布上没找到小鸡"};' +
+                  'var pt={x:cx/k,y:(top+' + dy + ')/k};' +
+                  'window.dispatchEvent(new MouseEvent("mousemove",{clientX:0,clientY:0}));' +   // 先复位
+                  'window.dispatchEvent(new MouseEvent("mousemove",{clientX:pt.x,clientY:pt.y}));' +
+                  'return {k:k,w:c.width,h:c.height,top:top,x:pt.x,y:pt.y};})()', true);
+                await new Promise(function (r2) { setTimeout(r2, 260); });
+                r.报给主进程的hit = petHitLast;
+                r.用例 = tag;
+                return r;
+              };
+              diagLog('pet-hit', {
+                本体上: await probeHit(12, '小鸡身上(最上面那行往下 12px)'),
+                上方留白: await probeHit(-10, '小鸡上方 10px 的透明处'),
+                本体上可点: petHitLast === true
+              });
+              /* 再补一刀：上方留白那次跑完，主进程记的应该是 false */
+              const above = await probeHit(-10, '再确认一次上方留白');
+              diagLog('pet-hit-blank', { 上方留白: above, 留白处穿透: above.报给主进程的hit === false });
+            }
+
+            /* 气泡显示时长：默认 3 秒，设置页那个下拉能改（主进程收到的是毫秒） */
+            const bubbleBefore = bubbleMsUser;
+            await win.webContents.executeJavaScript(
+              '(function(){var s=document.getElementById("petBubbleSel");' +
+              'if(!s)return false;s.value="8";s.dispatchEvent(new Event("change",{bubbles:true}));return true;})()', true);
+            await new Promise(function (r) { setTimeout(r, 400); });
+            diagLog('pet-bubble-ms', {
+              默认毫秒: BUBBLE_MS,
+              改之前: bubbleBefore,
+              '选 8 秒之后': bubbleMsUser,
+              下拉生效: bubbleMsUser === 8000,
+              默认是3秒: BUBBLE_MS === 3000
+            });
+            try {
+              await win.webContents.executeJavaScript(
+                '(function(){var s=document.getElementById("petBubbleSel");s.value="3";' +
+                's.dispatchEvent(new Event("change",{bubbles:true}));return true;})()', true);
+              await new Promise(function (r) { setTimeout(r, 300); });
+            } catch (e) { }
           }
           if (DIAG.tab) {
             await win.webContents.executeJavaScript(
@@ -5598,6 +5648,11 @@ function createPetWindow() {
     }
   });
   petWin.setAlwaysOnTop(true, 'floating');
+  /* 桌宠窗整个矩形比小鸡本体大（四周是透明的留白）——默认让鼠标穿透过去，
+     只在「鼠标真的压在小鸡身上」时才由 pet.js 的 alpha 命中测试把它打开
+     （见下面的 pet-hit）。forward:true 保证穿透状态下页面照样收到 mousemove，
+     否则页面永远判断不出该不该恢复可点。 */
+  petWin.setIgnoreMouseEvents(true, { forward: true });
   petWin.loadFile(path.join(__dirname, 'pet.html'));
 
   /* 宠物被拖到别块屏之后：按那块的缩放重新定尺寸（物理大小不变），
@@ -6853,9 +6908,11 @@ function showBubble(data) {
   return true;
 }
 
-/* 气泡自动收起：普通说话 6 秒；可点的（科研推送）给 15 秒，够看清标题再点 */
-const BUBBLE_MS = 6000;
+/* 气泡自动收起：普通说话默认 3 秒（设置页「🎈 气泡显示时长」可调 3/5/8/15 秒）；
+   可点的（科研推送）固定给 15 秒，够看清标题再点 */
+const BUBBLE_MS = 3000;
 const BUBBLE_CLICK_MS = 15000;
+let bubbleMsUser = BUBBLE_MS;        // 用户在设置里选的时长（毫秒），主界面推过来
 let bubbleTimer = null;
 
 function armBubbleTimer(ms) {
@@ -6863,8 +6920,24 @@ function armBubbleTimer(ms) {
   bubbleTimer = setTimeout(function () {
     bubbleTimer = null;
     hideBubble();
-  }, Math.max(1000, Math.round(Number(ms) || BUBBLE_MS)));
+  }, Math.max(1000, Math.round(Number(ms) || bubbleMsUser || BUBBLE_MS)));
 }
+
+/* 设置页「💬 气泡显示时长」：主界面把秒数推过来（默认 3 秒） */
+ipcMain.on('pet-bubble-sec', (e, sec) => {
+  const n = Math.round(Number(sec) || 0);
+  if (n > 0) bubbleMsUser = Math.max(1, Math.min(60, n)) * 1000;
+});
+
+/* 桌宠命中测试的结果（pet.js 拿画布 alpha 算的）：压在小鸡身上就关掉穿透，
+   压在透明留白上就恢复穿透。顺便记下最后一次状态，自检要读它。 */
+let petHitLast = null;
+ipcMain.on('pet-hit', (e, hit) => {
+  petHitLast = !!hit;
+  if (petWin && !petWin.isDestroyed()) {
+    try { petWin.setIgnoreMouseEvents(!petHitLast, { forward: true }); } catch (err) { }
+  }
+});
 
 function hideBubble() {
   talkOpen = false;
