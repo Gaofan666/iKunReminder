@@ -353,7 +353,8 @@ function applyDisplay(force) {
   if (wantW !== b.width || wantH !== b.height || wantX !== b.x || wantY !== b.y) {
     /* 尺寸被夹小了：这是环境逼的，别让它写进窗口状态（见 scheduleWinStateSave） */
     if (wantW !== b.width || wantH !== b.height) {
-      appImposedSize = { width: wantW, height: wantH };
+      noteImposedSize(wantW, wantH, b.width, b.height);
+      markProgrammaticBounds();
     }
     win.setBounds({ x: wantX, y: wantY, width: wantW, height: wantH });
   }
@@ -406,6 +407,12 @@ let petSize = 'max';
 let petOn = false;          // 用户是否勾选了「桌面宠物」
 let petTop = false;         // 桌宠「始终最前」：默认关，保持系统原本的置顶规则
 let petTopTimer = null;     // 「始终最前」的看门狗定时器
+/* 到点提醒正占着前台吗（提醒窗置顶显示中）。
+   ⚠️ 以前是拿 win.isAlwaysOnTop() 当这个判据的，但那个标记在「提醒没关就把窗口收进托盘」
+   之类的路径上不会被清掉（只有 dismiss 会清）→ 看门狗从此每 3 秒都提前 return，
+   用户勾的「始终最前」静默失效，直到重新叫出窗口并把那个提醒关掉。改成自己记状态 +
+   窗口真的可见才算数，hide / 页面重载 / dismiss 都会清。 */
+let alertFront = false;
 let petBooted = false;      // 宠物窗页面是否已经画好（画好之前不显示，避免闪一下）
 let petSkin = '__default';  // 当前形象，宠物窗与主界面共用
 let currentSkin = '__default';   // 同上（菜单打勾用这个名字，保留两个别名更直观）
@@ -493,26 +500,51 @@ let winStateSaveTimer = null;
    我们不得不把窗口夹进那块屏的工作区，但那个小尺寸是环境的产物：一旦存下来，
    下次在大屏上打开也变成那个小窗口（用户报的「有时候字体过小 / 导航栏按钮重叠」
    就是这么来的：窗口被夹小 → 小尺寸存盘 → 换回大屏还按小尺寸开）。
-   所以存盘时如果发现「当前尺寸正好就是我们强加的那个」，就只更新位置、
-   尺寸沿用上一次真正由用户定下的值。用户一旦自己拖过大小，尺寸就对不上了，
-   那条路径自然恢复正常（他自己定的大小照存不误）。 */
+   ⚠️ 早期版本是拿「当前尺寸 == 夹取时算出来的那个数」来判断的，这条靠不住：
+   Windows 会把 setBounds 夹到 minimumSize 上、无边框窗还会多出一圈边框，
+   实测能差 1 像素（自检 dpi-2 就是这么挂的：986 对我们算出来的 985）→ 判断落空、
+   小尺寸照样落盘。现在改成记「意图」而不是比数字：
+     · winSizeImposed —— 当前尺寸是程序夹出来的（用户自己拖过就清掉）；
+     · winSizeWanted  —— 夹之前窗口的尺寸（= 用户/存档真正想要的那个）；
+     · progBoundsAt   —— 我们最近一次自己 setBounds 的时间，用来把「我们设的」
+                         和「用户拖的」分开。 */
+let winSizeImposed = false;
+let winSizeWanted = null;
+let progBoundsAt = 0;
+/* 保留：自检和日志还在读它 */
 let appImposedSize = null;
+
+function markProgrammaticBounds() { progBoundsAt = Date.now(); }
+
+/* 夹取时统一走这里：记下「夹出来的是多少」和「夹之前想要多少」，并标记成程序夹的 */
+function noteImposedSize(wantW, wantH, beforeW, beforeH) {
+  appImposedSize = { width: wantW, height: wantH };
+  winSizeWanted = { width: Math.round(beforeW), height: Math.round(beforeH) };
+  winSizeImposed = true;
+}
+
 function scheduleWinStateSave() {
   if (winStateSaveTimer) clearTimeout(winStateSaveTimer);
   winStateSaveTimer = setTimeout(function () {
     winStateSaveTimer = null;
-    if (win && !win.isDestroyed() && !win.isMinimized()) {
-      const b = win.getBounds();
-      if (appImposedSize && b.width === appImposedSize.width && b.height === appImposedSize.height) {
-        const prev = loadWinState();
-        if (prev && prev.width > 0 && prev.height > 0 &&
-          (prev.width > b.width || prev.height > b.height)) {
-          saveWinState({ x: b.x, y: b.y, width: prev.width, height: prev.height });
-          return;
-        }
+    if (!win || win.isDestroyed() || win.isMinimized()) return;
+    const b = win.getBounds();
+    if (winSizeImposed) {
+      /* 只更新位置，尺寸沿用「用户真正想要的」：优先用存档里更大的那个
+         （换屏开小窗时存档还是上一块大屏的尺寸），没有存档（首次运行）
+         或存档不比现在大，就用夹取之前那个尺寸。 */
+      const prev = loadWinState();
+      if (prev && prev.width > 0 && prev.height > 0 &&
+        (prev.width > b.width || prev.height > b.height)) {
+        saveWinState({ x: b.x, y: b.y, width: prev.width, height: prev.height });
+        return;
       }
-      saveWinState(b);
+      if (winSizeWanted && (winSizeWanted.width > b.width || winSizeWanted.height > b.height)) {
+        saveWinState({ x: b.x, y: b.y, width: winSizeWanted.width, height: winSizeWanted.height });
+        return;
+      }
     }
+    saveWinState(b);
   }, 600);
 }
 
@@ -582,7 +614,7 @@ function createWindow() {
     fitW, fitH, openWa
   );
   if (fitW !== baseW || fitH !== baseH) {
-    appImposedSize = { width: openBox.width, height: openBox.height };
+    noteImposedSize(openBox.width, openBox.height, baseW, baseH);
   }
 
   win = new BrowserWindow({
@@ -676,10 +708,16 @@ function createWindow() {
                 r.用例 = tag;
                 return r;
               };
+              const bodyHit = await probeHit(12, '小鸡身上(最上面那行往下 12px)');
+              const blankHit = await probeHit(-10, '小鸡上方 10px 的透明处');
               diagLog('pet-hit', {
-                本体上: await probeHit(12, '小鸡身上(最上面那行往下 12px)'),
-                上方留白: await probeHit(-10, '小鸡上方 10px 的透明处'),
-                本体上可点: petHitLast === true
+                本体上: bodyHit,
+                上方留白: blankHit,
+                /* ⚠️ 这里以前写的是 `petHitLast === true`，而它是在两次探测都跑完之后才算的 ——
+                   等于是拿"最后一次探测（留白）"的结果去断言"本体上可点"，恒为 false。
+                   现在各用各的那次读数。 */
+                本体上可点: bodyHit.报给主进程的hit === true,
+                上方留白穿透: blankHit.报给主进程的hit === false
               });
               /* 再补一刀：上方留白那次跑完，主进程记的应该是 false */
               const above = await probeHit(-10, '再确认一次上方留白');
@@ -688,16 +726,21 @@ function createWindow() {
 
             /* 气泡显示时长：默认 3 秒，设置页那个下拉能改（主进程收到的是毫秒） */
             const bubbleBefore = bubbleMsUser;
+            /* 先看下拉"没被人动过"时停在几秒 —— 这才是真正的"默认值"证据
+               （直接比 BUBBLE_MS === 3000 是自己跟自己比，恒为真，等于没测） */
+            const bubbleDefault = await win.webContents.executeJavaScript(
+              '(function(){var s=document.getElementById("petBubbleSel");return s?s.value:null;})()', true);
             await win.webContents.executeJavaScript(
               '(function(){var s=document.getElementById("petBubbleSel");' +
               'if(!s)return false;s.value="8";s.dispatchEvent(new Event("change",{bubbles:true}));return true;})()', true);
             await new Promise(function (r) { setTimeout(r, 400); });
             diagLog('pet-bubble-ms', {
-              默认毫秒: BUBBLE_MS,
+              主进程默认毫秒: BUBBLE_MS,
+              下拉默认停在: bubbleDefault + ' 秒',
               改之前: bubbleBefore,
               '选 8 秒之后': bubbleMsUser,
               下拉生效: bubbleMsUser === 8000,
-              默认是3秒: BUBBLE_MS === 3000
+              默认是3秒: bubbleDefault === '3'
             });
             /* 「桌宠始终最前」和「气泡显示时长」必须在同一行（用户要求不换行） */
             diagLog('pet-one-row', await win.webContents.executeJavaScript(
@@ -708,7 +751,10 @@ function createWindow() {
               'return {在同一个容器里:!!rowA&&rowA===rowB,' +
               ' 同一行:Math.abs((ra.top+ra.height/2)-(rb.top+rb.height/2))<16,' +
               ' 复选框在左:ra.left<rb.left,' +
-              ' 容器不许换行:rowA?!getComputedStyle(rowA).flexWrap.indexOf("wrap")>=0||getComputedStyle(rowA).flexWrap==="nowrap":false};})()', true));
+              /* flexWrap 必须真的是 nowrap：以前写的是 indexOf("wrap")>=0 || === "nowrap"，
+                 而 "wrap" 本身就命中 indexOf，wrap / wrap-reverse 全都能过，这条等于没测 */
+              ' 容器不许换行:rowA?getComputedStyle(rowA).flexWrap==="nowrap":false,' +
+              ' 这行没溢出:rowA?rowA.scrollWidth<=rowA.clientWidth+1:false};})()', true));
             try {
               await win.webContents.executeJavaScript(
                 '(function(){var s=document.getElementById("petBubbleSel");s.value="3";' +
@@ -941,11 +987,13 @@ function createWindow() {
             setPetTop(true);
             await wait(120);
             out['2-打开后'] = { petTop: petTop, 看门狗起来了吗: !!petTopTimer, raise提上去了: petRaise() };
-            /* 提醒态：bringToFront() 就是把主窗置顶 —— 这时候桌宠不该顶上去 */
-            win.setAlwaysOnTop(true, 'screen-saver');
+            /* 提醒态：走真实的 bringToFront()（它会把「提醒占着前台」这个标记立起来） */
+            bringToFront();
             await wait(80);
-            out['3-提醒态让一让'] = { raise被拦住: petRaise() === false };
+            out['3-提醒态让一让'] = { raise被拦住: petRaise() === false, 提醒占前台: alertFront };
             win.setAlwaysOnTop(false);
+            win.flashFrame(false);
+            alertFront = false;
             setPetTop(false);
             await wait(120);
             out['4-关掉后'] = { petTop: petTop, 看门狗还在吗: !!petTopTimer, raise被拦住: petRaise() === false };
@@ -1155,20 +1203,59 @@ function createWindow() {
               'return o;})()');
             await waitC(250);
 
-            /* ⑤ 改名「工作」→「项目」：卡片小标要跟着变 */
+            /* ⑤ 改名「工作」→「项目」：卡片小标要跟着变。
+               ⚠️ 这里以前是把 window.prompt 打个桩再点「改名」，于是"改名用的是 prompt"
+               这件事被盖住了 —— 而 Electron 的渲染进程里 window.prompt 必抛
+               （prompt() is not supported.），真实用户点了根本不会改名。
+               现在改成装一个"会记账的桩"：真被调用就记下来，断言是「没调用它」，
+               改名必须走行内输入框 + 保存按钮才通过。 */
             out['5-改名'] = await jsc(
               '(function(){var o={};' +
-              'window.prompt=function(){return "项目";};' +
+              'window.__promptCalled=false;' +
+              'var rawPrompt=window.prompt;' +
+              'try{window.prompt=function(){window.__promptCalled=true;return "项目";};}catch(e){}' +
               'var rows=document.querySelectorAll("#catManage .cat-item");' +
               'var row=Array.prototype.find.call(rows,function(r){return r.querySelector(".cat-name").textContent==="工作";});' +
               'if(!row)return {没找到工作:true};' +
               'row.querySelector("[data-role=rename]").click();' +
+              'var inp=row.querySelector(".cat-edit-input");' +
+              'o.点了改名出现输入框=!!inp&&row.classList.contains("editing");' +
+              'o.输入框带出原名=inp?inp.value:"";' +
+              'if(inp)inp.value="项目";' +
+              'var ok=row.querySelector("[data-role=rename-ok]");' +
+              'o.有保存按钮=!!ok;' +
+              'if(ok)ok.click();' +
               'var names=[];var rr=document.querySelectorAll("#catManage .cat-item");' +
               'for(var i=0;i<rr.length;i++)names.push(rr[i].querySelector(".cat-name").textContent);' +
               'o.改名后分类=names;' +
+              'o["没走prompt"]=window.__promptCalled===false;' +
+              'try{window.prompt=rawPrompt;}catch(e){}' +
               'var mrows=document.querySelectorAll(".memo-item");' +
               'var mrow=Array.prototype.find.call(mrows,function(r){return r.textContent.indexOf("【自检】分类备忘")>=0;});' +
               'o.卡片小标=!!mrow&&!!mrow.querySelector(".cat-tag")?mrow.querySelector(".cat-tag").textContent:"";' +
+              'o.改成功=names.indexOf("项目")>=0&&names.indexOf("工作")<0&&o.卡片小标==="项目";' +
+              'return o;})()');
+            await waitC(250);
+
+            /* ⑤b 改名输入框的边界：空名字要拦下来、Esc 要能取消 */
+            out['5b-改名边界'] = await jsc(
+              '(function(){var o={};' +
+              'var rows=document.querySelectorAll("#catManage .cat-item");' +
+              'var row=Array.prototype.find.call(rows,function(r){return r.querySelector(".cat-name").textContent==="项目";});' +
+              'if(!row)return {没找到项目:true};' +
+              'row.querySelector("[data-role=rename]").click();' +
+              'var inp=row.querySelector(".cat-edit-input");' +
+              'inp.value="   ";' +
+              'row.querySelector("[data-role=rename-ok]").click();' +
+              'o.空名字还停在编辑态=row.classList.contains("editing");' +
+              'o.名字没被改空=row.querySelector(".cat-name")?row.querySelector(".cat-name").textContent:"";' +
+              'inp.value="临时名字";' +
+              'inp.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));' +
+              'var rr=document.querySelectorAll("#catManage .cat-item");' +
+              'var still=Array.prototype.find.call(rr,function(r){return r.querySelector(".cat-name").textContent==="临时名字";});' +
+              'o.Esc取消了=!still;' +
+              'var row2=Array.prototype.find.call(rr,function(r){return r.querySelector(".cat-name").textContent==="项目";});' +
+              'o.名字还是项目=!!row2;' +
               'return o;})()');
             await waitC(250);
 
@@ -1267,6 +1354,7 @@ function createWindow() {
             const T_D = '【自检】补原因B';
             const T_E = '【自检】没延期C';
             const T_F = '【自检】没延期D';
+            const T_K = '【自检】补原因K';
             /* hoursAgo > 0 = 截止在过去（会弹提醒）；负数 = 截止在未来 */
             const mk = function (text, hoursAgo) {
               return '(function(){var pad2=function(n){return n<10?"0"+n:String(n);};' +
@@ -1483,6 +1571,74 @@ function createWindow() {
               晚完成的会提示补原因: lateJ0.卡片上有补原因 === true,
               补完账目正确: afterJ.逾期次数 === 1 && afterJ.原因 === '加班' &&
                 afterJ.拖了毫秒 >= 7100000 && afterJ.拖了毫秒 <= 7300000
+            };
+
+            /* ⑥b 「补原因」弹窗不许顺手把备忘勾成完成（合并前修的那条）：
+               · 从卡片上的「补原因」进来 → 两个按钮是「只保存原因 / 保存并完成」；
+               · ✕（以及点遮罩 / Esc）= 只关闭，什么都不写、完成状态不动。 */
+            await jsw(mk(T_K, 1));
+            await waitW(1200);
+            /* 这条会弹提醒：先「我知道了」把它收掉（别点完成，那不是这一步要测的） */
+            await jsw('(function(){var ov=document.getElementById("overlay");' +
+              'if(ov&&!ov.hidden){var a=document.getElementById("alertAck");if(a&&!a.hidden)a.click();' +
+              'var c=document.getElementById("alertClose");if(c)c.click();}return true;})()');
+            await waitW(400);
+            const k0 = await jsw(readM(T_K));
+            const openedK = await jsw(clickWhy(T_K));
+            await waitW(300);
+            const modalK = await jsw(fillOpen);
+            await jsw('(function(){var c=document.querySelectorAll("#lateFillChips button");' +
+              'var t=Array.prototype.find.call(c,function(b){return b.textContent==="时间不够";});' +
+              'if(t)t.click();return true;})()');
+            await jsw('document.getElementById("lateFillClose").click(); true');    // ✕ = 只关闭
+            await waitW(400);
+            const afterClose = await jsw(readM(T_K));
+            const closedK = await jsw(
+              '(function(){return {弹窗开着:!document.getElementById("lateFillOverlay").hidden};})()');
+            /* 第二次点开之前：装一个"记录点了哪个按钮"的监听（capture 阶段先记，
+               再让程序自己的处理函数跑），顺便准备一个读按钮文案的小工具 */
+            const labelsAt = function () {
+              return jsw('(function(){return {' +
+                '弹窗开着:!document.getElementById("lateFillOverlay").hidden,' +
+                '保存按钮:document.getElementById("lateFillSave").textContent,' +
+                '跳过按钮:document.getElementById("lateFillSkip").textContent,' +
+                '输入框:document.getElementById("lateFillInput").value};})()');
+            };
+            await jsw('(function(){window.__clickRoles=[];' +
+              'var box=document.getElementById("memoList");' +
+              'if(box)box.addEventListener("click",function(e){' +
+              'var r=e.target.closest?e.target.closest("[data-role]"):null;' +
+              'window.__clickRoles.push(r?String(r.dataset.role):"(无data-role)");},true);' +
+              'return true;})()');
+            const openedK2 = await jsw(clickWhy(T_K));       // 再来一次，这次点「只保存原因」
+            await waitW(80);
+            const label80 = await labelsAt();
+            const clickTrace = await jsw('(function(){return window.__clickRoles||[];})()');
+            await jsw('(function(){var c=document.querySelectorAll("#lateFillChips button");' +
+              'var t=Array.prototype.find.call(c,function(b){return b.textContent==="事情变多";});' +
+              'if(t)t.click();return true;})()');
+            await waitW(150);
+            const beforeSave = await labelsAt();
+            /* 点保存的那一刻同时把「输入框此刻的值 / 弹窗有没有关 / 字幕说了什么」抓下来：
+               有时会看到原因没写进去，靠这三样就能判断是"输入框被清空了"还是"根本没执行"。 */
+            const saveShot = await jsw('(function(){' +
+              'var inp=document.getElementById("lateFillInput");' +
+              'var before=inp.value;' +
+              'document.getElementById("lateFillSave").click();' +
+              'return {点的时候输入框的值:before,' +
+              ' 点完弹窗还开着:!document.getElementById("lateFillOverlay").hidden,' +
+              ' 点完字幕:((document.getElementById("stageCaption")||{}).textContent||"").slice(0,44)};})()');
+            await waitW(600);
+            const afterReason = await jsw(readM(T_K));
+            out['6b-补原因弹窗别顺手完成'] = {
+              接手时: k0, 卡片点开了: openedK, 弹窗文案: modalK,
+              点了叉之后: afterClose, 弹窗收了吗: closedK,
+              再点开: openedK2, 刚点完: label80, 点到哪些按钮: clickTrace, 保存前: beforeSave,
+              点保存那一刻: saveShot, 点只保存原因之后: afterReason,
+              '弹窗文案是补原因': modalK.保存按钮 === '只保存原因' && modalK.跳过按钮 === '保存并完成',
+              '叉只关闭不改状态': afterClose.完成 === false && afterClose.原因 === '' && closedK.弹窗开着 === false,
+              '只保存原因不完成': afterReason.完成 === false && afterReason.原因 === '事情变多' &&
+                afterReason.逾期次数 === k0.逾期次数
             };
 
             /* 收尾：把自检造的备忘清掉 */
@@ -1909,7 +2065,11 @@ function createWindow() {
               await jswP('(function(){var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.ui.v1")||"{}");}catch(e){}' +
                 'raw.tab="settings";localStorage.setItem("kunkun.ui.v1",JSON.stringify(raw));return true;})()');
               win.webContents.reload();
-              await waitP(8000);
+              /* ⚠️ 这个等待决定了「重载后那一段」还剩多少时间：重载会再触发一次
+                 did-finish-load，于是同一个自检会跑第二条链；第一条链在后面这里等完就直接
+                 往下走、最后 runDiagnose() + 退出，第二条链的等待会被它截断。
+                 所以这里要留够 —— 15 秒，够下面把窗口状态那几步和换屏那几步都跑完。 */
+              await waitP(15000);
             } else {
               /* 重载后：程序是从「停在设置页」的状态启动的 */
               const curTab = await jswP('(function(){var ids=["app","pageTodo","pageDiary","pageArxiv","pageSettings"];' +
@@ -1941,6 +2101,44 @@ function createWindow() {
                 夹取后窗口: clamped.width + 'x' + clamped.height,
                 存档里的尺寸: savedState ? (savedState.width + 'x' + savedState.height) : '(没有)',
                 夹出来的尺寸没落盘: !!savedState && savedState.width === 1180 && savedState.height === 849
+              });
+
+              /* ②b 没有存档（首次运行 / 存档被删）时也一样：夹出来的小尺寸不许当成
+                 "用户想要的"存下去，得存夹取之前那个尺寸。 */
+              try { fs.rmSync(winStateFile(), { force: true }); } catch (e) { }
+              markProgrammaticBounds();                      // 这次 setBounds 是我们自己干的
+              win.setBounds({ x: 60, y: 60, width: 1180, height: 849 });
+              await waitP(200);
+              DIAG.avail = { w: 1000, h: 620 };
+              applyDisplay(true);
+              await waitP(600);
+              scheduleWinStateSave();
+              await waitP(1200);
+              const clamped2 = win.getBounds();
+              let saved2 = null;
+              try { saved2 = JSON.parse(fs.readFileSync(winStateFile(), 'utf8')); } catch (e) { }
+              DIAG.avail = fakeKeep;
+              diagLog('dpi-2b-没有存档时', {
+                夹取后窗口: clamped2.width + 'x' + clamped2.height,
+                存档里的尺寸: saved2 ? (saved2.width + 'x' + saved2.height) : '(没有)',
+                存的是夹取前的尺寸: !!saved2 && saved2.width >= 1180 && saved2.height >= 849 &&
+                  (saved2.width !== clamped2.width || saved2.height !== clamped2.height)
+              });
+
+              /* ②c 用户自己拖过大小之后，那个尺寸就该照存 —— 不能被"程序夹的"规则吃掉。
+                 把「最近一次程序 setBounds」推到 5 秒前，下面这次 setBounds 触发的 resize
+                 就会被当成用户自己拖的（真实场景就是这样），不用等判定窗。 */
+              progBoundsAt = Date.now() - 5000;
+              win.setBounds({ x: 60, y: 60, width: 1080, height: 760 });
+              await waitP(300);                              // 等 resize 回调把标记清掉
+              const userBox = win.getBounds();               // Windows 可能报 +1 像素，拿实际值比
+              scheduleWinStateSave();
+              await waitP(900);
+              let saved3 = null;
+              try { saved3 = JSON.parse(fs.readFileSync(winStateFile(), 'utf8')); } catch (e) { }
+              diagLog('dpi-2c-用户自己拖的尺寸', {
+                存档里的尺寸: saved3 ? (saved3.width + 'x' + saved3.height) : '(没有)',
+                用户的尺寸被存下了: !!saved3 && saved3.width === userBox.width && saved3.height === userBox.height
               });
 
               /* ③ 真正换屏：把窗口挪到每一块显示器上各量一次（这段最接近实机场景 ——
@@ -5431,15 +5629,31 @@ function createWindow() {
 
   win.on('closed', () => { win = null; });
 
-  /* 用户调整了窗口大小 / 位置 → 记住（下次启动恢复） */
-  win.on('resize', scheduleWinStateSave);
+  /* 用户调整了窗口大小 / 位置 → 记住（下次启动恢复）。
+     resize 要先分清「是我们自己 setBounds 夹的」还是「用户自己拖的」：
+     前者保持「尺寸是程序夹的」标记（别把小尺寸存下去），后者说明用户定了他要的大小，
+     从此按他拖的存（标记清掉）—— 否则用户从小屏换到大屏后又想拖回那个小尺寸时，
+     会被当成"程序夹的"而存不进去。 */
+  win.on('resize', () => {
+    /* 两个信号都算「这次 resize 是我们自己弄的」：
+       · 刚 setBounds 完 1.2 秒内（含 Windows 把尺寸夹到 minimumSize 的情况）；
+       · 新尺寸和我们夹出来的那个基本一样（±2px，防的是启动早期那次回调来得晚）。 */
+    const nb = win.getBounds();
+    const looksOurs = !!appImposedSize &&
+      Math.abs(nb.width - appImposedSize.width) <= 2 && Math.abs(nb.height - appImposedSize.height) <= 2;
+    if (Date.now() - progBoundsAt > 1200 && !looksOurs) {
+      winSizeImposed = false;
+      winSizeWanted = null;
+    }
+    scheduleWinStateSave();
+  });
   win.on('move', scheduleWinStateSave);
 
   /* 显示 / 隐藏要让渲染进程知道：隐藏时它会把动画和 DOM 刷新全停掉。
      之前收进托盘还占着近两个核心，就是因为隐藏时啥都没停。 */
   win.on('show', () => send('win-visible', true));
-  win.on('hide', () => send('win-visible', false));
-  win.on('minimize', () => send('win-visible', false));
+  win.on('hide', () => { alertFront = false; send('win-visible', false); });
+  win.on('minimize', () => { alertFront = false; send('win-visible', false); });
   win.on('restore', () => send('win-visible', true));
 }
 
@@ -5453,6 +5667,7 @@ function bringToFront() {
 
   win.setSkipTaskbar(false);
   win.setAlwaysOnTop(true, 'screen-saver');
+  alertFront = true;                 // 提醒占着前台：桌宠看门狗这会儿让位
   win.show();
   win.moveTop();
   win.focus();
@@ -5771,8 +5986,10 @@ const PET_TOP_MS = 3000;
 function petRaise() {
   if (!petTop || !petOn) return false;
   if (!petWin || petWin.isDestroyed() || !petWin.isVisible()) return false;
-  /* 到点提醒正在前台时让一让，免得把提醒窗盖住 */
-  if (win && !win.isDestroyed() && win.isAlwaysOnTop()) return false;
+  /* 到点提醒正在前台时让一让，免得把提醒窗盖住。
+     判据是「提醒正占着前台」（alertFront）——窗口已经藏起来 / 没显示，就不算占着，
+     不然提醒没关就把窗口收进托盘之后，看门狗会永远让位下去。 */
+  if (alertFront && win && !win.isDestroyed() && win.isVisible()) return false;
   /* 气泡刚被提到最上面（它就贴着宠物），这时候别跟它抢 Z 序 */
   if (bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()) return false;
   try {
@@ -6606,6 +6823,7 @@ ipcMain.handle('dismiss', () => {
   if (!win) return false;
   win.flashFrame(false);
   win.setAlwaysOnTop(false);
+  alertFront = false;  // 提醒退场：桌宠可以回到最上面了
   petRaise();          // 提醒退场后，开了「始终最前」的桌宠立刻回到最上面
 
   /* 提醒前躲在托盘里的话，打完卡自己缩回去（桌面宠物是独立窗口，不受影响） */

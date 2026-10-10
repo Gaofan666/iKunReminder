@@ -1196,6 +1196,17 @@
   const DONE_SHOW = 5;
   function doneSortKey(x) { return (+(x && x.doneAt) || 0) || (+(x && x.at) || 0); }
   let lateFillId = null;           // 正在补填延期原因的备忘 id
+  let lateFillMode = 'complete';   // 'complete' = 点完成时顺便补原因；'reason' = 只想补一句原因
+  let lateFillSaveAct = 'save';    // 主按钮的动作（save / complete，开窗时按来源定死）
+  let lateFillSkipAct = 'skip';    // 次按钮的动作（skip / complete / close）
+  /* 「刚过截止」的宽限：截止时间刚过的那一分钟不算逾期。
+     提醒弹窗的标题（「备忘快到截止时间啦」/「这条待办已经过期啦」）用的就是这个 60 秒，
+     这里必须同一个口径 —— 不然会出现「标题说快到截止时间、同一张窗里却问你逾期原因」，
+     统计里还会冒出「逾期 1 次 · 拖了 0 分钟」这种既刺眼又没意义的记录。 */
+  const LATE_GRACE_MS = 60000;
+  /* 开机补记的上限：程序没开着的那段时间里错过、但已经过去太久的，不翻旧账
+     （那种条目只能拿「现在 − 截止」估时长，搁置半年的会以「拖了 180 天」冲进统计第一名）。 */
+  const LATE_BOOT_GRACE_MS = 12 * 60 * 60 * 1000;
 
   /* 完成一条备忘。逾期的那一笔交给 recordMemoLate 去记（同一回合不会重复记），
      why 有值就当作这次的原因；没写也照记，原因允许事后补。 */
@@ -1204,7 +1215,7 @@
     const now = Date.now();
     const reason = String(why || '').trim().slice(0, 60);
     if (!m.done) {
-      if (m.dueAt && now > m.dueAt) recordMemoLate(m, reason);
+      if (m.dueAt && now > m.dueAt + LATE_GRACE_MS) recordMemoLate(m, reason);
       else if (reason) m.lateReason = reason;
     }
     m.done = true;
@@ -1232,14 +1243,14 @@
      写过一次就不再问：补填是帮忙，不能变成骚扰。 */
   function needLateReasonOnDone(m) {
     if (!m || !m.dueAt || m.done) return false;
-    if (!(hasLateRecord(m) || Date.now() > m.dueAt)) return false;
+    if (!(hasLateRecord(m) || Date.now() > m.dueAt + LATE_GRACE_MS)) return false;
     return lateReasonMissing(m);
   }
 
   /* 完成得比截止晚吗？（doneAt 现在会跟着存盘，重启之后依然认得）
      老数据没有 doneAt，这条自然为假 —— 宁可漏报，也不能把按时完成的当延期去追。 */
   function wasLateAtCompletion(m) {
-    return !!(m && m.done && m.dueAt && +m.doneAt > m.dueAt);
+    return !!(m && m.done && m.dueAt && +m.doneAt > m.dueAt + LATE_GRACE_MS);
   }
 
   /* 卡片上要不要留「补原因」按钮？认两种：真的记过延期，或者确实完成得比截止晚。 */
@@ -1255,17 +1266,41 @@
     for (let i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].textContent === cur);
   }
 
-  /* 打开「补填延期原因」。备忘已经完成的话（事后从卡片上补）措辞和按钮都要换。 */
-  function openLateFill(m) {
+  /* 打开「补填延期原因」。
+     mode:
+       'complete' —— 用户点了这条备忘的「完成」、它又逾期了：保存 = 保存原因并完成；
+       'reason'   —— 从卡片上的「补原因」进来（或这条已经完成了）：只写原因，不动完成状态。
+     已完成的备忘一律按 'reason' 处理。 */
+  function openLateFill(m, mode) {
     if (!m) return;
     lateFillId = m.id;
+    lateFillMode = m.done ? 'reason' : (mode === 'reason' ? 'reason' : 'complete');
     const ms = (+m.lateMs || 0) || (m.dueAt ? Math.max(0, Date.now() - m.dueAt) : 0);
     if (el.lateFillDesc) {
       el.lateFillDesc.textContent = '「' + m.text + '」逾期了 ' + fmtDur(ms) +
-        '，之前没写原因 —— 补一句？（不写也行）';
+        (m.done
+          ? '，之前没写原因 —— 补一句？（不写也行）'
+          : (lateFillMode === 'reason'
+            ? '，之前没写原因 —— 补一句？（不写也行，这条还是未完成）'
+            : '，之前没写原因 —— 补一句？（不写也行）'));
     }
-    if (el.lateFillSave) el.lateFillSave.textContent = m.done ? '保存' : '保存并完成';
-    if (el.lateFillSkip) el.lateFillSkip.textContent = m.done ? '取消' : '跳过，直接完成';
+    /* 两个按钮的文案和动作都在这里定死，免得后面按 mode 反复猜 */
+    if (m.done) {
+      if (el.lateFillSave) el.lateFillSave.textContent = '保存';
+      if (el.lateFillSkip) el.lateFillSkip.textContent = '取消';
+      lateFillSaveAct = 'save';
+      lateFillSkipAct = 'close';
+    } else if (lateFillMode === 'reason') {
+      if (el.lateFillSave) el.lateFillSave.textContent = '只保存原因';
+      if (el.lateFillSkip) el.lateFillSkip.textContent = '保存并完成';
+      lateFillSaveAct = 'save';
+      lateFillSkipAct = 'complete';
+    } else {
+      if (el.lateFillSave) el.lateFillSave.textContent = '保存并完成';
+      if (el.lateFillSkip) el.lateFillSkip.textContent = '跳过，直接完成';
+      lateFillSaveAct = 'save';
+      lateFillSkipAct = 'skip';
+    }
     if (el.lateFillChips) {
       if (!el.lateFillChips.dataset.ready) {
         el.lateFillChips.innerHTML = '';
@@ -1289,18 +1324,40 @@
     setTimeout(function () { try { el.lateFillInput.focus(); } catch (e) { } }, 50);
   }
 
+  /* 只写原因、不改变完成状态（卡片上「补原因」那条路用）。
+     已经有逾期记录的话顺手把原因补到最近一条记录上，统计里就能看到。 */
+  function saveLateReasonOnly(m, why) {
+    const v = String(why || '').trim().slice(0, 60);
+    if (!m || !v) return false;
+    m.lateReason = v;
+    if (Array.isArray(m.lateLog) && m.lateLog.length) {
+      const last = m.lateLog[m.lateLog.length - 1];
+      if (last && !last.text) last.text = v;
+    }
+    saveTodoStore();
+    renderMemos();
+    return true;
+  }
+
   function closeLateFill() {
     if (el.lateFillOverlay) el.lateFillOverlay.hidden = true;
     lateFillId = null;
   }
 
-  /* 两个按钮共用：skipIt = 不写原因（跳过 / 取消） */
-  function finishLateFill(skipIt) {
+  /* 出口（action）：
+       'save'     —— 保存原因。正在完成这条 → 顺带完成；只是补原因（mode='reason'）
+                      → 只写原因，完成状态一点不动。
+       'skip'     —— 不写原因、直接完成（只在"点完成时补一句"那条路上出现）。
+       'complete' —— 保存原因并完成（卡片上「补原因」弹窗的第二个按钮）。
+       'close'    —— ✕ / 点遮罩 / Esc：只关窗，什么都不写、什么都不改。 */
+  function finishLateFill(action) {
     const m = memoById(lateFillId);
+    const mode = lateFillMode;
     const wasDone = !!(m && m.done);
-    const why = skipIt ? '' : ((el.lateFillInput && el.lateFillInput.value) || '');
+    const why = String((el.lateFillInput && el.lateFillInput.value) || '');
     closeLateFill();
     if (!m) return;
+    if (action === 'close') return;              // 关掉 ≠ 完成（以前这里会顺手把人勾掉）
     if (wasDone) {
       /* 事后补一句原因（不改完成状态），但原因和账必须一起落 —— 只写原因的话，
          这条备忘会既没有「延期 N 次」、又因为已有原因而不再提示补，整条在统计里消失。
@@ -1319,6 +1376,19 @@
       }
       return;
     }
+    if (action === 'skip') {
+      completeMemo(m, '');
+      setCaption('备忘已完成：<b>' + escapeHtml(m.text) + '</b>');
+      return;
+    }
+    if (mode === 'reason' && action === 'save') {
+      /* 只想补一句原因：不动完成状态 */
+      const v = String(why || '').trim().slice(0, 60);
+      if (!v) { setCaption('这次没写原因，什么都没改'); return; }
+      saveLateReasonOnly(m, v);
+      setCaption('已记下逾期原因：<b>' + escapeHtml(v) + '</b>（这条还是未完成）');
+      return;
+    }
     completeMemo(m, why);
     setCaption('备忘已完成：<b>' + escapeHtml(m.text) + '</b>');
   }
@@ -1330,10 +1400,10 @@
     for (let i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].textContent === cur);
   }
 
-  /* 弹窗里「延期原因」那一块的显隐：只有已经过了截止时间的备忘才问 */
+  /* 弹窗里「延期原因」那一块的显隐：只有确实过了截止时间（超过宽限）的备忘才问 */
   function paintLateBox(m) {
     if (!el.lateBox) return;
-    const late = !!(m && !m.done && m.dueAt && Date.now() > m.dueAt);
+    const late = !!(m && !m.done && m.dueAt && Date.now() > m.dueAt + LATE_GRACE_MS);
     el.lateBox.hidden = !late;
     if (!late) return;
     if (el.lateChips && !el.lateChips.dataset.ready) {
@@ -1369,12 +1439,12 @@
             （那条路走的是 markTodoDone，不经过保存弹窗，天然不会被算进来）。
      两件事互相独立：错过旧期限之后再改期，就是「逾期 1 次 + 延期 1 次」。 */
 
-  /* 这个截止时间点该不该记一笔逾期？ */
+  /* 这个截止时间点该不该记一笔逾期？（「刚过一分钟」不算，见 LATE_GRACE_MS） */
   function missPending(x) {
     if (!x || !x.dueAt) return false;
-    if ((+x.lateDue || 0) === +x.dueAt) return false;   // 这个期限已经记过了
-    if (x.done) return (+x.doneAt || 0) > +x.dueAt;     // 完成得比截止晚 = 确实错过了
-    return Date.now() > +x.dueAt;
+    if ((+x.lateDue || 0) === +x.dueAt) return false;                       // 这个期限已经记过了
+    if (x.done) return (+x.doneAt || 0) > +x.dueAt + LATE_GRACE_MS;         // 完成得比截止晚 = 确实错过了
+    return Date.now() > +x.dueAt + LATE_GRACE_MS;
   }
 
   /* 记一笔逾期。这个期限已经记过 → 只把「拖了多久」和原因刷到最新，不加次数。
@@ -1388,7 +1458,7 @@
        而统计卡按 lateMs>0 过滤又把它排除掉，「卡片说逾期、统计里没有」就是这么来的。
        真逾期过一定有 lateMs > 0。 */
     const end = (+x.doneAt > +x.dueAt) ? +x.doneAt : now;
-    if (end <= +x.dueAt) return false;
+    if (end <= +x.dueAt + LATE_GRACE_MS) return false;
     if (why === undefined) why = lateInputVal();
     const reason = String(why || '').trim().slice(0, 60);
     const ms = end - +x.dueAt;
@@ -1434,6 +1504,23 @@
     (list || []).forEach(function (x) {
       if (!missPending(x)) return;
       if (recordLate(x, '')) changed = true;
+    });
+    return changed;
+  }
+
+  /* 开机那一遍（和 tick 那遍的区别）：程序没开着的那段时间里错过的截止时间也算数，
+     但「早就过期、一直没人管」的旧条目不翻旧账 —— 那种条目只能拿「现在 − 截止」估时长，
+     搁置半年的备忘会以「拖了 180 天」冲进统计第一名，用户看着莫名其妙。
+     做法：超过 LATE_BOOT_GRACE_MS 的老账只盖一个「这个期限已经处理过」的戳（lateDue），
+     不计次数、不计时长，之后 tick 也不会再把它算进来。 */
+  function sweepLateOnBoot(list) {
+    let changed = false;
+    (list || []).forEach(function (x) {
+      if (!x || !x.dueAt) return;
+      if ((+x.lateDue || 0) === +x.dueAt) return;
+      if (missPending(x)) { if (recordLate(x, '')) changed = true; return; }
+      if (x.done) return;
+      if (Date.now() - +x.dueAt > LATE_BOOT_GRACE_MS) { x.lateDue = +x.dueAt; changed = true; }
     });
     return changed;
   }
@@ -1648,7 +1735,7 @@
     const out = [];
     sortedTodos().forEach(function (t) {
       if (t.done || !t.remindAt || t.remindAt > now) return;
-      const lateTooLong = t.dueAt && (t.dueAt < now - 60000) && (now - t.dueAt) > TODO_LATE_GRACE;
+      const lateTooLong = t.dueAt && (t.dueAt < now - LATE_GRACE_MS) && (now - t.dueAt) > TODO_LATE_GRACE;
       if (lateTooLong) { t.remindAt = 0; changed = true; return; }
       out.push(t);
     });
@@ -2503,12 +2590,51 @@
         '<input type="color" data-role="color" value="' + c.color + '" title="换个颜色">' +
         '<button class="cat-btn" data-role="rename">改名</button>' +
         '<button class="cat-btn del" data-role="del">删除</button>' +
+        /* 改名走这一行（点「改名」时露出来）。⚠️ 不能用 window.prompt：
+           Electron 的渲染进程把它换成了一个必抛的实现（"prompt() is not supported."），
+           点了会直接抛异常、改名永远不生效。 */
+        '<span class="cat-edit">' +
+        '<input type="text" class="cat-edit-input" maxlength="12" placeholder="分类名字，最多 12 个字">' +
+        '<button class="cat-btn" data-role="rename-ok">保存</button>' +
+        '<button class="cat-btn" data-role="rename-cancel">取消</button>' +
+        '</span>' +
         '</div>';
     }).join('');
     const rows = el.catManage.querySelectorAll('.cat-item');
     for (let i = 0; i < rows.length; i++) {
       const c = catById(rows[i].dataset.id);
       if (c) rows[i].querySelector('.cat-name').textContent = c.name;
+    }
+  }
+
+  /* 点「改名」：这一行换成输入框（原来的名字带出来、全选，直接打字即可） */
+  function startCatRename(row, c) {
+    if (!row || !c) return;
+    row.classList.add('editing');
+    const inp = row.querySelector('.cat-edit-input');
+    if (!inp) return;
+    inp.value = c.name;
+    setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) { } }, 20);
+  }
+
+  /* 保存改名：空名 / 重名都不放行（留在输入框里继续改），成功才重画 */
+  function commitCatRename(row, c) {
+    if (!row || !c) return;
+    const inp = row.querySelector('.cat-edit-input');
+    const v = String((inp && inp.value) || '').trim().slice(0, 12);
+    if (!v) { catMsg('名字不能是空的'); try { inp.focus(); } catch (e) { } return; }
+    if (v !== c.name && cats.some(function (x) { return x.id !== c.id && x.name === v; })) {
+      catMsg('已经有叫「' + escapeHtml(v) + '」的分类了');
+      try { inp.focus(); } catch (e) { }
+      return;
+    }
+    if (v !== c.name) {
+      c.name = v;
+      saveCats();
+      renderCats();
+      catMsg('已改名为「' + escapeHtml(v) + '」');
+    } else {
+      renderCatManage();      // 名字没变：退出编辑态就行
     }
   }
 
@@ -3563,14 +3689,17 @@
         if (t.dueAt !== dueAt) {
           recordExtend(t, t.dueAt, dueAt);
           t.lateOpen = false;
+          /* ⚠️ 「重新变回未完成」只能在真的改了截止时间时做（和备忘那边同一个口径）。
+             这一句以前在 if 外面 —— 于是「只改个分类 / 只改个文字」也会把已完成点回未完成，
+             而它本来就过了截止时间，下一轮扫描就会凭空记一笔逾期、还弹一次提醒。 */
+          if (t.done) { t.done = false; t.doneAt = 0; }
         }
         t.dueAt = dueAt;
         t.prio = prio;
         t.repeat = repeat;
         t.cat = catPick;
-        /* 改了时间就把「下次提醒」重置到新时间；已经完成的重新变回未完成 */
-        t.remindAt = dueAt;
-        if (t.done) { t.done = false; t.doneAt = 0; }
+        /* 改了时间就把「下次提醒」重置到新时间；已完成的回来时不该又被排上提醒 */
+        t.remindAt = t.done ? 0 : dueAt;
       }
     } else {
       todos.unshift({
@@ -3670,7 +3799,7 @@
       const id = todoSeqQueue[0];
       const t = todos.filter(function (x) { return x.id === id; })[0];
       if (!t || t.done || !t.remindAt || t.remindAt > now) { todoSeqQueue.shift(); continue; }
-      const late = !!(t.dueAt && t.dueAt < now - 60000);
+      const late = !!(t.dueAt && t.dueAt < now - LATE_GRACE_MS);
       if (late && (now - t.dueAt) > TODO_LATE_GRACE) {
         t.remindAt = 0; todoSeqQueue.shift(); saveTodoStore(); renderTodos(); continue;
       }
@@ -3683,7 +3812,7 @@
     /* ③ 两条以上就合并成一条弹窗，省得连点好几次 */
     if (live.length >= 2) { fireTodoMulti(live); return; }
     const t = live[0];
-    fireTodo(t, !!(t.dueAt && t.dueAt < now - 60000));
+    fireTodo(t, !!(t.dueAt && t.dueAt < now - LATE_GRACE_MS));
   }
 
   /* ------------------------------------------------------- 备忘截止调度 */
@@ -3699,7 +3828,7 @@
       if (m.remindAt > now) continue;
       /* 过期太久（超过 12 小时）就不再弹，只留在列表里标过期 */
       if ((now - m.dueAt) > MEMO_LATE_GRACE) { m.remindAt = 0; changed = true; continue; }
-      const late = m.dueAt < now - 60000;
+      const late = m.dueAt < now - LATE_GRACE_MS;
       fireMemoAlert(m, late);
       if (advanceMemoRemind(m)) changed = true;
       break;                                     // 一次只弹一条，其余下一轮再说
@@ -4442,7 +4571,7 @@
           Sound.click();
         } else if (needLateReasonOnDone(m)) {
           /* 正拖着（或记过延期）、又一直没写原因：完成前先让补一句（也能跳过） */
-          openLateFill(m);
+          openLateFill(m, 'complete');
           Sound.click();
         } else {
           completeMemo(m);
@@ -4453,8 +4582,9 @@
       } else if (role === 'del') {
         deleteMemo(id);
       } else if (role === 'why') {
+        /* 卡片上的「补原因」：只补一句原因，不该顺手把这条勾成完成 */
         const m = memoById(id);
-        if (m) openLateFill(m);
+        if (m) openLateFill(m, 'reason');
       }
     };
     if (el.memoList) el.memoList.addEventListener('click', onMemoRowClick);
@@ -4511,14 +4641,11 @@
         const c = catById(row.dataset.id);
         if (!c) return;
         if (btn.dataset.role === 'rename') {
-          const name = window.prompt('分类名字（最多 12 个字）', c.name);
-          if (name == null) return;
-          const v = name.trim().slice(0, 12);
-          if (!v) { catMsg('名字不能是空的'); return; }
-          c.name = v;
-          saveCats();
-          renderCats();
-          catMsg('已改名为「' + escapeHtml(v) + '」');
+          startCatRename(row, c);
+        } else if (btn.dataset.role === 'rename-ok') {
+          commitCatRename(row, c);
+        } else if (btn.dataset.role === 'rename-cancel') {
+          renderCatManage();          // 取消 = 原样重画，什么都不改
         } else if (btn.dataset.role === 'del') {
           const n = catUsage(c.id);
           if (!window.confirm('删除分类「' + c.name + '」？\n\n' +
@@ -4550,6 +4677,15 @@
         if (dot) dot.style.background = c.color;
         renderMemos();
         renderTodos();
+      });
+      /* 改名输入框：回车 = 保存，Esc = 取消 */
+      el.catManage.addEventListener('keydown', function (e) {
+        const inp = e.target;
+        if (!inp || !inp.classList || !inp.classList.contains('cat-edit-input')) return;
+        const row = inp.closest ? inp.closest('.cat-item') : null;
+        const c = row ? catById(row.dataset.id) : null;
+        if (e.key === 'Enter') { e.preventDefault(); commitCatRename(row, c); }
+        else if (e.key === 'Escape') { e.preventDefault(); renderCatManage(); }
       });
     }
     if (el.btnCatAdd) {
@@ -4615,19 +4751,21 @@
     if (el.memoOverlay) el.memoOverlay.addEventListener('click', function (e) {
       if (e.target === el.memoOverlay) closeMemoModal();
     });
-    /* 「补填延期原因」弹窗：保存=写原因（未完成的话顺手标完成），跳过=不写 */
-    if (el.lateFillSave) el.lateFillSave.addEventListener('click', function () { Sound.click(); finishLateFill(false); });
-    if (el.lateFillSkip) el.lateFillSkip.addEventListener('click', function () { Sound.click(); finishLateFill(true); });
-    if (el.lateFillClose) el.lateFillClose.addEventListener('click', function () { finishLateFill(true); });
+    /* 「补填延期原因」弹窗：保存=写原因（正在完成的话顺带完成），第二个按钮按来源变
+       （跳过直接完成 / 保存并完成 / 取消）；✕、点遮罩、Esc 都只是关掉，不改任何状态。 */
+    if (el.lateFillSave) el.lateFillSave.addEventListener('click', function () { Sound.click(); finishLateFill(lateFillSaveAct); });
+    if (el.lateFillSkip) el.lateFillSkip.addEventListener('click', function () { Sound.click(); finishLateFill(lateFillSkipAct); });
+    if (el.lateFillClose) el.lateFillClose.addEventListener('click', function () { finishLateFill('close'); });
     if (el.lateFillOverlay) {
       el.lateFillOverlay.addEventListener('click', function (e) {
-        if (e.target === el.lateFillOverlay) finishLateFill(true);
+        if (e.target === el.lateFillOverlay) finishLateFill('close');
       });
     }
     if (el.lateFillInput) {
       el.lateFillInput.addEventListener('input', lateFillChipPaint);
       el.lateFillInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); finishLateFill(false); }
+        if (e.key === 'Enter') { e.preventDefault(); finishLateFill(lateFillSaveAct); }
+        else if (e.key === 'Escape') { e.preventDefault(); finishLateFill('close'); }
       });
     }
 
@@ -6003,9 +6141,10 @@
 
     bindAll();
     /* 开机先扫一遍逾期：程序没开着的那段时间里错过的截止时间也算数
-       （同一个截止时间只记一次，所以反复启动不会把次数越滚越大）。 */
-    const sweptOnBootM = sweepLate(memos);
-    const sweptOnBootT = sweepLate(todos);
+       （同一个截止时间只记一次，所以反复启动不会把次数越滚越大）。
+       搁置太久的老账不翻（见 sweepLateOnBoot）。 */
+    const sweptOnBootM = sweepLateOnBoot(memos);
+    const sweptOnBootT = sweepLateOnBoot(todos);
     if (sweptOnBootM || sweptOnBootT) saveTodoStore();
     renderPanels();
     renderMemos();

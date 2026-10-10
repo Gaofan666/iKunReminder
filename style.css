@@ -513,6 +513,16 @@ mark.ax-hit{
 .cat-item .cat-btn:hover{color:var(--text);background:#DFEDF6;border-color:var(--lake)}
 .cat-item .cat-btn.del{color:#B93B2C;background:#FDECE9;border-color:rgba(185,59,44,.45)}
 .cat-item .cat-btn.del:hover{color:#fff;background:#B93B2C}
+/* 行内改名（点「改名」后把这一行换成输入框 + 保存 / 取消）。
+   ⚠️ 不能用 window.prompt —— Electron 的渲染进程里它必抛（"prompt() is not supported."）。 */
+.cat-edit{display:none;flex:1;min-width:0;gap:6px;align-items:center}
+.cat-item.editing > *{display:none}
+.cat-item.editing .cat-edit{display:flex}
+.cat-edit input{
+  flex:1;min-width:0;padding:4px 9px;border:1px solid var(--line);border-radius:8px;
+  font-family:inherit;font-size:13px;color:var(--text);background:#fff;outline:none;
+}
+.cat-edit input:focus{border-color:var(--lake)}
 .cat-empty{font-size:12.5px;color:var(--dim);padding:6px 2px}
 .cat-add{display:flex;gap:8px;align-items:center}
 .cat-add input{
