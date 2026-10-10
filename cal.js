@@ -118,26 +118,41 @@
       });
   }
 
-  /* 某天有截止时间的备忘（未完成的），按截止时间排 —— 日历格子和当天清单都要用 */
+  /* 某天要显示的备忘：**未完成的按「截止时间」落在那天；已完成的按「完成时间」落在那天**
+     （用户要的：昨天完成的备忘就显示在昨天，而不是它原先那个截止日）。
+     老数据没有完成时间（doneAt=0）时退回按截止时间放，总比整个看不见强。
+     排序：未完成在前 —— 格子里最多画两条，不能让已完成的把还没到期的挤掉。 */
   function memoDeadlinesOf(key) {
-    return memos.filter(function (m) { return m && !m.done && m.dueAt && keyOfTs(m.dueAt) === key; })
-      .sort(function (a, b) { return a.dueAt - b.dueAt; });
+    const whenOf = function (m) { return +m.doneAt || +m.dueAt || 0; };
+    return memos.filter(function (m) {
+      if (!m) return false;
+      if (m.done) { const at = whenOf(m); return !!at && keyOfTs(at) === key; }
+      return !!m.dueAt && keyOfTs(m.dueAt) === key;
+    }).sort(function (a, b) {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return whenOf(a) - whenOf(b);
+    });
   }
 
-  /* ------------------------------------------------------------ 左栏：备忘录 */
+  /* ------------------------------------------------------------ 左栏：备忘录
+     未完成的照旧一条条列出来；**已完成的折叠起来**（默认收起，点那条才展开）——
+     左栏是「现在还有什么要做」的地方，做完的堆在那儿只会占地方。 */
+  var memoDoneOpen = false;      // 左栏「已完成」展开着吗（只在本次运行里记着）
+
   function renderMemos() {
-    const list = memos.slice().sort(function (a, b) {
+    const all = memos.slice().sort(function (a, b) {
       if (a.done !== b.done) return a.done ? 1 : -1;
       return (b.at || 0) - (a.at || 0);
     });
-    const undone = list.filter(function (m) { return !m.done; }).length;
-    el.memoCount.textContent = list.length ? (undone + ' / ' + list.length) : '';
-    if (!list.length) {
+    const pending = all.filter(function (m) { return !m.done; });
+    const doneList = all.filter(function (m) { return m.done; });
+    el.memoCount.textContent = all.length ? (pending.length + ' / ' + all.length) : '';
+    if (!all.length) {
       el.memoList.innerHTML = '<div class="memo-empty">还没有备忘。<br>' +
         '在主界面「待办」页左边新增，这里会同步显示。</div>';
       return;
     }
-    el.memoList.innerHTML = list.map(function (m) {
+    const rowOf = function (m) {
       const d = m.at ? new Date(m.at) : null;
       const when = d ? (d.getMonth() + 1) + '月' + d.getDate() + '日' : '';
       let dueHtml = '';
@@ -151,7 +166,19 @@
         'title="' + esc(m.done ? '点一下取消完成' : '点一下标记完成') + '">' +
         '<i class="bullet"></i><div class="txt">' + esc(m.text) +
         (when ? '<div class="when">记于 ' + when + '</div>' : '') + dueHtml + '</div></div>';
-    }).join('');
+    };
+    let html = pending.map(rowOf).join('');
+    if (!pending.length) {
+      html = '<div class="memo-empty">都做完了 👌</div>';
+    }
+    if (doneList.length) {
+      html += '<button type="button" class="memo-done-bar" id="memoDoneToggle">已完成 ' +
+        doneList.length + ' 条 ' + (memoDoneOpen ? '▴' : '▾') + '</button>';
+      if (memoDoneOpen) {
+        html += '<div class="memo-done-list">' + doneList.map(rowOf).join('') + '</div>';
+      }
+    }
+    el.memoList.innerHTML = html;
   }
 
   /* ------------------------------------------------------------ 右栏：月历 */
@@ -202,12 +229,14 @@
       }
       cell.appendChild(head);
 
-      /* 待办条 + 备忘截止条混排：待办（实心彩条）在前，备忘截止（虚线）填剩余空位，
-         总条数仍按 MAX_BARS 封顶，超出走「+N 条」（合并计数） */
+      /* 待办条 + 备忘条混排：**未完成的排前面**（格子里只画两条，别让已完成的把
+         还没到期的挤掉），组内维持各自原来的顺序；总条数仍按 MAX_BARS 封顶，
+         超出走「+N 条」（合并计数） */
       const evs = eventsOf(key);
       const mevs = memoDeadlinesOf(key);
-      const bars = evs.map(function (t) { return { kind: 'todo', t: t }; })
-        .concat(mevs.map(function (m) { return { kind: 'memo', m: m }; }));
+      const bars = evs.map(function (t) { return { kind: 'todo', t: t, done: !!t.done }; })
+        .concat(mevs.map(function (m) { return { kind: 'memo', m: m, done: !!m.done }; }))
+        .sort(function (a, b) { return (a.done ? 1 : 0) - (b.done ? 1 : 0); });
       let show = bars, more = 0;
       if (bars.length > MAX_BARS) {
         show = bars.slice(0, MAX_BARS - 1);
@@ -227,11 +256,14 @@
           bar.appendChild(span);
         } else {
           const m = b.m;
-          bar.className = 'ev memo';
-          bar.title = '备忘截止 ' + fmtTime(m.dueAt) + ' · ' + m.text;
+          /* 已完成的备忘按「完成那天」落格，样式和已完成待办一致（变灰划掉），
+             悬浮提示也不能再写「备忘截止」，不然就是假警报 */
+          bar.className = 'ev memo' + (m.done ? ' done' : '');
+          const whenTs = +m.doneAt || +m.dueAt;
+          bar.title = (m.done ? '备忘已完成 ' : '备忘截止 ') + fmtTime(whenTs) + ' · ' + m.text;
           const span = document.createElement('span');
           span.className = 't';
-          span.textContent = '📌 ' + m.text;
+          span.textContent = (m.done ? '✅ ' : '📌 ') + m.text;
           bar.appendChild(span);
         }
         cell.appendChild(bar);
@@ -267,7 +299,9 @@
     el.panelTitle.textContent = (+parts[1]) + '月' + (+parts[2]) + '日 周' + wk +
       (lu ? ' · 农历' + lu.month + lu.text : '') +
       ' · ' + evs.length + ' 条' + (evs.length ? '（未完成 ' + undone + '）' : '') +
-      (mevs.length ? ' · 备忘截止 ' + mevs.length : '');
+      (mevs.length ? ' · 备忘 ' + mevs.length +
+        (mevs.some(function (m) { return m.done; })
+          ? '（已完成 ' + mevs.filter(function (m) { return m.done; }).length + '）' : '') : '');
 
     if (!evs.length && !mevs.length) {
       el.panelList.innerHTML = '<div class="panel-empty">这天还没有待办。<br>' +
@@ -301,11 +335,13 @@
       }).join('') +
       /* 备忘截止：只读展示（编辑/删除在主界面和左栏备忘里），不设 data-id 以免被当成待办 */
       mevs.map(function (m) {
-        return '<div class="pi memo">' +
+        const whenTs = +m.doneAt || +m.dueAt;
+        return '<div class="pi memo' + (m.done ? ' done' : '') + '">' +
           '<div class="box"></div>' +
           '<div class="body">' +
           '<div class="txt">' + esc(m.text) + '</div>' +
-          '<div class="meta"><span>备忘截止</span><span>' + fmtTime(m.dueAt) + '</span></div>' +
+          '<div class="meta"><span>' + (m.done ? '备忘已完成' : '备忘截止') + '</span><span>' +
+          fmtTime(whenTs) + '</span></div>' +
           '</div></div>';
       }).join('');
     }
@@ -510,6 +546,15 @@
       e.stopPropagation();
       e.preventDefault();
     }, true);
+  }
+  /* 左栏「已完成 N 条」：点一下展开/收起（默认收起，做完的不占地方） */
+  if (el.memoList) {
+    el.memoList.addEventListener('click', function (e) {
+      const t = e.target.closest ? e.target.closest('#memoDoneToggle') : null;
+      if (!t) return;
+      memoDoneOpen = !memoDoneOpen;
+      renderMemos();
+    });
   }
   el.panelClose.addEventListener('click', closePanel);
   /* 当天清单右上角 ＋：展开「＋ 待办 / ＋ 备忘」。
