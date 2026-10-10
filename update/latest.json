@@ -1,20 +1,20 @@
 {
-  "version": "4.2.0",
-  "releaseDate": "2026-09-29T10:16:04.376Z",
-  "notes": "## iKunReminder v4.2\n\n1. 🔔 **自己指定的提示音，现在会完整放完，才轮到提醒音乐**\n   · 以前给提醒事项或待办指定了提示音之后，提示音还在放，提醒音乐就跟着响起来了，两段声音叠在一起听着很乱。\n   · 现在按顺序来：**到点的提示音先放完**（语音播报也说完）→ 再等 3 秒 → 才放提醒音乐。\n   · 没指定提示音的（用内置小旋律）跟以前一模一样，不受影响。\n   · 提示音挑了一首比较长的曲子时，提醒音乐就会等这首曲子放完才来 —— 想让它早点响，给这条提醒挑一段短一点的提示音就行。\n\n2. 🧰 前两版的东西也都还在：v4.1 的「提示音可自选」（提醒事项卡片右上角 🔔、待办卡片「🔔 提示音」按钮）、v4.0 的更新修复（一步升到最新、更新那栏有「🌐 打开发布页」兜底）。\n\n**下载**：`iKunReminder-setup-v4.2.0.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121828187,
-  "sha512": "uxXsghQEgBFZkGpf4LPv78g07giRVVA2ru2vcJj+axXV6zugE+olgRj11iky7OJBu8bd+5bajHDxpN7EE+TDxQ==",
+  "version": "4.4.0",
+  "releaseDate": "2026-10-10T02:18:56.974Z",
+  "notes": "## iKunReminder v4.4\n\n这一版内容比较多，先捡最常用的说：\n\n1. 🐣 **桌宠好用多了**\n   · **点得准了**：桌宠窗比小鸡本体大一圈（四周是透明的），以前那一圈也算桌宠 —— 鼠标离小鸡还有一段距离就变\"手掌\"、点了也会有反应。现在只有真的压在小鸡身上才算，透明的那一圈鼠标直接穿过去；小鸡身上的单击 / 拖动 / 右键菜单不受影响。\n   · **气泡显示时长默认 6 秒 → 3 秒**，设置页「桌面宠物」里可以调成 3 / 5 / 8 / 15 秒（能点的科研推送气泡仍然是 15 秒）。\n   · **「📌 桌宠始终最前」不会再莫名失效**：以前提醒弹出来时桌宠会让位，但如果你没关提醒就把窗口收进了托盘，桌宠就一直在后面不回来了；现在提醒一收就自动回到最前。\n\n2. 🗓 **桌面日历上点某天就能加**：点日历上任意一天 → 当天清单 → 右上角「＋」→「＋ 待办 / ＋ 备忘」，直接调出正常的新增弹窗、**日期预填那一天**，存完日历格子立刻同步。\n\n3. 🧩 **待办和备忘可以分类了**：入口在待办页「📌 备忘录」栏头右边那个「🧩 分类」（和「＋ 新增备忘」并排），点开就能命名 / 换色 / 删除；新增和编辑弹窗的分类下拉最后一项能**就地新建**；列表上方按分类筛选；**删除分类不会删内容**，那些条目会回到「未分类」。\n\n4. 📝 **逾期和延期分开记**：逾期 = 一个截止时间被错过；延期 = 你把截止时间往后挪了一次。备忘列表最下面挂着一条低调的统计（点一下展开明细：每条拖了多久、当时写的原因）。逾期过的备忘在完成时会问你一句原因，也可以点「跳过」，或者事后再补。\n\n5. 🗂 **做完的自动收起来**：列表默认只留没做完的，做完的收进 `🗂 已完成 N 条`，点开先看最近 5 条，更早的再点一下。\n\n6. 🪟 **双屏 / 混合缩放下窗口不再忽大忽小**：窗口被屏幕工作区\"夹小\"的那个尺寸不再被记住（以前会跟着你跑到大屏上，界面整体变小）。你要是自己拖过窗口大小，就按你拖的记住。\n\n7. 🔧 **这一版又修了一串小毛病**\n   · 分类「改名」以前点了没反应，现在改成**行内输入框**（回车保存、Esc 取消，空名字和重名会拦下来）。\n   · 「补原因」弹窗的 **✕ / 点窗口外面 / Esc 现在只是关掉**，不会再顺手把这条备忘标成已完成；从卡片上的「补原因」进去是「只保存原因」，完成状态一点不动。\n   · **编辑一条已完成的备忘 / 待办**（哪怕只改个分类）不会再把它变回未完成、也不会凭空记一笔逾期。\n   · 刚过截止时间**一分钟以内不算逾期**（以前会出现\"标题说快到截止时间、同一个窗里却问你逾期原因\"，统计里还会冒出「逾期 1 次 · 拖了 0 分钟」）。\n   · **开机补记不翻旧账**：程序没开着时错过的截止时间照样算，但搁置超过 12 小时的老账只默默记下\"处理过\"，不计次数和时长（不然一条半年前的备忘会以\"拖了 180 天\"冲进统计第一名）。\n   · 桌宠的鼠标判定不再每次移动都去读画布像素，鼠标在小鸡上扫过不会卡。\n\n**下载**：`iKunReminder-setup-v4.4.0.exe`（约 116 MB，Windows x64，双击安装）\n",
+  "size": 121873972,
+  "sha512": "bOmdOhPEuAku1vN568Le6Uh9YN4KNQCmZO5XWeCyy07wn/rtcn16UxiFFd0ZvHCkX+ZeAGPCtRcA77Q6WOKTfQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.2/iKunReminder-setup-v4.2.0.exe.part1",
-      "size": 60914094,
-      "sha512": "a1J9lcyXVBXnNNmyWNKXmQqDjOwc+jdpnxEj7yHKpsPKUL4zufJ3ls+xQlpDsYyXrbKU6u7+vJ8IXnTQ+8vHLg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.4/iKunReminder-setup-v4.4.0.exe.part1",
+      "size": 60936986,
+      "sha512": "ixCCtUZuOCBa64aqkm7xznm4hPtaABjbWQ12I40/K7RdYj9ahICCKdm8g5ujk1hzhXJ5OWxeCP2p8N9p0dtA8g==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.2/iKunReminder-setup-v4.2.0.exe.part2",
-      "size": 60914093,
-      "sha512": "tuu+R3IQZ4edcikYjr8pgIBg+oVEc1YotV5jCgRATEGJmQ0YKdGkqn/UAGaP4UmfNiqgqx5tX4nuUxeX/GQ0Aw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.4/iKunReminder-setup-v4.4.0.exe.part2",
+      "size": 60936986,
+      "sha512": "GVMkwpHeYLs9eQ63JSVO5PUR/qgRY/ctrjJOO0P42Ms+xApNw02yRNXXBE74+PUW+snFAmhPqO3WqcqerNJahw==",
       "index": 2
     }
   ]
