@@ -119,7 +119,31 @@
     document.body.className = 'tail-' + (d.tail || 'bottom') +
       (bodyClick ? ' clickable' : '') +
       (bodyClick === 'arxiv' ? ' msg-arxiv' : '');
+
+    /* 按内容自动定尺寸：等两帧（字体排完版）再量一次自然尺寸，回报给主进程。
+       量的时候把宽高放开成 auto —— 绝对定位 + auto 会收缩到内容大小，
+       所以量到的就是"这两行字真正需要多大"，不受当前窗口尺寸影响（因此不会来回振荡）。 */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        try { autoFit(safe); } catch (e) { }
+      });
+    });
   });
+
+  /* 量内容 → 回报主进程。设计单位 = 量到的 CSS 像素 × scale（内层被 scale 放大过）。 */
+  function autoFit(scale) {
+    var inner = document.getElementById('bubble-inner');
+    if (!inner || !b || !b.fit) return;
+    var pw = inner.style.width, ph = inner.style.height;
+    inner.style.width = 'auto';
+    inner.style.height = 'auto';
+    var natW = inner.offsetWidth, natH = inner.offsetHeight;
+    inner.style.width = pw;
+    inner.style.height = ph;
+    if (!(natW > 0 && natH > 0)) return;
+    var k = Number(scale) > 0 ? Number(scale) : 1;
+    b.fit(Math.round(natW * k), Math.round(natH * k));
+  }
 
   /* 点气泡 = 告诉主进程「用户要看详情」（主进程会把主界面叫出来并切到科研动态页） */
   document.addEventListener('click', function () {

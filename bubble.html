@@ -29,17 +29,32 @@
 
   #bubble-inner{
     position:relative;width:100%;height:100%;
-    display:flex;flex-direction:column;gap:7px;
-    padding:12px 14px;box-sizing:border-box;overflow:hidden;
-    border-radius:16px;background:#ffffff;
-    border:1px solid rgba(70,95,110,.22);
+    display:flex;flex-direction:column;gap:6px;
+    padding:13px 15px 13px 17px;box-sizing:border-box;overflow:hidden;
+    border-radius:20px;background:#ffffff;
+    border:1px solid rgba(70,95,110,.20);
+    /* 顶边一道极淡的内高光让白卡片有厚度；外投影只有很淡的一层 ——
+       之前说过不要气泡四周那圈荧光，所以这里刻意压到 10% 透明度、4px 偏移、14px 模糊，
+       只是让它从桌面上"浮"起来一点，不是发光。 */
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.9),
+               0 4px 14px rgba(15,32,39,.10);
     transform-origin:top left;
     transform:scale(var(--bubble-scale,1));
   }
+  /* 左侧一道细青色标记（和 .pb-mer 同色系）：给气泡一个视觉落点，
+     不然两行字摆在白板上确实太单调。 */
+  #bubble-inner::before{
+    content:'';position:absolute;left:0;top:13px;bottom:13px;width:3px;
+    border-radius:0 3px 3px 0;
+    background:linear-gradient(180deg,#4FB3C0,#1A6E80);
+  }
+  /* 科研推送那种浅绿气泡自己有一套配色，标记也跟着换成绿的（见 body.msg-arxiv） */
+  body.msg-arxiv #bubble-inner::before{background:linear-gradient(180deg,#7FBF7A,#3F7F3A)}
 
-  .pb-head{font-size:16.5px;font-weight:800;letter-spacing:1px;color:#0F2027}
+  .pb-head{font-size:16.5px;font-weight:800;letter-spacing:1px;color:#0F2027;line-height:1.35}
   .pb-mer{font-size:14px;font-weight:600;color:#1A6E80;letter-spacing:.5px}
-  .pb-tip{font-size:14px;line-height:1.75;color:#2B3A44;flex:1;overflow:hidden;white-space:pre-line}
+  /* 行高从 1.75 收到 1.62：两行字的短提示不再显得空，长内容也还够松快 */
+  .pb-tip{font-size:14px;line-height:1.62;color:#2B3A44;flex:1;overflow:hidden;white-space:pre-line}
   /* 可点的气泡（科研动态推送）：整块都能点，鼠标变成手型。
      注意：不要加发光/阴影（用户明确说不要气泡四周那圈荧光） */
   body.clickable{cursor:pointer}

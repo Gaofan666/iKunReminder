@@ -761,6 +761,58 @@ function createWindow() {
                 's.dispatchEvent(new Event("change",{bubbles:true}));return true;})()', true);
               await new Promise(function (r) { setTimeout(r, 300); });
             } catch (e) { }
+
+            /* 关主窗口时那句「坤坤躲到托盘里了」：走桌宠气泡小窗，但摆到主屏工作区右下角
+               （和系统气泡的位置一致），时长归「💬 气泡显示时长」这个设置（默认 3 秒）。 */
+            balloonShown = false;                  // 这句提示正常只弹一次，自检里放开
+            bubbleMsLast = 0;
+            hideToTray(false);
+            await new Promise(function (r) { setTimeout(r, 1000); });
+            let nearCorner = false, gapPx = -1, blankPx = -1, clippedPx = -1, bubbleWPx = 0, bubbleHPx = 0, shadowOk = false;
+            try {
+              const wa = screen.getPrimaryDisplay().workArea;
+              const bb = (bubbleWin && !bubbleWin.isDestroyed()) ? bubbleWin.getBounds() : null;
+              if (bb) {
+                gapPx = Math.round(Math.abs((wa.x + wa.width) - (bb.x + bb.width)));
+                nearCorner = gapPx <= 40 && Math.abs((wa.y + wa.height) - (bb.y + bb.height)) <= 400;
+                bubbleWPx = bb.width; bubbleHPx = bb.height;
+              }
+              /* 气泡里还剩多少空白 / 有没有被裁掉：量页面上最后一个元素的底边，和窗口内容高比 */
+              if (bubbleWin && !bubbleWin.isDestroyed()) {
+                const m = await bubbleWin.webContents.executeJavaScript(
+                  '(function(){var b=document.body;' +
+                  'var kids=b.querySelectorAll("*"),bottom=0;' +
+                  'for(var i=0;i<kids.length;i++){var r=kids[i].getBoundingClientRect();' +
+                  'if(r.width>2&&r.height>2&&r.bottom>bottom)bottom=r.bottom;}' +
+                  'var ih=window.innerHeight;' +
+                  /* 顺带看一眼卡片有没有外投影（内高光那层带 inset，外投影那层不带） */
+                  'var pm=(getComputedStyle(document.getElementById("bubble-inner")).boxShadow||"").split(",");' +
+                  'var hasOuter=false;for(var q=0;q<pm.length;q++){if(pm[q].trim()&&pm[q].indexOf("inset")<0)hasOuter=true;}' +
+                  'return {内容底边:Math.round(bottom),窗口内容高:Math.round(ih),' +
+                  ' 空白:Math.round(ih-bottom),被裁掉:Math.round(bottom-ih),有外投影:hasOuter};})()', true);
+                blankPx = m.空白;
+                clippedPx = m.被裁掉;
+                shadowOk = m.有外投影 === true;
+              }
+            } catch (e) { }
+            const trayHint = {
+              气泡窗可见: !!(bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()),
+              用的毫秒: bubbleMsLast,
+              跟设置同一个: bubbleMsLast === (bubbleMsUser || BUBBLE_MS),
+              默认是3秒: bubbleMsLast === 3000,
+              贴着右下角: nearCorner,
+              离右边缘像素: gapPx,
+              气泡窗宽: bubbleWPx,
+              气泡窗高: bubbleHPx,
+              比默认窄: bubbleWPx > 0 && bubbleWPx < 300,   // 默认 340；这条短提示按 232 发
+              底部空白像素: blankPx,
+              内容没被裁: clippedPx <= 2,
+              空白不算多: blankPx >= 0 && blankPx <= 28,
+              有外投影: shadowOk
+            };
+            showWindow();
+            await new Promise(function (r) { setTimeout(r, 500); });
+            diagLog('pet-tray-hint', trayHint);
           }
           if (DIAG.tab) {
             await win.webContents.executeJavaScript(
@@ -5779,21 +5831,32 @@ function toggleWindow() {
   else showWindow();
 }
 
-/* silent=true 时不弹「躲进托盘了」的提示气泡 —— 一键摸鱼要的就是低调，
-   这时候冒个气泡反而把注意力吸过来 */
+/* silent=true 时不弹「躲进托盘了」的提示 —— 一键摸鱼要的就是低调，
+   这时候冒个提示反而把注意力吸过来 */
 function hideToTray(silent) {
   if (!win) return;
   hideBubble();                 // 气泡是独立小窗，收托盘时要一起收掉
   win.hide();
   if (silent) return;
-  if (!balloonShown && tray && typeof tray.displayBalloon === 'function') {
+  if (!balloonShown) {
     balloonShown = true;
+    /* 摆在托盘那个角（主屏工作区右下角）—— 和系统气泡出现的位置一致，
+       不然关主窗口时它会贴着桌宠/主窗口弹在屏幕中间，看着就不像"收进托盘"了。
+       时长归「💬 气泡显示时长」这个设置管（默认 3 秒）；tray.displayBalloon 做不到这点
+       （系统气泡的停留时长由系统定，Electron 没有参数能改）。 */
+    let anchor = null;
     try {
-      tray.displayBalloon({
-        title: '坤坤躲到托盘里了',
-        content: '到点会自动跳出来提醒你。点托盘图标可以随时叫出来 / 收起。'
-      });
+      const wa = screen.getPrimaryDisplay().workArea;
+      anchor = { x: wa.x + wa.width - 6, y: wa.y + wa.height - 6, width: 1, height: 1 };
     } catch (e) { }
+    showBubble({
+      head: '💤 坤坤躲到托盘里了',
+      tip: '到点会自动跳出来提醒你',
+      next: '点托盘图标就能随时叫出来',           // 底部那行带分隔线的脚注，气泡不至于只有两行白字
+      w: 232,
+      h: 132,
+      anchor: anchor
+    });
   }
 }
 
@@ -7062,7 +7125,11 @@ function ensureBubbleWin() {
 
 /* 显示气泡：主进程负责算位置，渲染进程只提供文字内容 */
 function showBubble(data) {
-  const b = petHome || (win && !win.isDestroyed() ? win.getBounds() : null);
+  bubbleLastData = data || {};      // 自动适配时要拿它重放一遍（见上面的 bubble-fit）
+  /* 贴着谁弹：默认桌宠位置（没开桌宠就退回主窗口位置）；
+     data.anchor 可以让调用方指定一个矩形 —— 关窗提示用它贴到托盘那个角 */
+  const b = (data && data.anchor) ? data.anchor
+    : (petHome || (win && !win.isDestroyed() ? win.getBounds() : null));
   if (!b) return false;
 
   const bw = ensureBubbleWin();
@@ -7078,8 +7145,11 @@ function showBubble(data) {
     const td = (data && data.todos) ? data.todos : null;
     if (td && td.memos) designH += bubbleTodoExtra(td.memos.items.length, td.memos.more);
   }
-  const box = (designH / box0.k !== box0.h)
-    ? { w: box0.w, h: designH / box0.k, gap: box0.gap, pad: box0.pad, k: box0.k }
+  /* 宽度同理：默认用设计基准，调用方可以用 data.w 指定一个更窄的（两行字的短提示用不到 340 那么宽）。
+     两个都以「设计单位」为准，÷k 交给下面统一算。 */
+  const designW = Number(data && data.w) > 0 ? Number(data.w) : UI.DESIGN.bubbleW;
+  const box = (designH / box0.k !== box0.h || designW / box0.k !== box0.w)
+    ? { w: designW / box0.k, h: designH / box0.k, gap: box0.gap, pad: box0.pad, k: box0.k }
     : box0;
   const disp = talkDisplay(b.x + b.width / 2, b.y + b.height / 2);
   const p = placeBubble(b.x, b.y, b.width, b.height,
@@ -7141,14 +7211,16 @@ function showBubble(data) {
 const BUBBLE_MS = 3000;
 const BUBBLE_CLICK_MS = 15000;
 let bubbleMsUser = BUBBLE_MS;        // 用户在设置里选的时长（毫秒），主界面推过来
+let bubbleMsLast = 0;                // 最近一次桌宠气泡实际用的时长（自检读它看「跟设置同一个」）
 let bubbleTimer = null;
 
 function armBubbleTimer(ms) {
   if (bubbleTimer) clearTimeout(bubbleTimer);
+  bubbleMsLast = Math.max(1000, Math.round(Number(ms) || bubbleMsUser || BUBBLE_MS));
   bubbleTimer = setTimeout(function () {
     bubbleTimer = null;
     hideBubble();
-  }, Math.max(1000, Math.round(Number(ms) || bubbleMsUser || BUBBLE_MS)));
+  }, bubbleMsLast);
 }
 
 /* 设置页「💬 气泡显示时长」：主界面把秒数推过来（默认 3 秒） */
@@ -7165,6 +7237,24 @@ ipcMain.on('pet-hit', (e, hit) => {
   if (petWin && !petWin.isDestroyed()) {
     try { petWin.setIgnoreMouseEvents(!petHitLast, { forward: true }); } catch (err) { }
   }
+});
+
+/* 气泡按内容自动定尺寸：气泡页量完自然尺寸回报过来（设计单位），这里按同一个 showBubble
+   重算一遍 —— 宽度/高度、尾巴位置、贴哪块屏全都跟着重算，不用另写一份几何逻辑。
+   同尺寸直接忽略：气泡页量的是"内容自然尺寸"，和窗口当前尺寸无关，所以不会来回振荡。 */
+let bubbleLastData = null;       // 最近一次显示气泡用的参数（自动适配时拿它重放）
+let bubbleFitW = 0, bubbleFitH = 0;
+ipcMain.on('bubble-fit', (e, size) => {
+  /* 封顶：气泡页量的是「一行不折」的自然宽度，内容长了会一直变宽 ——
+     超过默认宽度就按默认宽折行（高度也封一个上限，免得撑满屏）。 */
+  const w = Math.min(Math.round(Number(size && size.w) || 0), UI.DESIGN.bubbleW);
+  const h = Math.min(Math.round(Number(size && size.h) || 0), 420);
+  if (!(w > 60 && h > 30)) return;                        // 明显不合理的量法，忽略
+  if (!bubbleLastData) return;
+  if (Math.abs(w - bubbleFitW) <= 2 && Math.abs(h - bubbleFitH) <= 2) return;
+  bubbleFitW = w; bubbleFitH = h;
+  const next = Object.assign({}, bubbleLastData, { w: w, h: h });
+  try { showBubble(next); } catch (err) { }
 });
 
 function hideBubble() {

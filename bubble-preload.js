@@ -4,5 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('petBubble', {
   onData: (cb) => ipcRenderer.on('bubble-data', (e, d) => cb(d)),
-  clicked: () => ipcRenderer.send('bubble-clicked')
+  clicked: () => ipcRenderer.send('bubble-clicked'),
+  /* 量完内容回报尺寸（设计单位）→ 主进程据此重算窗口几何，尾巴和贴哪块屏一起重算 */
+  fit: (w, h) => ipcRenderer.send('bubble-fit', { w: w, h: h })
 });
