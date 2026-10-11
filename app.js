@@ -1496,6 +1496,64 @@
     return true;
   }
 
+  /* 弹窗里日期 + 时间选的这一刻（本地时区，和 dueAt 同一套算法）；算不出来返回 0 */
+  function extCandTs(dateEl, timeEl) {
+    const d = dateEl && dateEl.value;
+    if (!d) return 0;
+    const ts = new Date(d + 'T' + ((timeEl && timeEl.value) || '00:00')).getTime();
+    return isNaN(ts) ? 0 : ts;
+  }
+
+  /* 「往后挪算不算一次延期」由用户定：弹窗里那个勾选框默认勾上。
+     以前是「往后挪就自动记一笔」，但用户可能只是当初把时间填错了 —— 那种不该算延期。
+     找不到控件时按老行为（记），保证调用点永远不会因为控件缺失而漏记。 */
+  function extendWanted(chkId) {
+    const c = document.getElementById(chkId);
+    return !c || c.checked !== false;
+  }
+
+  /* 编辑时把时间往后挪 → 露出那个勾选框（默认勾上）；换一条、或没往后挪就收起来。
+     idVar 取当前编辑的 id，srcOf 按 id 取条目，candOf 从日期/时间输入算新时间戳。 */
+  function bindExtendAsk(rowId, chkId, idVar, srcOf, candOf) {
+    const row = document.getElementById(rowId);
+    const chk = document.getElementById(chkId);
+    if (!row || !chk) return function () { };
+    let lastId = null;
+    return function () {
+      const id = idVar();
+      const src = id ? srcOf(id) : null;
+      if (!src) { row.hidden = true; lastId = null; return; }        // 新增条目，不存在"延期"
+      if (lastId !== id) { lastId = id; row.hidden = true; chk.checked = true; }   // 换了一条 → 复位
+      const cand = candOf(), cur = +src.dueAt || 0;
+      if (cand && cur && cand > cur) {
+        if (row.hidden) { row.hidden = false; chk.checked = true; }
+      } else {
+        row.hidden = true;
+        chk.checked = true;
+      }
+    };
+  }
+
+  /* 弹窗里的日期/时间输入是静态 DOM，所以在 document 上挂一次即可（不用去改两个 open 函数） */
+  const refreshMemoExt = bindExtendAsk('memoExtRow', 'memoExtChk',
+    function () { return editingMemoId; },
+    function (id) { return memoById(id); },
+    function () { return extCandTs(document.getElementById('memoDueDate'), document.getElementById('memoDueTime')); });
+  const refreshTodoExt = bindExtendAsk('todoExtRow', 'todoExtChk',
+    function () { return editingTodoId; },
+    function (id) { return todoById(id); },
+    function () { return extCandTs(document.getElementById('tdDate'), document.getElementById('tdTime')); });
+  document.addEventListener('input', function (e) {
+    const id = e.target && e.target.id;
+    if (id === 'memoDueDate' || id === 'memoDueTime') refreshMemoExt();
+    else if (id === 'tdDate' || id === 'tdTime') refreshTodoExt();
+  }, true);
+  document.addEventListener('change', function (e) {
+    const id = e.target && e.target.id;
+    if (id === 'memoDueDate' || id === 'memoDueTime') refreshMemoExt();
+    else if (id === 'tdDate' || id === 'tdTime') refreshTodoExt();
+  }, true);
+
   /* 扫一遍：到点了还没完成的（或者完成得比截止晚的）自己记一笔逾期 —— 不用等用户点弹窗。
      用户定的口径是「没完成、也没改截止时间，就算逾期」，这是截止时间的性质，
      不该取决于他点没点那个按钮（弹窗被晾着、被 12 小时宽限静默清掉，都不该漏记）。 */
@@ -3439,7 +3497,8 @@
         /* 往后挪截止时间 = 记一笔延期（改早、清空都不算，见 recordExtend）。
            lateOpen 复位保留着：那只是「这次逾期还没收尾」的标记，去重靠的是 lateDue。 */
         if (m.dueAt !== dueAt) {
-          recordExtend(m, m.dueAt, dueAt);
+          /* 往后挪要不要记这笔延期，交给弹窗里那个勾选框（默认勾上；原来是填错了就取消） */
+          if (extendWanted('memoExtChk')) recordExtend(m, m.dueAt, dueAt);
           m.lateOpen = false;
           /* ⚠️ 「重新变回未完成」只能在真的改了截止时间时做。
              这一句以前写在这个 if 外面 —— 结果是「只改个分类 / 只改个文字」也会把
@@ -3687,7 +3746,8 @@
         /* 往后挪截止时间 = 记一笔延期。重复待办的「勾完自动排下一期」不走这里
            （走 markTodoDone 直接改 dueAt），所以自动排期永远不会被算成延期。 */
         if (t.dueAt !== dueAt) {
-          recordExtend(t, t.dueAt, dueAt);
+          /* 同备忘：往后挪要不要记这笔延期，看弹窗里的勾选框 */
+          if (extendWanted('todoExtChk')) recordExtend(t, t.dueAt, dueAt);
           t.lateOpen = false;
           /* ⚠️ 「重新变回未完成」只能在真的改了截止时间时做（和备忘那边同一个口径）。
              这一句以前在 if 外面 —— 于是「只改个分类 / 只改个文字」也会把已完成点回未完成，
