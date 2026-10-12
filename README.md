@@ -20,6 +20,15 @@
 
 ---
 
+## 🆕 v4.5 更新（待办重复多了「每隔 N 天」）
+
+- **待办可以「每隔几天」重复了**：新增待办时，「重复」下拉里多一项 **「每隔几天」**，选中后填一个天数（1~365，默认 30），右边会直接写出下一次是哪天几点，比如「每隔 30 天（下一次：4月19日 09:30）」。
+- **什么时候用它**：流量套餐、按月清零、隔周浇花这类**按天数滚**的周期。它和「每月 30 号」是两条不同的规则 —— 「每月 30 号」会随长短月漂（2 月没有 30 号就跳过、3 月又跳回 30 号），而「每隔 30 天」永远是**上一次之后第 30 天**，跨月跨年都准（3 月 30 日 + 3 天 = 4 月 2 日）。
+- 列表上挂 `🔁 每隔 30 天` 的小标签，桌面日历的当天清单里也写着同一句话；改了日期或时间，提示里的「下一次」立刻跟着变。
+- 自检 `--diag-repeat` 补 5 条推进用例（每隔 1 / 3 / 30 / 90 天，含跨月和跨年）+ `repeat-3-编辑回填`（打开一条「每隔 7 天」，下拉、数字框、提示都要对上）。
+
+---
+
 ## 🆕 v4.4 更新（桌宠点击范围 / 气泡时长 / 日历点天新增 / 分类 / 逾期统计）
 
 ### 🐣 桌宠
@@ -381,11 +390,14 @@ v3.2.2 的「一键摸鱼」是「把所有有标题的可见窗口都最小化�
 
 **方式一：GitHub Releases（推荐）**
 
-> **v4.4（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.4
-> 直接下载：[`iKunReminder-setup-v4.4.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.4/iKunReminder-setup-v4.4.0.exe)（约 116 MB，安装版）
+> **v4.5（最新）发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.5
+> 直接下载：[`iKunReminder-setup-v4.5.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.5/iKunReminder-setup-v4.5.0.exe)（约 116 MB，安装版）
 >
 > ⚠️ **v3.2.1 及更早的版本需要手动装一次**（它们里面没有更新器，没法自己更新自己）。
 > 装上 v3.2.2 或更高之后就不用了 —— 以后的新版本都能在「设置 → 软件更新」里一键更新。
+>
+> 历史版本 **v4.4 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.4
+> 直接下载：[`iKunReminder-setup-v4.4.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.4/iKunReminder-setup-v4.4.0.exe)（约 116 MB，安装版）
 >
 > 历史版本 **v4.2 发布页**：https://github.com/Gaofan666/iKunReminder/releases/tag/v4.2
 > 直接下载：[`iKunReminder-setup-v4.2.0.exe`](https://github.com/Gaofan666/iKunReminder/releases/download/v4.2/iKunReminder-setup-v4.2.0.exe)（约 116 MB，安装版）
