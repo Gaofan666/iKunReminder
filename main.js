@@ -3429,13 +3429,16 @@ function createWindow() {
                   : '') +
                 (cfg.monthDay ? ('g("tdMonthDay").value="' + cfg.monthDay +
                   '";g("tdMonthDay").dispatchEvent(new Event("change",{bubbles:true}));') : '') +
-                'var weekRowShown=!g("tdWeekRow").hidden, monthRowShown=!g("tdMonthRow").hidden;' +
+                (cfg.everyDays ? ('g("tdEveryDays").value="' + cfg.everyDays +
+                  '";g("tdEveryDays").dispatchEvent(new Event("input",{bubbles:true}));') : '') +
+                'var weekRowShown=!g("tdWeekRow").hidden, monthRowShown=!g("tdMonthRow").hidden,' +
+                'everyRowShown=!g("tdEveryRow").hidden;' +
                 'var hint=g("tdRepeatHint").textContent;' +
                 'g("tdSave").click();' +
                 'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
                 'var t=(raw.todos||[]).filter(function(x){return x.text===' + JSON.stringify(text) + ';})[0];' +
                 'return {id:t?t.id:null, dueAt:t?t.dueAt:0, repeat:t?t.repeat:null,' +
-                ' 每周行:weekRowShown, 每月行:monthRowShown, 提示:hint};' +
+                ' 每周行:weekRowShown, 每月行:monthRowShown, 每隔行:everyRowShown, 提示:hint};' +
                 '}catch(e){return {error:String(e&&e.message||e)};}})()';
               return win.webContents.executeJavaScript(js, true);
             };
@@ -3459,7 +3462,15 @@ function createWindow() {
               { name: '每月31号', date: '2027-01-31', cfg: { kind: 'monthly', monthDay: 31 }, want: '2027-03-31' },
               { name: '每月最后一天', date: '2027-01-31', cfg: { kind: 'monthly', monthMode: 'last' }, want: '2027-02-28' },
               { name: '每年', date: '2027-03-15', cfg: { kind: 'yearly' }, want: '2028-03-15' },
-              { name: '每年2月29', date: '2028-02-29', cfg: { kind: 'yearly' }, want: '2032-02-29' }
+              { name: '每年2月29', date: '2028-02-29', cfg: { kind: 'yearly' }, want: '2032-02-29' },
+              /* 每隔 N 天：按天数滚，不看「几号」——流量套餐那种周期用这个才准 */
+              { name: '每隔1天(等于每天)', date: '2027-03-10', cfg: { kind: 'every', everyDays: 1 }, want: '2027-03-11' },
+              { name: '每隔3天', date: '2027-03-10', cfg: { kind: 'every', everyDays: 3 }, want: '2027-03-13' },
+              /* 跨月：3/30 + 3 天 = 4/2（要是写成「每月几号」就会漂到 4/30） */
+              { name: '每隔3天跨月', date: '2027-03-30', cfg: { kind: 'every', everyDays: 3 }, want: '2027-04-02' },
+              { name: '每隔30天', date: '2027-03-20', cfg: { kind: 'every', everyDays: 30 }, want: '2027-04-19' },
+              /* 跨年 + 跨过 2 月 */
+              { name: '每隔90天跨年', date: '2027-11-15', cfg: { kind: 'every', everyDays: 90 }, want: '2028-02-13' }
             ];
             const rows2 = [];
             for (let i = 0; i < cases.length; i++) {
@@ -3474,7 +3485,7 @@ function createWindow() {
                 建在: c.date,
                 规则: JSON.stringify(made.repeat),
                 弹窗提示: made.提示,
-                行显示: { 每周行: made.每周行, 每月行: made.每月行 },
+                行显示: { 每周行: made.每周行, 每月行: made.每月行, 每隔行: made.每隔行 },
                 下一期: got,
                 期望: c.want,
                 对不对: got === c.want,
@@ -3483,6 +3494,29 @@ function createWindow() {
               await wait7(200);
             }
             diagLog('repeat-1-推进规则', rows2.filter(function (r) { return r.用例; }));
+
+            /* 编辑回填：打开一条「每隔 7 天」，下拉 / 那行 / 数字框 / 提示都要对上 */
+            const made7 = await addTodo('【重复自检】编辑回填', '2027-05-01', { kind: 'every', everyDays: 7 });
+            await wait7(300);
+            const prefill = await win.webContents.executeJavaScript(
+              '(function(){try{' +
+              'var row=document.querySelector(\'.todo-item[data-id="' + made7.id + '"]\');' +
+              'if(!row)return {error:"没找到这条待办"};' +
+              'var eb=row.querySelector(\'[data-role="edit"]\');if(!eb)return {error:"没有编辑按钮"};' +
+              'eb.click();' +
+              'var g=function(id){return document.getElementById(id);};' +
+              'return {下拉:g("tdRepeat").value, 每隔行显示:!g("tdEveryRow").hidden,' +
+              ' 天数框:g("tdEveryDays").value, 提示:g("tdRepeatHint").textContent, 日期:g("tdDate").value};' +
+              '}catch(e){return {error:String(e&&e.message||e)};}})()', true);
+            await wait7(200);
+            await win.webContents.executeJavaScript(
+              '(function(){var c=document.getElementById("tdCancel");if(c)c.click();return true;})()', true);
+            await wait7(200);
+            diagLog('repeat-3-编辑回填', {
+              建出来的: made7, 打开编辑后: prefill,
+              回填对了: prefill.下拉 === 'every' && prefill.每隔行显示 === true &&
+                prefill.天数框 === '7' && String(prefill.提示).indexOf('每隔 7 天') === 0
+            });
 
             /* 顺手验：重复待办在日历里带 🔁，当天清单里写明规则 */
             const repTodos = await win.webContents.executeJavaScript(

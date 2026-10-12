@@ -689,11 +689,20 @@
       <select class="skin-sel" id="tdRepeat">
         <option value="none">不重复</option>
         <option value="daily">每天</option>
+        <option value="every">每隔几天</option>
         <option value="weekly">每周</option>
         <option value="monthly">每月</option>
         <option value="yearly">每年</option>
       </select>
       <span class="psr-label" id="tdRepeatHint"></span>
+    </div>
+    <!-- 每隔几天：按天数滚动（上一次之后第 N 天），流量套餐 / 按月清零这类周期用它 -->
+    <div class="it-row" id="tdEveryRow" hidden>
+      <span class="it-label"></span>
+      <span class="psr-label">每隔</span>
+      <input type="number" id="tdEveryDays" min="1" max="365" step="1" value="30"
+             title="隔多少天提醒一次（1~365）">
+      <span class="psr-label">天</span>
     </div>
     <!-- 每周：挑星期几（可多选） -->
     <div class="it-row" id="tdWeekRow" hidden>
