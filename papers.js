@@ -328,6 +328,22 @@
     if (e.type === 'preparing') return '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 投稿 ddl';
     return '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 返修截止' + (k ? '（' + k.name + '）' : '');
   }
+  /* 一条截止"了结"了吗？了结的**完成时间落在真实发生的那一天**（用户要求）：
+     · 投稿 ddl → 它后面那条「已投稿」的日期（投出去那天）
+     · 返修截止 → 这条收到意见里的「提交返修稿」日期
+     没写日期的（比如论文直接进终态）才退回用当前时间。 */
+  function resolveDeadline(p, e) {
+    var d = D(e);
+    if (e.type === 'preparing') {
+      var sub = null;
+      byCreated(p).forEach(function (x) {
+        if (!sub && x.type === 'submitted' && (+x.createdAt || 0) > (+e.createdAt || 0)) sub = x;
+      });
+      return sub ? { done: true, doneAt: evAt(sub) } : { done: false, doneAt: 0 };
+    }
+    if (evOf(e.type).opinion && +d.submitAt) return { done: true, doneAt: +d.submitAt };
+    return { done: false, doneAt: 0 };
+  }
   /* 幂等：一切以 paperlinks 里的 memoId 为准，绝不无脑新建 */
   function syncMemos() {
     var bridge = window.KUNKUN_MEMOS;
@@ -346,13 +362,14 @@
         L[it.evId] = { memoId: memoId, paperId: p.id, evId: it.evId, field: it.field, due: it.due };
       });
     });
-    /* 已经了结的（交掉了 / 进了终态）：备忘标记完成（顺带刷新文本），映射留着，别再当新的建一遍 */
+    /* 已经了结的（交掉了 / 投出去了 / 进了终态）：备忘标记完成 + 完成时间落在真实那天 */
     Object.keys(L).forEach(function (evId) {
       if (live[evId]) return;
       var ent = L[evId];
       var p = byId(ent.paperId);
       var e = p ? evById(p, evId) : null;
-      bridge.finish(ent.memoId, (p && e) ? deadlineText(p, e) : null);
+      var res = (p && e) ? resolveDeadline(p, e) : { done: true, doneAt: 0 };
+      bridge.finish(ent.memoId, (p && e) ? deadlineText(p, e) : null, res.doneAt || 0);
     });
     saveLinks(L);
   }

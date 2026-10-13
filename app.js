@@ -2585,14 +2585,19 @@
       if (changed) saveTodoStore();
       return changed;
     },
-    finish: function (id, text) {
+    finish: function (id, text, doneAt) {
       const m = memos.filter(function (x) { return x.id === id; })[0];
       if (!m) return false;
       const t = (text == null) ? null : String(text).slice(0, 500);
+      /* 完成时间用投稿那边给的真实日期（投稿那天 / 交返修稿那天）——
+         日历是按完成日落格的，这里落错日子就白搭。
+         没有给日期（比如论文直接进了终态）才退回当前时间。 */
+      const at = +doneAt || Date.now();
       let changed = false;
       /* 顺带把文本刷新 —— 论文改了标题之后，旧备忘不能一直挂着老标题 */
       if (t && m.text !== t) { m.text = t; changed = true; }
-      if (!m.done) { m.done = true; m.doneAt = Date.now(); changed = true; }
+      if (!m.done) { m.done = true; m.doneAt = at; changed = true; }
+      else if (at && m.doneAt !== at) { m.doneAt = at; changed = true; }
       if (changed) saveTodoStore();
       return changed;
     },
@@ -4806,6 +4811,15 @@
       if (role === 'done') {
         const m = memoById(id);
         if (!m) return;
+        /* 来自「我的投稿」的备忘：完成状态跟着投稿走，**不让手点** ——
+           投出去（记了「已投稿」）它自己完成、完成时间落在投稿那天；
+           返修截止则在记了「提交返修稿」时自己完成、时间落在交稿那天。
+           手点会和投稿那边打架（一边完成一边还报着警），所以这里直接拦住，只显示状态。 */
+        if (isLinkedMemo(id)) {
+          setCaption('这条来自「我的投稿」：完成状态跟着投稿走 —— 投出去 / 交了返修稿时它自己会完成');
+          Sound.click();
+          return;
+        }
         if (m.done) {
           /* 取消完成：回到未完成 */
           m.done = false;

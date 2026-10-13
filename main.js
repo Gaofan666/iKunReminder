@@ -1080,6 +1080,19 @@ function createWindow() {
               ' 跟到20天:!!d&&Math.abs(Math.round((d.getTime()-Date.now())/86400000)-20)<=1};})()');
 
             /* ⑱ 交掉这轮 → 对应备忘自动完成 */
+            /* ⑰b 投稿来的备忘**不许手点完成**（只显示状态）—— 点它应该被拦住，状态不变 */
+            SM['17b-禁止手点完成'] = await jp(
+              '(function(){var tab=document.querySelector(".tab-btn[data-tab=todo]");if(tab)tab.click();' +
+              'var rows=document.querySelectorAll("#memoList .memo-item");var row=null;' +
+              'for(var i=0;i<rows.length;i++){if((rows[i].textContent||"").indexOf("小修")>=0){row=rows[i];break;}}' +
+              'if(!row)return {没找到那条备忘:true};' +
+              'var b=row.querySelector("[data-role=done]");if(!b)return {这条没有完成按钮:true};' +
+              'b.click();' +
+              'var ms=window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[];var mine=null;' +
+              'for(var j=0;j<ms.length;j++){if((ms[j].text||"").indexOf("小修")>=0)mine=ms[j];}' +
+              'return {点完还是未完成:!!mine&&!mine.done};})()');
+
+            /* ⑱ 交掉这轮 → 对应备忘自动完成（完成时间落在交稿那天） */
             SM['18-交掉后备忘完成'] = await jp(
               '(function(){var P=window.__pp;' +
               'if(!P.ensure("改过标题"))return {没能展开这篇:true};' +
@@ -4657,7 +4670,8 @@ function createWindow() {
               ' 内容默认收着:document.getElementById("memoDoneBox").hidden};})()', true);
             /* 勾完成 → 应该从主列表消失、进折叠栏 */
             await win.webContents.executeJavaScript(
-              '(function(){var rows=document.querySelectorAll("#memoList .memo-item");' +
+              '(function(){var tab=document.querySelector(".tab-btn[data-tab=todo]")||document.querySelector(".tab-btn[data-tab=memo]");if(tab)tab.click();' +
+              'var rows=document.querySelectorAll("#memoList .memo-item");' +
               'for(var i=0;i<rows.length;i++){if(rows[i].innerText.indexOf("【自检】折叠-新完成")>=0){' +
               'rows[i].querySelector("[data-role=done]").click();return true;}}return false;})()', true);
             await waitM(600);
