@@ -235,6 +235,9 @@ body.anim-off *::after{animation-play-state:paused !important}
   grid-template-columns:minmax(420px,1.3fr) minmax(330px,1fr);
   min-height:var(--page-min-h, 560px);
   align-items:stretch;
+  /* 内容不够高时别把整块垂直居中 —— 那样顶栏和切换条之间会空出一大段（用户截图里的问题）。
+     和 arXiv 那两栏一样，永远从顶上排。 */
+  align-content:start;
 }
 .arxiv-col{
   display:flex;flex-direction:column;padding:13px 16px 13px;min-width:0;
@@ -770,6 +773,204 @@ mark.ax-hit{
 /* 这两项要待在同一行：不允许换行（桌宠始终最前 + 气泡显示时长） */
 .pet-size-row.nowrap{flex-wrap:nowrap;white-space:nowrap;gap:16px}
 .psr-label{font-size:12.5px;color:var(--dim);letter-spacing:.5px;white-space:nowrap}
+
+/* ===================== 论文投稿时间与状态监控（科研动态页第二块） =====================
+   顶上的两块切换 + 「我的投稿」都占满整行（grid-column:1/-1），
+   所以原来 arXiv 那两栏的 grid 布局完全不受影响；切到哪块就把另一块 hidden 掉。 */
+/* 顶上的切换条：往上提一点（用户说离顶栏太远），下面留一点和卡片分开 */
+.page-switch{grid-column:1/-1;display:flex;gap:6px;align-items:center;margin:-6px 0 8px}
+.psw-btn{
+  padding:7px 14px;border-radius:10px;border:1px solid var(--line);cursor:pointer;
+  background:rgba(255,255,255,.6);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;
+}
+.psw-btn:hover{background:var(--btn-hover)}
+.psw-btn.on{background:#3E9AA8;border-color:#3E9AA8;color:#fff}
+/* 「我的投稿」完全照 arXiv 那两栏的排版来（用户要求）：
+   同一个 max-height 公式（跟 app 的 --page-view-h 走，DPI 缩放也不会错位）+ 内部滚动；
+   切换条占了约 40px，所以这里再减掉一点，保证「切换条 + 面板」不会顶出可视区。 */
+#pageArxiv .papers-pane .col-head h2{font-size:17px}
+.papers-pane{
+  grid-column:1/-1;display:flex;flex-direction:column;padding:13px 16px;
+  /* 高度上下限都用 arXiv 那栏的同一个公式：内容少也不缩成一小条（图2 那种大面板），
+     内容多则在列表里滚，整页永远不顶出可视区。 */
+  min-height:calc(var(--page-view-h, 803px) - 78px);
+  max-height:calc(var(--page-view-h, 803px) - 78px);
+  overflow:auto;min-width:0;
+}
+.papers-pane > .col-head,.papers-pane > .col-sub,.papers-pane > .paper-filter{flex:none}
+.paper-filter{display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap;align-items:center}
+.paper-list{
+  flex:1;display:flex;flex-direction:column;gap:10px;
+  overflow:auto;padding-right:4px;max-height:620px;
+}
+/* 行样式对齐 .arxiv-item：同样的圆角/渐变底/描边 */
+.paper-item{
+  padding:12px 14px;border-radius:14px;
+  background:linear-gradient(180deg,#ffffff,#f7fafe);
+  border:1px solid var(--line);transition:.15s;
+}
+.paper-item:hover{border-color:rgba(62,154,168,.45)}
+.paper-item.open{background:linear-gradient(180deg,#ffffff,#f2f8fc)}
+/* 状态时间线 */
+.pp-ev-head{
+  display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+  font-size:12px;color:var(--dim);margin:12px 0 6px;
+}
+.pp-ev-tip{font-size:11.5px;color:var(--dim);opacity:.85}
+.pp-evs{display:flex;flex-direction:column;gap:2px}
+.pp-ev{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.55)}
+.pp-ev:hover{background:rgba(255,255,255,.9)}
+.pp-ev.urgent{background:rgba(217,83,79,.07)}
+.pp-ev.editing{background:rgba(74,155,212,.10);gap:6px;flex-wrap:wrap}
+.pp-ev.editing select,.pp-ev.editing input{
+  padding:5px 8px;border-radius:8px;border:1px solid var(--line);
+  background:#fff;font-family:inherit;font-size:12.5px;color:var(--text);
+}
+.pp-ev-dot{flex:none;width:8px;height:8px;border-radius:50%}
+.pp-ev-name{flex:none;font-size:13px;font-weight:600;color:var(--text)}
+.pp-ev-ok{flex:1;min-width:0;font-size:11.5px;color:#3F9E6E}
+.pp-ev-late{flex:1;min-width:0;font-size:11.5px;color:#c0392b;font-weight:700}
+.pp-ev-soon{flex:1;min-width:0;font-size:11.5px;color:#B9762A;font-weight:700}
+.pp-ev-date{flex:none;margin-left:auto;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.pp-ev-ico{
+  flex:none;border:none;background:transparent;cursor:pointer;color:var(--dim);
+  font-family:inherit;font-size:12px;padding:0 3px;line-height:1;
+}
+.pp-ev-ico:hover{color:var(--lake,#3E9AA8)}
+.pp-ev-ico.del:hover{color:#c0392b}
+/* 「收到意见」那一条右侧的详情按钮：小、克制，但要一眼看到 */
+.pp-ev-more{
+  flex:none;cursor:pointer;font-family:inherit;font-size:11.5px;padding:3px 9px;border-radius:8px;
+  border:1px solid rgba(232,184,67,.55);background:rgba(232,184,67,.12);color:#8a6a1e;font-weight:600;
+}
+.pp-ev-more:hover{background:rgba(232,184,67,.22)}
+.pp-add-ev{
+  display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;
+  padding-top:12px;border-top:1px dashed var(--line);
+}
+.pp-add-ev select{flex:none}
+.pp-add-ev input[type=date],.pp-add-ev input[type=time]{
+  flex:none;padding:6px 8px;border-radius:9px;border:1px solid var(--line);
+  background:#fff;font-family:inherit;font-size:12.5px;color:var(--text);
+}
+.paper-item{
+  border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.6);
+  padding:11px 13px;
+}
+.paper-item.open{background:rgba(255,255,255,.88)}
+.paper-item{
+  padding:12px 14px;border-radius:14px;
+  background:linear-gradient(180deg,#ffffff,#f7fafe);
+  border:1px solid var(--line);transition:.15s;
+}
+.paper-item.open{background:linear-gradient(180deg,#ffffff,#f2f7fc)}
+.pp-head{display:flex;align-items:center;gap:10px;cursor:pointer}
+.pp-status{flex:none;padding:2px 8px;border-radius:999px;color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.5px}
+.pp-title{flex:1;min-width:0;font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-due{flex:none;font-size:12px;color:var(--dim)}
+.pp-due.soon{color:#B9762A;font-weight:700}
+.pp-due.late{color:#c0392b;font-weight:700}
+.pp-caret{flex:none;color:var(--dim);font-size:12px}
+.pp-meta{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:5px;font-size:12px;color:var(--dim)}
+.pp-meta .pp-venue{color:var(--text);font-weight:600}
+.pp-meta .pp-level{padding:0 6px;border-radius:6px;background:rgba(74,155,212,.14);color:#3E7CA8;font-weight:600}
+.pp-detail{margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}
+/* 详情别跟着卡片一起拉满整屏宽：名字在最左、日期在最右、中间一段全空，很难读（用户截图里的问题）。
+   限宽之后日期就紧跟在名字后面。 */
+.pp-detail > .pp-kvs,.pp-detail > .pp-evs,.pp-detail > .pp-add-ev,
+.pp-detail > .pp-acts,.pp-detail > .pp-ev-head{max-width:620px}
+.pp-kv{display:flex;gap:10px;font-size:12.5px;margin-bottom:5px}
+.pp-kv .k{flex:none;width:78px;color:var(--dim)}
+.pp-kv .v{flex:1;min-width:0;word-break:break-all}
+.pp-dates{display:flex;flex-wrap:wrap;gap:7px 14px;margin:8px 0;font-size:12.5px}
+.pp-date i{color:var(--dim);font-style:normal;margin-right:4px}
+.pp-cycle{
+  font-size:12.5px;color:#3E7CA8;font-weight:600;margin:2px 0 8px;
+  padding:5px 9px;border-radius:8px;background:rgba(74,155,212,.09);
+}
+.pp-block{margin:8px 0}
+.pp-block .k{font-size:12px;color:var(--dim);margin-bottom:2px}
+.pp-block .v{
+  font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;
+  background:rgba(74,155,212,.07);border-radius:8px;padding:7px 9px;
+}
+.pp-log-head{font-size:12px;color:var(--dim);margin:9px 0 4px}
+.pp-log{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto}
+.pp-log-row{display:flex;gap:10px;font-size:12.5px}
+.pp-log-row .t{flex:none;color:var(--dim);font-variant-numeric:tabular-nums}
+.pp-log-row .x{flex:1;min-width:0}
+.pp-empty{font-size:12.5px;color:var(--dim)}
+.pp-add-log{display:flex;gap:8px;margin-top:9px}
+.pp-add-log input{
+  flex:1;min-width:0;padding:6px 9px;border-radius:9px;border:1px solid var(--line);
+  background:#fff;font-family:inherit;font-size:13px;color:var(--text);
+}
+.pp-acts{display:flex;gap:8px;margin:14px 0 2px}
+.paper-flash{
+  position:fixed;left:50%;bottom:40px;transform:translateX(-50%) translateY(6px);
+  padding:8px 16px;border-radius:10px;background:rgba(15,32,39,.88);color:#fff;font-size:13px;
+  opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;z-index:60;
+}
+.paper-flash.on{opacity:1;transform:translateX(-50%) translateY(0)}
+/* 提示条里的「撤销」：删东西手滑时的救命按钮 */
+.paper-flash .paper-undo{
+  margin-left:10px;padding:3px 10px;border-radius:8px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.14);color:#fff;
+  font-family:inherit;font-size:12.5px;font-weight:600;
+}
+.paper-flash .paper-undo:hover{background:rgba(255,255,255,.26)}
+/* 新增/编辑弹窗：两栏表单。
+   ⚠️ 必须限高 + 中间滚动、按钮钉在底部 —— 字段十来个，窗口矮一点「保存」就被顶出屏幕了
+   （用户实测：找不到保存按钮）。自检里有一条「保存按钮没被顶出屏幕」专门守这个。 */
+.paper-card{width:min(760px,94vw);max-height:88vh;display:flex;flex-direction:column}
+.paper-card .close,.paper-card .it-title{flex:none}
+.paper-grid{
+  flex:1;min-height:0;overflow-y:auto;
+  display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;
+  margin:6px 0 10px;padding-right:4px;
+}
+.paper-grid .span2{grid-column:1/-1}
+.paper-grid .it-row{margin:0}
+.paper-grid .it-label{width:80px}
+.paper-grid input[type=text],.paper-grid input[type=date],.paper-grid select{width:100%}
+.paper-card .alert-btns{flex:none;margin-top:0;padding-top:10px;border-top:1px solid var(--line)}
+.pp-export{
+  width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border-radius:10px;
+  border:1px solid var(--line);background:#fff;color:var(--text);
+  font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.5;resize:vertical;
+}
+/* 「收到意见」小窗：一轮返修的信息一次填全 —— 左标签右控件，两列对齐 */
+.pp-op-card{width:min(440px,92vw)}
+.pp-op-grid{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;margin:10px 0 4px}
+.pp-op-grid label{font-size:12.5px;color:var(--dim);white-space:nowrap}
+.pp-op-grid input[type=date],.pp-op-grid input[type=text],.pp-op-grid select{width:100%}
+/* ⚠️ 行高 + 最小高度必须给够：只写 padding + font-size 时，中文的下半截会被切掉
+   （用户截图里的「期刊」「一作」就是这个问题）。所有弹窗里的自定义输入都用这套。 */
+.pp-op-grid input[type=text],.pp-op-grid input[type=date],.pp-op-grid select,
+.paper-grid input[type=text],.paper-grid input[type=date],.paper-grid select,
+.pp-add-log input,.pp-export{
+  padding:7px 10px;border-radius:9px;border:1px solid var(--line);
+  background:#fff;font-family:inherit;font-size:13px;line-height:1.5;color:var(--text);
+  box-sizing:border-box;min-height:32px;
+}
+/* 「完整时间线」弹窗：一行一天，左边日期、中间状态、右边细节 */
+/* 「论文完整信息」弹窗里的标题编辑行（只有标题在这儿改，别的跟着状态走） */
+.pp-tl-edit{display:flex;gap:8px;align-items:center;margin:8px 0 4px}
+.pp-tl-edit label{flex:none;font-size:12.5px;color:var(--dim)}
+.pp-tl-edit input{
+  flex:1;min-width:0;padding:7px 10px;border-radius:9px;border:1px solid var(--line);
+  background:#fff;font-family:inherit;font-size:13px;line-height:1.5;color:var(--text);
+  box-sizing:border-box;min-height:32px;
+}
+.pp-tl-tip{font-size:11.5px;opacity:.9}
+.pp-tl-card{width:min(720px,94vw);max-height:86vh;display:flex;flex-direction:column}
+.pp-tl{flex:1;min-height:0;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:2px}
+.pp-tl-row{display:grid;grid-template-columns:88px 10px 132px 1fr;gap:8px;align-items:baseline;padding:6px 8px;border-radius:8px}
+.pp-tl-row:nth-child(odd){background:rgba(255,255,255,.6)}
+.pp-tl-date{font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.pp-tl-dot{width:8px;height:8px;border-radius:50%;align-self:center}
+.pp-tl-name{font-size:13px;font-weight:600;color:var(--text)}
+.pp-tl-ext{font-size:12.5px;color:var(--dim);min-width:0;word-break:break-word}
 /* 护眼模式的状态提示：成功时闪一下自动隐掉，失败（驱动不支持）要一直留着 */
 .psr-label.bad{color:#cf574d;white-space:normal}
 /* 护眼模式：色温滑杆（左暖右冷） */

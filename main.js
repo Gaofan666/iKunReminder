@@ -65,6 +65,10 @@ const DIAG = (function () {
     if (a === '--diag-bubble') out.bubble = true;
     /* --diag-arxiv：科研动态端到端自检（真抓一次 arXiv + 界面 + 可点气泡） */
     if (a === '--diag-arxiv') out.arxiv = true;
+    /* --diag-paper：论文投稿监控端到端自检（新增 → 改状态 → 追加进展 → 改投 → 删除） */
+    if (a === '--diag-paper') out.paper = true;
+    /* --diag-ppsmoke：我的投稿冒烟测试（多轮返修的各种状态/时间/截稿 + 接收各字段；不测删除） */
+    if (a === '--diag-ppsmoke') out.ppsmoke = true;
     /* --diag-arxiv-hold：自检时把程序留着不退出（配合外面用真鼠标点气泡） */
     if (a === '--diag-arxiv-hold') { out.arxiv = true; out.arxivHold = true; }
     /* --diag-alertmusic：弹一次休息提醒，点「我休息了」之后音乐就该停（用户报的 bug） */
@@ -813,6 +817,326 @@ function createWindow() {
             showWindow();
             await new Promise(function (r) { setTimeout(r, 500); });
             diagLog('pet-tray-hint', trayHint);
+          }
+          /* ============ 论文投稿监控（--diag-paper） ============
+             全走真实界面：切块 → 新增 → 展开详情 → 改状态 → 追加进展 → 统计 → 改投他刊 → 删除 */
+          /* ============ 我的投稿 · 冒烟测试（--diag-ppsmoke） ============
+             覆盖：新增（准备中/已投稿 + 从准备中继承）、审稿中、
+                   收到意见四种意见类型 × 有/无返修截止 × 已交/未交、
+                   接收（接收时间+校稿+见刊+检索+DOI）、检索、筛选、完整信息改标题、导出、统计。
+             不覆盖：删除（用户要求先不测）。
+             要点：时间线里的条目一律**按名字找**，不再"取第一条" —— 日期排序会骗人。 */
+          if (DIAG.ppsmoke) {
+            const SM = {};
+            const jp = async (js) => {
+              try { return await win.webContents.executeJavaScript(js, true); }
+              catch (e) { return { 执行失败: String((e && e.message) || e) }; }
+            };
+            await jp('(function(){localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));return true;})()');
+            await jp('(function(){var t=document.querySelector(".tab-btn[data-tab=arxiv]");if(t)t.click();' +
+              'var b=document.querySelector("#arxivSwitch .psw-btn[data-psw=papers]");if(b)b.click();return true;})()');
+            await new Promise(function (r) { setTimeout(r, 400); });
+
+            /* 页内小工具（装一次，后面所有步骤都用它） */
+            SM['0-装工具'] = await jp(
+              '(function(){' +
+              'var P={};' +
+              'P.day=function(d){var x=new Date(Date.now()+d*86400000),p=function(n){return (n<10?"0":"")+n;};' +
+              ' return x.getFullYear()+"-"+p(x.getMonth()+1)+"-"+p(x.getDate());};' +
+              'P.list=function(){return JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}").papers||[];};' +
+              'P.p=function(){return window.PAPERS._data()[0];};' +
+              'P.set=function(id,v){var e=document.getElementById(id);if(!e)return false;e.value=v;return true;};' +
+              'P.has=function(id){return !!document.getElementById(id);};' +
+              'P.ok=function(){var b=document.getElementById("ppOpOk");if(!b)return false;b.click();return true;};' +
+              'P.add=function(type){var s=document.getElementById("ppEvType");if(s)s.value=type;' +
+              ' var b=document.getElementById("ppEvAdd");if(!b)return false;b.click();return true;};' +
+              'P.row=function(name){var rs=document.querySelectorAll("#paperList .pp-ev");' +
+              ' for(var i=0;i<rs.length;i++)if(rs[i].textContent.indexOf(name)>=0)return rs[i];return null;};' +
+              'P.openRow=function(name){var r=P.row(name);if(!r)return false;' +
+              ' var b=r.querySelector("[data-role=evdetail]");if(!b)return false;b.click();return true;};' +
+              'P.badge=function(){var b=document.querySelector("#paperList .pp-status");return b?b.textContent:"";};' +
+              'P.due=function(){var b=document.querySelector("#paperList .pp-due");return b?b.textContent:"";};' +
+              'P.stat=function(){return window.PAPERS._stats();};' +
+              'P.st=function(){return window.PAPERS._status(P.p()).id;};' +
+              'P.meta=function(){return window.PAPERS._meta(P.p());};' +
+              'P.waiting=function(){return window.PAPERS._waiting(P.p());};' +
+              'window.__pp=P;return "工具已装";})()');
+
+            /* ① 新建论文（准备中）→ 详细信息填 期刊/级别/ddl(+10天) */
+            SM['1-准备中+ddl'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】多轮返修";' +
+              'var m=document.getElementById("ppModePrep");if(m)m.click();' +   /* 默认就是准备中，点一下确保 */
+              'document.getElementById("paperSave").click();' +
+              'P.set("ppDVenue","IEEE TIM");P.set("ppDLevel","中科院一区");' +
+              'P.set("ppDDue",P.day(10));P.set("ppDAt",P.day(0));P.ok();' +
+              'var p=P.p();var due=window.PAPERS._activeDue(p);' +
+              'return {条数:P.list().length,状态:P.st(),徽章:P.badge(),' +
+              ' 期刊:P.meta().venue,级别:P.meta().level,' +
+              ' 算出ddl:due>0,ddl天数:due?Math.round((due-Date.now())/86400000):0,' +
+              ' 列表上有倒计时:P.due().indexOf("投稿 ddl")>=0};})()');
+
+            /* ② 加「已投稿」→ 检查是否继承了准备中的期刊/级别（读预填值）*/
+            SM['2-已投稿+继承'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'P.add("submitted");' +
+              'var v=document.getElementById("ppDVenue")?document.getElementById("ppDVenue").value:"(无)";' +
+              'var l=document.getElementById("ppDLevel")?document.getElementById("ppDLevel").value:"(无)";' +
+              'P.set("ppDAuthors","张三, 李四");P.set("ppDRole","first");' +
+              'P.set("ppDLink","10.1109/TIM.2026.1");P.set("ppDAt",P.day(-5));P.ok();' +
+              'return {状态:P.st(),徽章:P.badge(),继承来的期刊:v,继承来的级别:l,' +
+              ' 存下来的期刊:P.meta().venue,ddl解除了:window.PAPERS._activeDue(P.p())===0};})()');
+
+            /* ③ 审稿中 */
+            SM['3-审稿中'] = await jp(
+              '(function(){var P=window.__pp;P.add("review");P.set("ppDAt",P.day(-2));P.ok();' +
+              'return {状态:P.st(),徽章:P.badge()};})()');
+
+            /* ④ 收到意见·大修 + 返修截止(+10) 还没交 → 应该报警 */
+            SM['4-大修未交'] = await jp(
+              '(function(){var P=window.__pp;P.add("opinion");' +
+              'P.set("ppOpKind","major");P.set("ppOpAt",P.day(-1));P.set("ppOpDue",P.day(10));P.ok();' +
+              'return {状态:P.st(),徽章:P.badge(),待返修:P.waiting(),' +
+              ' 摘要:P.row("收到意见")?P.row("收到意见").textContent.indexOf("返修截止")>=0:false,' +
+              ' 列表倒计时:P.due()};})()');
+
+            /* ⑤ 编辑同一条（按名字找到）→ 填「提交返修稿」→ 应该不再报警 */
+            SM['5-交掉这轮'] = await jp(
+              '(function(){var P=window.__pp;P.openRow("收到意见：大修");' +
+              'P.set("ppOpSubmit",P.day(0));P.ok();' +
+              'return {待返修:P.waiting(),列表还有报警:P.due()!=="",' +
+              ' 摘要写了已交:P.row("收到意见：大修").textContent.indexOf("已于")>=0};})()');
+
+            /* ⑥ 再来一轮：小修 + 返修截止已经过期(-3)、也没交 → 应该标红报警 */
+            SM['6-小修过期未交'] = await jp(
+              '(function(){var P=window.__pp;P.add("opinion");' +
+              'P.set("ppOpKind","minor");P.set("ppOpAt",P.day(0));P.set("ppOpDue",P.day(-3));P.ok();' +
+              'var r=P.row("收到意见：小修");' +
+              'return {状态:P.st(),徽章:P.badge(),待返修:P.waiting(),' +
+              ' 过期标红:!!(r&&r.className.indexOf("urgent")>=0),' +
+              ' 摘要说过期:!!r&&r.textContent.indexOf("已过期")>=0};})()');
+
+            /* ⑦ 重投（不填返修截止）→ 状态回到已投稿，且不计入"待返修" */
+            SM['7-重投无截止'] = await jp(
+              '(function(){var P=window.__pp;P.add("opinion");' +
+              'P.set("ppOpKind","resubOther");P.set("ppOpAt",P.day(0));P.ok();' +
+              'return {状态:P.st(),徽章:P.badge(),待返修:P.waiting()};})()');
+
+            /* ⑧ 拒稿 */
+            SM['8-拒稿'] = await jp(
+              '(function(){var P=window.__pp;P.add("opinion");' +
+              'P.set("ppOpKind","reject");P.set("ppOpAt",P.day(0));P.ok();' +
+              'return {状态:P.st(),徽章:P.badge()};})()');
+
+            /* ⑨ 接收：接收时间 + 校稿 + 见刊 + 检索 + DOI 五个字段 */
+            SM['9-接收五个字段'] = await jp(
+              '(function(){var P=window.__pp;P.add("accept");' +
+              'P.set("ppDAt",P.day(-1));P.set("ppDProof",P.day(0));P.set("ppDPublish",P.day(1));' +
+              'P.set("ppDIndex",P.day(2));P.set("ppDDoi","10.1109/TIM.2026.999");P.ok();' +
+              'var arr=P.list();var p=arr[0];var e=null;' +
+              '(p.events||[]).forEach(function(x){if(x.type==="accept")e=x;});' +
+              'var d=(e&&e.d)||{};' +
+              'return {状态:P.st(),徽章:P.badge(),' +
+              ' 接收时间:!!d.proofAt,校稿:!!d.proofAt,见刊:!!d.publishAt,检索:!!d.indexAt,doi:d.doi||"",' +
+              ' 摘要含见刊:P.row("接收")?P.row("接收").textContent.indexOf("见刊")>=0:false};})()');
+
+            /* ⑩ 检索（独立类型） */
+            SM['10-检索条目'] = await jp(
+              '(function(){var P=window.__pp;P.add("index");P.set("ppDAt",P.day(3));' +
+              'P.set("ppDDoi","10.1109/TIM.2026.999");P.ok();' +
+              'var p=P.list()[0];var n=0;(p.events||[]).forEach(function(x){if(x.type==="index")n++;});' +
+              'return {状态:P.st(),检索条数:n,徽章:P.badge()};})()');
+
+            /* ⑪ 筛选：全部 / 已接收 */
+            SM['11-筛选'] = await jp(
+              '(function(){var P=window.__pp;var out={};' +
+              'var f=document.querySelector("#paperFilter [data-pf=all]");if(f)f.click();' +
+              'out.全部条数=document.querySelectorAll("#paperList .paper-item").length;' +
+              'var f2=document.querySelector("#paperFilter [data-pf=accepted]");' +
+              'if(f2){f2.click();out.已接收条数=document.querySelectorAll("#paperList .paper-item").length;}' +
+              'else out.已接收条数="没有这个筛选项";' +
+              'var f3=document.querySelector("#paperFilter [data-pf=all]");if(f3)f3.click();' +
+              'return out;})()');
+
+            /* ⑫ 论文完整信息：改标题 */
+            SM['12-完整信息改标题'] = await jp(
+              '(function(){var P=window.__pp;var item=document.querySelector("#paperList .paper-item");' +
+              'var b=item.querySelector("[data-role=timeline]");if(!b)return {找不到按钮:true};b.click();' +
+              'var t=document.getElementById("ppTlTitle");var had=!!t;' +
+              'if(t){t.value="【冒烟】改过标题";}' +
+              'var s=document.getElementById("ppTlSaveTitle");if(s)s.click();' +
+              'var now=P.list()[0].title;' +
+              'return {有标题输入框:had,保存后标题:now,改成功:now==="【冒烟】改过标题"};})()');
+
+            /* ⑬ 导出 Markdown */
+            SM['13-导出'] = await jp(
+              '(function(){var b=document.getElementById("btnPaperExport");if(!b)return {没有导出按钮:true};b.click();' +
+              'var ta=document.getElementById("ppExpText");var txt=ta?ta.value:"";' +
+              'var out={有导出框:!!ta,含标题:txt.indexOf("【冒烟】改过标题")>=0,含时间线:txt.indexOf("状态时间线")>=0,' +
+              ' 含接收信息:txt.indexOf("接收")>=0,字数:txt.length};' +
+              'var c=document.getElementById("ppExpClose");if(c)c.click();' +
+              'return out;})()');
+
+            /* ⑭ 统计 + 再来一篇（看两篇互不干扰） */
+            SM['14-统计与多篇'] = await jp(
+              '(function(){var P=window.__pp;var s=P.stat();var before=P.list().length;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】第二篇";' +
+              'var m=document.getElementById("ppModeSub");if(m)m.click();' +
+              'document.getElementById("paperSave").click();' +
+              'var l=P.list();' +
+              'return {总数s:s.total,进行中s:s.open,平均审稿周期s:s.avg,平均意见轮次s:s.avgRound,' +
+              ' 加之前的条数:before,加之后:P.list().length,第二篇标题:l[0]?l[0].title:"",' +
+              ' 第二篇状态:window.PAPERS._status(l[0]).id,第一篇还在:P.list().length===before+1};})()');
+
+            diagLog('ppsmoke', SM);
+          }
+          if (DIAG.paper) {
+            const P = {};
+            /* 这个自检块自己备一个等待函数：waitC 是别的自检块里的局部函数，这里拿不到 */
+            const waitC = (ms) => new Promise(function (r) { setTimeout(r, ms); });
+            /* 每一步都兜住异常：失败的那一步留下 {执行失败:…} 继续往下跑，
+               这样一次运行就能看出是哪一步、哪个选择器不对，而不是整块崩掉什么都不报。 */
+            const jp = async (js) => {
+              try { return await win.webContents.executeJavaScript(js, true); }
+              catch (e) { return { 执行失败: String((e && e.message) || e) }; }
+            };
+            await jp('(function(){localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));return true;})()');
+            await jp('(function(){var t=document.querySelector(".tab-btn[data-tab=arxiv]");if(t)t.click();' +
+              'var b=document.querySelector("#arxivSwitch .psw-btn[data-psw=papers]");if(b)b.click();return true;})()');
+            await waitC(600);
+            P['1-切到我的投稿'] = await jp('(function(){var p=document.getElementById("paperPane");' +
+              'var cols=document.querySelectorAll("#pageArxiv > section.arxiv-col");var hidden=0;' +
+              'for(var i=0;i<cols.length;i++)if(cols[i].hidden)hidden++;' +
+              'var col=cols[0];' +
+              'return {区块显示:!!p&&!p.hidden,arXiv两栏藏起来了:hidden===2,有筛选条:!!document.getElementById("paperFilter"),' +
+              /* 排版要求：面板和 arXiv 那栏用同一个高度公式（不是固定小条、也不随内容缩） */
+              '面板高度上限:getComputedStyle(p).maxHeight,arXiv栏高度上限:col?getComputedStyle(col).maxHeight:"",' +
+              '列表区:!!document.querySelector(".paper-list")&&getComputedStyle(document.querySelector(".paper-list")).overflowY};})()');
+
+            /* 打开弹窗先验一件事：字段多、窗口矮的时候，「保存」不能被顶到屏幕外面去
+               （用户实测过：找不到保存按钮，只能干瞪眼） */
+            await jp('(function(){document.getElementById("btnPaperAdd").click();return true;})()');
+            await waitC(400);
+            P['2a-保存按钮在屏幕里'] = await jp('(function(){var b=document.getElementById("paperSave");' +
+              'if(!b)return {按钮在:false};var r=b.getBoundingClientRect();' +
+              'var card=document.querySelector("#paperOverlay .paper-card");' +
+              'var g=document.querySelector("#paperOverlay .paper-grid");' +
+              'return {底边:Math.round(r.bottom),窗口高:window.innerHeight,' +
+              ' 没被顶出屏幕:r.bottom<=window.innerHeight&&r.top>=0,看得见:!!b.offsetParent,' +
+              ' 卡片高:card?Math.round(card.getBoundingClientRect().height):0,' +
+              ' 表单区可滚动:!!g&&getComputedStyle(g).overflowY==="auto"};})()');
+
+            await jp('(function(){document.getElementById("btnPaperAdd").click();' +
+              'var m=document.getElementById("ppModeSub");if(m)m.click();' +            // 选「已投稿」
+              'var set=function(id,v){var e=document.getElementById(id);if(e)e.value=v;};' +
+              'set("ppTitle","【自检】投稿监控用例");set("ppAuthors","张三, 李四");' +
+              'set("ppVenue","IEEE TIP");set("ppLevel","CCF A");' +
+              'set("ppSubmitted","2026-09-01");' +
+              'document.getElementById("paperSave").click();return true;})()');
+            await waitC(500);
+            P['2-新增一条'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'var p=(raw.papers||[]).filter(function(x){return x.title==="【自检】投稿监控用例";})[0];' +
+              'return {存下来了:!!p,期刊:p?p.venue:"",等级:p?p.level:"",' +
+              '条目数:p?(p.events||[]).length:0,第一条是已投稿:!!p&&(p.events||[])[0]&&(p.events||[])[0].type==="submitted",' +
+              '推导状态:window.PAPERS._status(p).id,状态名:document.querySelector("#paperList .pp-status").textContent,' +
+              '列表行数:document.querySelectorAll("#paperList .paper-item").length,' +
+              '统计:document.getElementById("paperStats").textContent};})()');
+
+            /* 点标题行的展开/收起：新增时详情是自动展开的，所以先点一下「收起」、再点一下「展开」，
+               两边都验 —— 这一条正好覆盖"行点击能不能开关详情"。 */
+            await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'it.querySelector(".pp-head").click();return true;})()');
+            await waitC(350);
+            P['3-点标题行收起'] = await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'return {收起来了:!it.querySelector(".pp-detail")};})()');
+            await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'it.querySelector(".pp-head").click();return true;})()');
+            await waitC(350);
+            P['3b-再点展开'] = await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'return {展开了:!!it.querySelector(".pp-detail"),有状态时间线:!!it.querySelector(".pp-evs"),' +
+              '条目行数:it.querySelectorAll(".pp-ev").length,有加条目那一行:!!it.querySelector("#ppEvAdd"),' +
+              '倒计时:it.querySelector(".pp-due")?it.querySelector(".pp-due").textContent:""};})()');
+            /* 新流程：加一条「收到意见」→ 时间线上**只有一行** + 右侧出现「详细信息」按钮
+               → 点它填类型 / 返修截止 / 交稿时间（都挂在这同一条上） */
+            await jp('(function(){document.getElementById("ppEvType").value="opinion";' +
+              'document.getElementById("ppEvAdd").click();return true;})()');
+            await waitC(400);
+            P['4-加收到意见后只有一行'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'var p=(raw.papers||[])[0];var evs=(p.events||[]).filter(function(e){return e.type==="opinion";});' +
+              'var it=document.querySelector("#paperList .paper-item");' +
+              'return {意见条数:evs.length,状态没被瞎改:window.PAPERS._status(p).id==="submitted",' +
+              '有详细信息按钮:!!it.querySelector("[data-role=evdetail]"),' +
+              '时间线行数:it.querySelectorAll(".pp-ev").length};})()');
+            await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'it.querySelector("[data-role=evdetail]").click();return true;})()');
+            await waitC(400);
+            P['4a-详细信息小窗'] = await jp('(function(){var ov=document.getElementById("ppOpinionOverlay");' +
+              'return {小窗开了:!!ov,有类型:!!document.getElementById("ppOpKind"),' +
+              '有收到日期:!!document.getElementById("ppOpAt"),有返修截止:!!document.getElementById("ppOpDue"),' +
+              '有交稿日期:!!document.getElementById("ppOpSubmit")};})()');
+            await jp('(function(){document.getElementById("ppOpKind").value="major";' +
+              'var d=new Date(Date.now()+7*86400000);' +
+              'var s=d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);' +
+              'document.getElementById("ppOpDue").value=s;' +
+              'document.getElementById("ppOpOk").click();return true;})()');
+            await waitC(450);
+            P['4b-信息都挂在这一条上'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'var p=(raw.papers||[])[0];var evs=(p.events||[]).filter(function(e){return e.type==="opinion";});' +
+              'var e=evs[evs.length-1];' +
+              'return {意见条数:evs.length,还是一行:evs.length===1,kind:(e&&e.d)?e.d.kind:"",有截止:!!(e&&e.d&&e.d.dueAt),' +
+              '推导状态:window.PAPERS._status(p).id,' +
+              '时间线行数:document.querySelector("#paperList .paper-item").querySelectorAll(".pp-ev").length};})()');
+
+            /* 删掉 4b 里那条「返修截止」（一次只删一条：删除会重绘，抓着的旧节点点不动），
+               免得留下一个没人配对的孤儿截止，把后面 6/6b 的断言带偏 */
+            await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'var rows=it.querySelectorAll(".pp-ev");' +
+              'for(var i=0;i<rows.length;i++){' +
+              'if(rows[i].textContent.indexOf("返修截止")>=0){rows[i].querySelector("[data-role=evdel]").click();return true;}}' +
+              'return false;})()');
+            await waitC(400);
+            /* 交掉这一轮：在同一个「详细信息」里填上「提交返修稿」→ 列表上不该再报警 */
+            await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'it.querySelector("[data-role=evdetail]").click();return true;})()');
+            await waitC(400);
+            /* 转储：这一小窗到底绑在哪条、里面几个输入框现在是什么值 —— 上次就是缺这个才说不清 */
+            P['6a-小窗里有什么'] = await jp('(function(){var ov=document.getElementById("ppOpinionOverlay");' +
+              'var g=function(id){var e=document.getElementById(id);return e?String(e.value):"(没有这个输入框)";};' +
+              'var row=document.querySelector("#paperList .pp-ev");' +
+              'return {小窗在:!!ov, 页面上第一条:row?row.dataset.ev:"", ppOpKind:g("ppOpKind"),' +
+              'ppOpAt:g("ppOpAt"), ppOpDue:g("ppOpDue"), ppOpSubmit:g("ppOpSubmit")};})()');
+            await jp('(function(){document.getElementById("ppOpSubmit").value=' +
+              'document.getElementById("ppOpAt").value;document.getElementById("ppOpOk").click();return true;})()');
+            await waitC(450);
+            P['6-交掉这轮返修'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'var p=(raw.papers||[])[0];var evs=(p.events||[]).filter(function(e){return e.type==="opinion";});' +
+              'var e=evs[evs.length-1];' +
+              'var it=document.querySelector("#paperList .paper-item");' +
+              'return {有交稿:!!(e&&e.d&&e.d.submitAt),还在等的轮次:window.PAPERS._waiting(p),' +
+              '还在盯的截止:window.PAPERS._activeDue(p),列表上的报警:!!document.querySelector("#paperList .pp-due"),' +
+              '时间线上写了已交:(it.textContent.indexOf("已于")>=0)};})()');
+
+            P['7-统计'] = await jp('(function(){var s=window.PAPERS._stats();' +
+              'return {总数:s.total,进行中:s.open,平均返修次数:s.avgRound,文案:document.getElementById("paperStats").textContent};})()');
+
+            await jp('(function(){window.confirm=function(){return true;};' +
+              'var it=document.querySelector("#paperList .paper-item");' +
+              'if(!it.querySelector(".pp-detail"))it.querySelector(".pp-head").click();return true;})()');
+            await waitC(300);
+            /* 上一步可能刚重绘过，这里必须重新取一次行节点（旧的已经脱离文档，点它没反应） */
+            await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
+              'var b=it?it.querySelector("[data-role=del]"):null;if(b)b.click();return true;})()');
+            await waitC(500);
+            P['8-删除'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'return {剩几条:(raw.papers||[]).length,列表行数:document.querySelectorAll("#paperList .paper-item").length};})()');
+
+            await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'raw.papers=(raw.papers||[]).filter(function(p){return (p.title||"").indexOf("【自检】")<0;});' +
+              'localStorage.setItem("kunkun.papers.v1",JSON.stringify(raw));' +
+              'if(window.PAPERS)window.PAPERS.open();return true;})()');
+            diagLog('paper', P);
           }
           if (DIAG.tab) {
             await win.webContents.executeJavaScript(
