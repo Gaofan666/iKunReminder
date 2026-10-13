@@ -927,7 +927,10 @@ function createWindow() {
               'return {条数:P.list().length,状态:P.st(),徽章:P.badge(),' +
               ' 期刊:P.meta().venue,级别:P.meta().level,' +
               ' 算出ddl:due>0,ddl天数:due?Math.round((due-Date.now())/86400000):0,' +
-              ' 列表上有倒计时:P.due().indexOf("投稿 ddl")>=0};})()');
+              ' 列表上有倒计时:P.due().indexOf("投稿 ddl")>=0,' +
+              ' 时间线上ddl醒目:(function(){var r=P.row("准备中");' +
+              ' var s=r?r.querySelector(".pp-ev-soon,.pp-ev-late"):null;' +
+              ' return !!s&&(s.textContent||"").indexOf("投稿 ddl")>=0;})()};})()');
 
             /* ② 加「已投稿」→ 检查是否继承了准备中的期刊/级别（读预填值）*/
             SM['2-已投稿+继承'] = await jp(
@@ -1146,8 +1149,29 @@ function createWindow() {
               'var d=item.querySelector("[data-role=del]");if(!d)return {没有删除按钮:true};d.click();' +
               'var after=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).length;' +
               'var left=window.PAPERS._data().length;' +
+              'var badge=document.getElementById("paperFlash");' +
+              'var ub=badge?badge.querySelector(".paper-undo"):null;' +
+              'var clickable=ub?getComputedStyle(ub).pointerEvents!=="none":false;' +
+              'if(ub)ub.click();' +
+              'var back=window.PAPERS._data().length;' +
+              'var memosBack=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).length;' +
+              'var liveCount=0;window.PAPERS._data().forEach(function(x){liveCount+=window.PAPERS._live(x).length;});' +
               'return {删之前备忘:before,删之后备忘:after,论文剩:left,' +
-              ' 这篇的备忘清干净了:after===0,第二篇还在:left===1};})()');
+              ' 这篇的备忘清干净了:after===0,第二篇还在:left===1,' +
+              ' 撤销按钮能点:clickable,点撤销论文回来了:back===2,' +
+              ' 备忘数等于未了结的截止数:memosBack===liveCount};})()');
+            /* ㉑ 详细信息里也能改论文标题（用第二篇试，改完在内存里改回去，免得影响后面的删除用例）*/
+            SM['21-详细信息里改标题'] = await jp(
+              '(function(){var P=window.__pp;P.ensure("第二篇");' +
+              'var items=document.querySelectorAll("#paperList .paper-item");var item=null;' +
+              'for(var i=0;i<items.length;i++){if((items[i].textContent||"").indexOf("第二篇")>=0){item=items[i];break;}}' +
+              'if(!item)return {没找到第二篇:true};' +
+              'var b=item.querySelector("[data-role=evdetail]");if(!b)return {没有详细信息按钮:true};b.click();' +
+              'var el=document.getElementById("ppDTitle");var had=!!el;var old=el?String(el.value):"";' +
+              'if(el)el.value="【冒烟】改标题测试";window.__pp.ok();' +
+              'var ok=false;window.PAPERS._data().forEach(function(x){if((x.title||"")==="【冒烟】改标题测试")ok=true;});' +
+              'if(ok){window.PAPERS._data().forEach(function(x){if((x.title||"")==="【冒烟】改标题测试")x.title="【冒烟】第二篇";});}' +
+              'return {有标题输入框:had,预填的是原标题:old==="【冒烟】第二篇",改了能存:ok};})()');
             diagLog('ppsmoke', SM);
           }
           if (DIAG.paper) {

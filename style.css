@@ -1443,3 +1443,6 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 .pp-tl-title-text{flex:1;min-width:0;font-size:15px;font-weight:600;line-height:1.5;color:var(--text);word-break:break-word;white-space:normal}
 .pp-tl-title .btn{flex:none}
 .pp-tl-edit[hidden]{display:none}
+/* 提示条整体 pointer-events:none（不挡点击），但里面的「撤销」必须能点到 ——
+   父级关掉的点击权，子级要显式开回来，否则按钮看得见摸不着。 */
+.paper-flash.on .paper-undo{pointer-events:auto;cursor:pointer}

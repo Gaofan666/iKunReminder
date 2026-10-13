@@ -463,8 +463,13 @@
       var t = [];
       if (d.venue) t.push(esc(d.venue));
       if (d.level) t.push(esc(d.level));
-      if (+d.due) t.push('ddl ' + fmtDay(d.due) + ' · ' + fromNow(d.due));
-      return t.length ? '<span class="pp-ev-tip">' + t.join(' · ') + '</span>' : '';
+      /* 投稿 ddl 要和返修截止一样醒目：同一套变色（临近橙、过期红），不再只是灰色提示 */
+      var ddl = '';
+      if (+d.due) {
+        ddl = '<span class="' + (+d.due < Date.now() ? 'pp-ev-late' : 'pp-ev-soon') + '">投稿 ddl ' +
+          fmtDay(d.due) + ' · ' + fromNow(d.due) + '</span>';
+      }
+      return (t.length ? '<span class="pp-ev-tip">' + t.join(' · ') + '</span>' : '') + (ddl ? (t.length ? ' ' : '') + ddl : '');
     }
     if (e.type === 'submitted') {
       var s2 = [];
@@ -486,7 +491,9 @@
 
   function evRowHtml(p, e) {
     var d = evOf(e.type);
-    var urgent = d.opinion && +D(e).dueAt && !+D(e).submitAt;
+    /* 「还没了结」的截止整条给点警示：返修截止（没交稿）+ 投稿 ddl（还没投出去）*/
+    var urgent = (d.opinion && +D(e).dueAt && !+D(e).submitAt) ||
+      (e.type === 'preparing' && +D(e).due && !resolveDeadline(p, e).done);
     return '<div class="pp-ev' + (urgent ? ' urgent' : '') + '" data-ev="' + esc(e.id) + '">' +
       '<span class="pp-ev-dot" style="background:' + (d.opinion ? (kindOf(D(e).kind) || { color: '#E8B843' }).color || '#E8B843' : d.color) + '"></span>' +
       '<span class="pp-ev-name">' + esc(evName(e)) + '</span>' +
@@ -773,9 +780,11 @@
       '<button class="close" id="ppOpClose" title="关闭">✕</button>' +
       '<h3 class="it-title">' + esc(evName(e)) + ' · 详细信息</h3>' +
       '<p class="col-sub">' + (t === 'review' ? '审稿中只记一个日期：从这天起在审。' :
-        (t === 'submitted' ? '期刊/级别如果前面「准备中」填过，这里会自动带出来，可以改。作者 / 期刊 / 级别 / 链接都记在这一条里；论文标题在「论文完整信息」里改。' :
+        (t === 'submitted' ? '期刊/级别如果前面「准备中」填过，这里会自动带出来，可以改。作者 / 期刊 / 级别 / 链接都记在这一条里；论文标题在这个弹窗最上面也能改。' :
           '填的都在这一条状态上，列表上的小字和倒计时都跟着它走。')) + '</p>' +
       '<div class="pp-op-grid">' +
+        /* 论文标题放在最上面 —— 记录级的字段，在哪个状态的详细信息里都能顺手改 */
+        '<label>论文标题</label><input type="text" id="ppDTitle" maxlength="300" value="' + esc(p.title || '') + '">' +
         /* 日期永远排最上面（用户要求：接收里先「接收时间」，再校稿/见刊/检索/DOI）。
            「收到意见」自己有「收到日期」（在 body 第一行），不重复。 */
         (t === 'opinion' ? '' : '<label>' + esc(dateLabel(t)) + '</label><input type="date" id="ppDAt" value="' + tsDay(evAt(e)) + '">') +
@@ -807,6 +816,9 @@
     var ts = function (id) { return dayTs(val(id)); };
     if (!e.d) e.d = {};
     var d = e.d;
+    /* 详细信息里能改论文标题（记录级）—— 留空则不动 */
+    var titleNew = val('ppDTitle');
+    if (titleNew) p.title = titleNew.slice(0, 300);
     if (t === 'preparing') {
       d.venue = val('ppDVenue').slice(0, 120);
       d.level = val('ppDLevel').slice(0, 40);
