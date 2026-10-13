@@ -1,20 +1,20 @@
 {
-  "version": "4.5.0",
-  "releaseDate": "2026-10-12T02:09:35.441Z",
-  "notes": "## iKunReminder v4.5\n\n1. 🔁 **待办的重复方式多了「每隔几天」**\n   · 新增 / 编辑待办时，「重复」下拉里多了一项 **「每隔几天」**，选中后填一个天数（1~365，默认 30 天），右边会直接写出下一次是哪天几点 —— 比如 **「每隔 30 天（下一次：4月19日 09:30）」**。\n   · **什么时候用它**：流量套餐、按月清零、隔周浇花这类**按天数滚**的周期。\n   · 它和「每月 30 号」是两条不同的规则：「每月 30 号」会随长短月漂（2 月没有 30 号就跳过、3 月又跳回 30 号），而「每隔 30 天」永远是**上一次之后第 30 天** —— 3 月 30 日 + 3 天 = 4 月 2 日，跨月跨年都不漂。\n   · 列表上会挂 `🔁 每隔 30 天` 的小标签，桌面日历的当天清单里也写着同一句话；改了日期或时间，提示里的「下一次」立刻跟着变。\n\n2. 🧰 上一版（v4.4）的那些也都在：桌宠点击范围缩到本体 / 气泡时长可调、桌面日历点某天就能加、待办和备忘自定义分类、逾期和延期分开统计、做完的收进折叠栏，以及合并前后修掉的那一批小毛病（分类改名、补原因弹窗的 ✕ 只关闭、双屏下窗口不再忽大忽小等）。\n\n**下载**：`iKunReminder-setup-v4.5.0.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121875700,
-  "sha512": "IHzxTbj6SIjix2WeJije/Lx60vFC5cgrGz23Gb087WN6uuud0v2hgSkEPJwA/PTJWDopNp74Vb3KtkPO29aCXQ==",
+  "version": "4.6.0",
+  "releaseDate": "2026-10-13T14:44:16.623Z",
+  "notes": "## iKunReminder v4.6\n\n1. ⏱ **「延期」不再是一刀切**\n   · 编辑时把时间**往后挪**，弹窗里会多一行 **「⏱ 记 1 次延期」（默认勾上）**。要是当初只是把时间**填错了**，就把勾去掉 —— 时间照样改，但**不计这笔延期**。\n   · 改早、清空时间、新增条目时这行不出现；用「明天 9:00」这类**快捷档位**改时间，这行也会正确刷出来。\n   · 修：那行提示保存后还留在弹窗里（打开弹窗时忘了复位），现在一进来就收起。\n   · 修：待办卡的「编辑」按钮悬停时一直闪（主循环每轮都重建列表，鼠标下的悬停被重置），现在只刷新「还有多久 / 已过期」两处文字。\n\n2. 🗓 **桌面日历里的备忘**\n   · **已完成的折叠起来**：左栏默认只列没做完的，底下一条「已完成 N 条 ▾」，点一下才展开。\n   · **已完成的按「完成那一天」落格**：昨天做完的就显示在昨天，而不是它原来那个截止日；格子里已完成那条灰化 + ✅，当天清单里也写明「备忘已完成 时间」。\n   · **左栏按时间排**：最上面是最先到期的；没填截止时间的沉到最底。\n   · **备忘提醒的提前量多了两档**：截止前 **10 天** / 截止前 **2 周**（原来最多 1 周）。\n\n3. 💬 **关主窗口时那句「坤坤躲到托盘里了」**\n   · 改走桌宠自己的气泡小窗，贴在**屏幕右下角（托盘那个角）**，显示时长跟着「💬 气泡显示时长」这个设置走（默认 3 秒）—— 以前是系统气泡，停留多久由系统定、改不了。\n   · 气泡按内容自动定尺寸（长文本仍按默认宽折行），外观也更清爽一点：左侧一道青色标记、圆角更大、一层很淡的外投影。\n\n4. 🧰 这几版（v4.5.0 ~ v4.6）合起来的新东西都在：日历左侧备忘折叠 / 按完成日落格 / 提前量两档、延期勾选框、关窗提示气泡，以及上一版的「待办每隔 N 天重复」和更早的桌宠点击范围、分类、逾期统计等。\n\n**下载**：`iKunReminder-setup-v4.6.0.exe`（约 116 MB，Windows x64，双击安装）\n",
+  "size": 121885187,
+  "sha512": "YK7AP3wHyp1XQdsMTZUSwHw8ldiyHVwaDUuyJszvQYiQTbGyEpXF4Wzdj/+mFyvRgq1sbkmkE6AIpiZr4G/kCQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.5/iKunReminder-setup-v4.5.0.exe.part1",
-      "size": 60937850,
-      "sha512": "2uWn9kzE9PXrhrAFDcDKeLngXDbxCD4CYCcxLWDU09JXxKYFlL+D9FL8RDw2sbhNwErH2jVdM40bejb42NhhgA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.6/iKunReminder-setup-v4.6.0.exe.part1",
+      "size": 60942594,
+      "sha512": "AN+0Q8QVx64YyaKKBhkthMQJ8zE8gBTUVDgoMe4nFHXZ14gFSUN7j5+tUHJSC2rbSqzbloAXTdpk2pOp+jY/XQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.5/iKunReminder-setup-v4.5.0.exe.part2",
-      "size": 60937850,
-      "sha512": "ooabe++JfiqLbNP86IgU3bl0ieN1XF78km4qKUAYv+V4vX1n8AIMPjiNE+p5ubAacH5xv/oKS6qXE9+CVv5ppA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.6/iKunReminder-setup-v4.6.0.exe.part2",
+      "size": 60942593,
+      "sha512": "ARUrwL5y6FdskjnffyaNLKfoqTbepNLOokN9nDDqBj+FW+p3CDOdsb8sNcRKO6BPoZx7O0y1cMjKOmEDDsMOOw==",
       "index": 2
     }
   ]
