@@ -2550,6 +2550,65 @@
     pushCalTodos();
   }
 
+  /* ------------------------------------------------------------ 给论文监控用的桥
+     papers.js（我的投稿）要把「还没了结的截止」写成备忘 —— 让日历上能看到、能提前提醒。
+     ⚠️ 它绝不能自己去写 kunkun.todos.v1：备忘在本模块的内存里，外面直接写盘，
+        本模块下次一保存就把外面的改动覆盖掉（用户的返修时间就这么丢过一次）。
+     所以统一走这里。**只做单向**：这里永远不改投稿的任何事件。
+     dueAt 传 0 = 只保证这条备忘存在、文本对，别动它现有的截止时间（免得把用户自己延期的改回去）。 */
+  window.KUNKUN_MEMOS = {
+    upsert: function (id, text, dueAt, remindBefore, forceDue) {
+      const due = +dueAt || 0;
+      const t = String(text == null ? '' : text).slice(0, 500);
+      let m = memos.filter(function (x) { return x.id === id; })[0];
+      let changed = false;
+      if (!m) {
+        memos.push({
+          id: id, text: t, done: false, at: Date.now(), dueAt: due, doneAt: 0,
+          remindBefore: +remindBefore || 0, remindEvery: 0, remindAt: 0, cat: '',
+          lateCount: 0, lateMs: 0, lateReason: '', lateOpen: false, lateLog: [], lateDue: 0,
+          extCount: 0, extLog: []
+        });
+        changed = true;
+      } else {
+        if (m.text !== t) { m.text = t; changed = true; }
+        if (forceDue && due && m.dueAt !== due) {
+          m.dueAt = due;
+          /* 期限变了，备忘自己的"逾期去重键"跟着重置，免得把同一次逾期算两遍 */
+          m.lateDue = 0;
+          /* 只有"截止真的变了"才把它重新变回未完成。
+             你在备忘里点了「完成」、之后同步只是刷新文字，不能把完成状态抹掉
+             （那会导致它又冒出来提醒你 —— 和改分类抹掉完成是同一类坑）。 */
+          if (m.done) { m.done = false; m.doneAt = 0; }
+          changed = true;
+        }
+      }
+      if (changed) saveTodoStore();
+      return changed;
+    },
+    finish: function (id, text) {
+      const m = memos.filter(function (x) { return x.id === id; })[0];
+      if (!m) return false;
+      const t = (text == null) ? null : String(text).slice(0, 500);
+      let changed = false;
+      /* 顺带把文本刷新 —— 论文改了标题之后，旧备忘不能一直挂着老标题 */
+      if (t && m.text !== t) { m.text = t; changed = true; }
+      if (!m.done) { m.done = true; m.doneAt = Date.now(); changed = true; }
+      if (changed) saveTodoStore();
+      return changed;
+    },
+    remove: function (id) {
+      const i = memos.findIndex(function (x) { return x.id === id; });
+      if (i < 0) return false;
+      memos.splice(i, 1);
+      saveTodoStore();
+      return true;
+    },
+    list: function () {
+      return memos.map(function (m) { return { id: m.id, text: m.text, dueAt: m.dueAt, done: m.done }; });
+    }
+  };
+
   /* ------------------------------------------------------------ 分类
      待办和备忘共用同一套分类：{ id, name, color }，单独存一份。
      条目上只记 cat: '<分类 id>'（空串 = 未分类），所以删掉分类不用去改条目，
@@ -3520,9 +3579,32 @@
     if (el.memoRemindEvery) el.memoRemindEvery.value = String((m && m.remindEvery) || DEFAULT_MEMO_REMIND_EVERY);
     fillCatSelect(el.memoCat, m ? m.cat : '');
     paintMemoDueUI(hasDue);
+    /* 来自「我的投稿」的备忘：文字和截止时间锁住（跟着投稿走），
+       提醒时间 / 分类 / 频次照旧可以改 —— 用户要的就是这个分寸。 */
+    const linked = !!(editingMemoId && isLinkedMemo(editingMemoId));
+    const lockTip = '这条来自「我的投稿」：日期跟着投稿的截止走，要改请到投稿里改；提醒时间/分类可以在这里改。';
+    if (el.memoText) { el.memoText.readOnly = linked; el.memoText.title = linked ? lockTip : ''; }
+    if (el.memoDueOn) { el.memoDueOn.disabled = linked; el.memoDueOn.title = linked ? lockTip : ''; }
+    if (el.memoDueDate) { el.memoDueDate.disabled = linked; el.memoDueDate.title = linked ? lockTip : ''; }
+    if (el.memoDueTime) { el.memoDueTime.disabled = linked; el.memoDueTime.title = linked ? lockTip : ''; }
+    if (el.memoRemindBefore) el.memoRemindBefore.disabled = false;
+    if (el.memoRemindEvery) el.memoRemindEvery.disabled = false;
+    if (el.memoCat) el.memoCat.disabled = false;
     el.memoOverlay.hidden = false;
     setTimeout(function () { try { el.memoText.focus(); } catch (e) { } }, 50);
   }
+  /* 这条备忘是不是「我的投稿」自动建的？（映射存在 kunkun.paperlinks.v1 里）
+     是的话：文字和截止时间由投稿决定，备忘里不让改；提醒时间/分类/频次照旧可以改。 */
+  function isLinkedMemo(id) {
+    try {
+      const raw = JSON.parse(localStorage.getItem('kunkun.paperlinks.v1') || '{}') || {};
+      for (const k in raw) {
+        if (raw[k] && raw[k].memoId === id) return true;
+      }
+    } catch (e) { }
+    return false;
+  }
+
   function closeMemoModal() { el.memoOverlay.hidden = true; editingMemoId = null; }
 
   function saveMemoModal() {
@@ -3545,6 +3627,14 @@
     if (editingMemoId) {
       const m = memoById(editingMemoId);
       if (m) {
+        const linked = isLinkedMemo(editingMemoId);
+        /* 投稿来的备忘：截止由投稿决定，这里不碰 dueAt / text，只更新提醒设置和分类 */
+        if (linked) {
+          m.remindBefore = remindBefore;
+          m.remindEvery = remindEvery;
+          m.remindAt = m.done ? 0 : nextMemoRemind({ dueAt: m.dueAt, remindBefore: remindBefore, remindEvery: remindEvery, done: false });
+          m.cat = catPick;
+        } else {
         m.text = text.slice(0, 500);
         /* 往后挪截止时间 = 记一笔延期（改早、清空都不算，见 recordExtend）。
            lateOpen 复位保留着：那只是「这次逾期还没收尾」的标记，去重靠的是 lateDue。 */
@@ -3564,6 +3654,7 @@
         /* 已完成的备忘不该因为改个分类又被排上提醒（完成时本来就把 remindAt 清零了） */
         m.remindAt = m.done ? 0 : remindAt;
         m.cat = catPick;
+        }
       }
     } else {
       memos.unshift({

@@ -832,7 +832,16 @@ function createWindow() {
               try { return await win.webContents.executeJavaScript(js, true); }
               catch (e) { return { 执行失败: String((e && e.message) || e) }; }
             };
-            await jp('(function(){localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));return true;})()');
+            /* 开跑前把三个存储 + 内存都清干净：
+               ⚠️ 只清 localStorage 不够 —— 应用启动时已经把 papers 读进内存了，
+                  而临时目录按进程号命名、进程号会被复用，上一次的残留会污染这一次
+                  （实测 20 次里有 3 次被污染：条数 3、备忘 6、导出字数 615）。 */
+            await jp('(function(){' +
+              'localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));' +
+              'localStorage.setItem("kunkun.paperlinks.v1","{}");' +
+              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
+              'var a=window.PAPERS._data();if(a&&a.length){a.length=0;}' +
+              'return true;})()');
             await jp('(function(){var t=document.querySelector(".tab-btn[data-tab=arxiv]");if(t)t.click();' +
               'var b=document.querySelector("#arxivSwitch .psw-btn[data-psw=papers]");if(b)b.click();return true;})()');
             await new Promise(function (r) { setTimeout(r, 400); });
@@ -857,6 +866,13 @@ function createWindow() {
               'P.badge=function(){var b=document.querySelector("#paperList .pp-status");return b?b.textContent:"";};' +
               'P.due=function(){var b=document.querySelector("#paperList .pp-due");return b?b.textContent:"";};' +
               'P.stat=function(){return window.PAPERS._stats();};' +
+              /* 论文进了终态就会从「进行中」消失 —— 要操作它前面先切「全部」并展开 */
+              'P.ensure=function(title){var f=document.querySelector("#paperFilter [data-pf=all]");if(f)f.click();' +
+              ' var items=document.querySelectorAll("#paperList .paper-item");var idx=-1;' +
+              ' for(var i=0;i<items.length;i++)if(items[i].textContent.indexOf(title)>=0){idx=i;break;}' +
+              ' if(idx<0)return false;' +
+              ' if(!items[idx].querySelector(".pp-detail")){var h=items[idx].querySelector(".pp-head");if(h)h.click();}' +
+              ' return !!document.querySelectorAll("#paperList .paper-item")[idx];};' +
               'P.st=function(){return window.PAPERS._status(P.p()).id;};' +
               'P.meta=function(){return window.PAPERS._meta(P.p());};' +
               'P.waiting=function(){return window.PAPERS._waiting(P.p());};' +
@@ -990,6 +1006,55 @@ function createWindow() {
               ' 加之前的条数:before,加之后:P.list().length,第二篇标题:l[0]?l[0].title:"",' +
               ' 第二篇状态:window.PAPERS._status(l[0]).id,第一篇还在:P.list().length===before+1};})()');
 
+            /* ⑮ 联动（单向）：投稿的截止 → 备忘（日历自然就能看到）
+               此时"小修"那轮还有截止没交 → 应有一条未完成备忘；
+               "大修"那轮已经交掉了 → 对应备忘应已完成。 */
+            SM['15-截止变备忘'] = await jp(
+              '(function(){var P=window.__pp;var n1=PAPERS._sync();var n2=PAPERS._sync();' +
+              'var ms=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);' +
+              'var p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)p=x;});' +
+              'var mine=ms.filter(function(m){return m.text.indexOf("改过标题")>=0;});' +
+              'var live=null,done=null;mine.forEach(function(m){if(m.done)done=m;else live=m;});' +
+              'var due=p?window.PAPERS._activeDue(p):-1;var liveN=p?window.PAPERS._live(p).length:-1;' +
+              'return {备忘总数:n1,再同步还是:n2,幂等:n1===n2,' +
+              ' 属于这篇的备忘:mine.length,应该还没了结的截止数:liveN,' +
+              ' 有未完成那条:!!live,未完成的文本:live?live.text:"",' +
+              ' 当前算出的截止:due,备忘里的截止:live?live.dueAt:0,对得上:!!live&&Math.abs(live.dueAt-due)<1000,' +
+              ' 有已完成那条:!!done,已完成的文本:done?done.text:""};})()');
+
+            /* ⑯ 反向禁止：同步绝不能改动投稿的任何事件（快照前后完全一致） */
+            SM['16-不做反向修改'] = await jp(
+              '(function(){var before=localStorage.getItem("kunkun.papers.v1");' +
+              'PAPERS._sync();PAPERS._sync();' +
+              'var after=localStorage.getItem("kunkun.papers.v1");' +
+              'return {投稿数据没被动:before===after};})()');
+
+            /* ⑰ 投稿这边改了截止 → 备忘跟着改（单向：投稿说了算） */
+            SM['17-投稿改期备忘跟随'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'if(!P.ensure("改过标题"))return {没能展开这篇:true};' +
+              'if(!P.openRow("收到意见：小修"))return {没找到小修那行:true};' +
+              'if(!P.set("ppOpDue",P.day(20)))return {没有返修截止输入框:true};' +
+              'P.ok();PAPERS._sync();' +
+              'var ms=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);' +
+              'var mine=ms.filter(function(m){return m.text.indexOf("小修")>=0&&!m.done;})[0];' +
+              'var d=mine?new Date(mine.dueAt):null;' +
+              'return {找到未完成备忘:!!mine,备忘截止:mine?d.toISOString().slice(0,10):"(无)",' +
+              ' 天数:d?Math.round((d.getTime()-Date.now())/86400000):0,' +
+              ' 跟到20天:!!d&&Math.abs(Math.round((d.getTime()-Date.now())/86400000)-20)<=1};})()');
+
+            /* ⑱ 交掉这轮 → 对应备忘自动完成 */
+            SM['18-交掉后备忘完成'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'if(!P.ensure("改过标题"))return {没能展开这篇:true};' +
+              'if(!P.openRow("收到意见：小修"))return {没找到小修那行:true};' +
+              'P.set("ppOpSubmit",P.day(0));P.ok();PAPERS._sync();' +
+              'var ms=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);' +
+              'var mine=ms.filter(function(m){return m.text.indexOf("小修")>=0;});' +
+              'var un=ms.filter(function(m){return m.text.indexOf("改过标题")>=0&&!m.done;});' +
+              'return {小修备忘条数:mine.length,都已完成为:mine.length>0&&mine.every(function(m){return m.done;}),' +
+              ' 这篇还没完成的备忘:un.length};})()');
+
             diagLog('ppsmoke', SM);
           }
           if (DIAG.paper) {
@@ -1002,7 +1067,16 @@ function createWindow() {
               try { return await win.webContents.executeJavaScript(js, true); }
               catch (e) { return { 执行失败: String((e && e.message) || e) }; }
             };
-            await jp('(function(){localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));return true;})()');
+            /* 开跑前把三个存储 + 内存都清干净：
+               ⚠️ 只清 localStorage 不够 —— 应用启动时已经把 papers 读进内存了，
+                  而临时目录按进程号命名、进程号会被复用，上一次的残留会污染这一次
+                  （实测 20 次里有 3 次被污染：条数 3、备忘 6、导出字数 615）。 */
+            await jp('(function(){' +
+              'localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));' +
+              'localStorage.setItem("kunkun.paperlinks.v1","{}");' +
+              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
+              'var a=window.PAPERS._data();if(a&&a.length){a.length=0;}' +
+              'return true;})()');
             await jp('(function(){var t=document.querySelector(".tab-btn[data-tab=arxiv]");if(t)t.click();' +
               'var b=document.querySelector("#arxivSwitch .psw-btn[data-psw=papers]");if(b)b.click();return true;})()');
             await waitC(600);

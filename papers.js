@@ -281,6 +281,80 @@
   }
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify({ papers: papers })); } catch (e) { }
+    syncMemos();
+  }
+
+  /* ------------------------------------------------ 投稿截止 → 备忘（**只做单向**）
+     用户要求：先把"投稿里的截止"搬到备忘（日历上就能看到、能提醒），
+     并**禁止反向修改** —— 备忘那边改了时间，不回写投稿的任何事件。
+     映射单独存一份（kunkun.paperlinks.v1），不往备忘对象上挂自定义字段：
+     备忘在 app.js 里是白名单重建的，挂上去重启就丢，会导致重复建备忘。 */
+  var LINK_KEY = 'kunkun.paperlinks.v1';
+  function loadLinks() {
+    try { return JSON.parse(localStorage.getItem(LINK_KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function saveLinks(o) {
+    try { localStorage.setItem(LINK_KEY, JSON.stringify(o)); } catch (e) { }
+  }
+  /* 这一篇论文"还没了结"的截止有哪些 */
+  function liveDeadlines(p) {
+    var out = [], list = byCreated(p), lastSub = 0;
+    list.forEach(function (e) { if (e.type === 'submitted') lastSub = Math.max(lastSub, +e.createdAt || 0); });
+    list.forEach(function (e) {
+      if (e.type !== 'preparing') return;
+      var due = +D(e).due;
+      if (!due) return;
+      if (lastSub && (+e.createdAt || 0) < lastSub) return;    // 这之后已经投出去了
+      out.push({
+        evId: e.id, field: 'due', due: due,
+        text: '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 投稿 ddl'
+      });
+    });
+    list.forEach(function (e) {
+      var d = D(e);
+      if (!evOf(e.type).opinion) return;
+      if (!(+d.dueAt) || +d.submitAt) return;                  // 没截止、或已经交掉了
+      var k = kindOf(d.kind);
+      out.push({
+        evId: e.id, field: 'dueAt', due: +d.dueAt,
+        text: '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 返修截止' + (k ? '（' + k.name + '）' : '')
+      });
+    });
+    return out;
+  }
+  /* 一条截止对应备忘该写的文本（同步和收尾都用它，标题改了也能刷新） */
+  function deadlineText(p, e) {
+    var k = kindOf(D(e).kind);
+    if (e.type === 'preparing') return '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 投稿 ddl';
+    return '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 返修截止' + (k ? '（' + k.name + '）' : '');
+  }
+  /* 幂等：一切以 paperlinks 里的 memoId 为准，绝不无脑新建 */
+  function syncMemos() {
+    var bridge = window.KUNKUN_MEMOS;
+    if (!bridge) return;
+    var L = loadLinks(), live = {};
+    papers.forEach(function (p) {
+      liveDeadlines(p).forEach(function (it) {
+        var old = L[it.evId] || {};
+        var memoId = old.memoId || ('pm_' + it.evId);
+        live[it.evId] = 1;
+        /* 只有"投稿这边的截止变了"才把 dueAt 推过去；
+           否则 dueAt 传 0（不动它）—— 你在备忘里自己延期，不会被投稿改回去，
+           投稿这边也不会因为备忘改了就被反向修改（用户明确要求禁止反向）。 */
+        var push = (+old.due || 0) !== it.due;
+        bridge.upsert(memoId, deadlineText(p, evById(p, it.evId) || { type: 'preparing' }), push ? it.due : 0, 86400000, push);
+        L[it.evId] = { memoId: memoId, paperId: p.id, evId: it.evId, field: it.field, due: it.due };
+      });
+    });
+    /* 已经了结的（交掉了 / 进了终态）：备忘标记完成（顺带刷新文本），映射留着，别再当新的建一遍 */
+    Object.keys(L).forEach(function (evId) {
+      if (live[evId]) return;
+      var ent = L[evId];
+      var p = byId(ent.paperId);
+      var e = p ? evById(p, evId) : null;
+      bridge.finish(ent.memoId, (p && e) ? deadlineText(p, e) : null);
+    });
+    saveLinks(L);
   }
   function touch(p) { if (p) p.updatedAt = Date.now(); }
 
@@ -1005,13 +1079,16 @@
   }
 
   window.PAPERS = {
-    open: function () { if ($('paperPane')) render(); },
+    open: function () { if ($('paperPane')) { render(); syncMemos(); } },
     _data: function () { return papers; },
     _stats: function () { return stats(); },
     _status: function (p) { return statusOfPaper(p); },
     _activeDue: function (p) { return activeDue(p); },
     _waiting: function (p) { return waitingRounds(p).length; },
-    _meta: function (p) { return paperMeta(p); }
+    _meta: function (p) { return paperMeta(p); },
+    /* 供自检用：手动触发一次同步，返回同步后备忘条数（验幂等） */
+    _sync: function () { syncMemos(); return window.KUNKUN_MEMOS ? window.KUNKUN_MEMOS.list().length : -1; },
+    _live: function (p) { return liveDeadlines(p); }
   };
 
   function boot() {
