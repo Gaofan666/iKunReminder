@@ -349,6 +349,18 @@
     var bridge = window.KUNKUN_MEMOS;
     if (!bridge) return;
     var L = loadLinks(), live = {};
+    /* 先清理孤儿：论文被删、或那条状态条目被删之后，映射还留着 ——
+       这种备忘完全是为那条截止而生成的，源头没了就该一起删掉，
+       不然它会一直提醒你一篇已经不存在的论文。 */
+    Object.keys(L).forEach(function (evId) {
+      var ent = L[evId];
+      var pp = byId(ent.paperId);
+      var ee = pp ? evById(pp, evId) : null;
+      if (!pp || !ee) {
+        bridge.remove(ent.memoId);
+        delete L[evId];
+      }
+    });
     papers.forEach(function (p) {
       liveDeadlines(p).forEach(function (it) {
         var old = L[it.evId] || {};
@@ -761,7 +773,7 @@
       '<button class="close" id="ppOpClose" title="关闭">✕</button>' +
       '<h3 class="it-title">' + esc(evName(e)) + ' · 详细信息</h3>' +
       '<p class="col-sub">' + (t === 'review' ? '审稿中只记一个日期：从这天起在审。' :
-        (t === 'submitted' ? '期刊/级别如果前面「准备中」填过，这里会自动带出来，可以改。' :
+        (t === 'submitted' ? '期刊/级别如果前面「准备中」填过，这里会自动带出来，可以改。作者 / 期刊 / 级别 / 链接都记在这一条里；论文标题在「论文完整信息」里改。' :
           '填的都在这一条状态上，列表上的小字和倒计时都跟着它走。')) + '</p>' +
       '<div class="pp-op-grid">' +
         /* 日期永远排最上面（用户要求：接收里先「接收时间」，再校稿/见刊/检索/DOI）。
@@ -883,20 +895,36 @@
     ov.innerHTML = '<div class="overlay-card item-card pp-tl-card">' +
       '<button class="close" id="ppTlClose" title="关闭">✕</button>' +
       '<h3 class="it-title">论文完整信息</h3>' +
-      /* 标题是"属于论文本身"的字段，别处没得改（改标题按钮已去掉、记录表单也瘦身了），
-         所以只有它在这里可编辑；作者/期刊/级别属于具体某条状态，只读 + 指明去哪儿改，
-         免得同一份数据两个入口打架。 */
-      '<div class="pp-tl-edit">' +
+      /* 标题先**完整展示**（长标题要能看全），要改再点「✎ 修改标题」进编辑态 ——
+         不要一进来就是个输入框。 */
+      '<div class="pp-tl-title" id="ppTlTitleView">' +
+        '<span class="pp-tl-title-text" id="ppTlTitleText">' + esc(p.title || '（没写标题）') + '</span>' +
+        '<button class="btn sm" id="ppTlEditTitle">✎ 修改标题</button>' +
+      '</div>' +
+      '<div class="pp-tl-edit" id="ppTlEditBox" hidden>' +
         '<label>标题</label>' +
         '<input type="text" id="ppTlTitle" maxlength="300" value="' + esc(p.title || '') + '">' +
-        '<button class="btn sm primary" id="ppTlSaveTitle">保存标题</button>' +
+        '<button class="btn sm primary" id="ppTlSaveTitle">保存</button>' +
+        '<button class="btn sm" id="ppTlCancelTitle">取消</button>' +
       '</div>' +
       '<p class="col-sub">当前状态：<b style="color:' + statusColor(st.id) + '">' + esc(statusName(st.id)) + '</b>' +
-        (st.at ? '（' + fmtDay(st.at) + '）' : '') + (head.length ? ' · ' + head.join(' · ') : '') +
-        '<br><span class="pp-tl-tip">作者 / 期刊 / 级别 / 链接这些跟着状态走，在「已投稿」那条的『详细信息』里改。</span></p>' +
+        (st.at ? '（' + fmtDay(st.at) + '）' : '') + (head.length ? ' · ' + head.join(' · ') : '') + '</p>' +
       '<div class="pp-tl">' + (rows || '<div class="pp-empty">还没有状态条目。</div>') + '</div>' +
     '</div>';
     document.body.appendChild(ov);
+    if ($('ppTlEditTitle')) {
+      $('ppTlEditTitle').addEventListener('click', function () {
+        if ($('ppTlTitleView')) $('ppTlTitleView').hidden = true;
+        if ($('ppTlEditBox')) $('ppTlEditBox').hidden = false;
+        if ($('ppTlTitle')) { $('ppTlTitle').value = p.title || ''; try { $('ppTlTitle').focus(); } catch (e) { } }
+      });
+    }
+    if ($('ppTlCancelTitle')) {
+      $('ppTlCancelTitle').addEventListener('click', function () {
+        if ($('ppTlEditBox')) $('ppTlEditBox').hidden = true;
+        if ($('ppTlTitleView')) $('ppTlTitleView').hidden = false;
+      });
+    }
     if ($('ppTlSaveTitle')) {
       $('ppTlSaveTitle').addEventListener('click', function () {
         var v = $('ppTlTitle') ? String($('ppTlTitle').value || '').trim().slice(0, 300) : '';

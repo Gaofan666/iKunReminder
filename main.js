@@ -1090,7 +1090,12 @@ function createWindow() {
               'b.click();' +
               'var ms=window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[];var mine=null;' +
               'for(var j=0;j<ms.length;j++){if((ms[j].text||"").indexOf("小修")>=0)mine=ms[j];}' +
-              'return {点完还是未完成:!!mine&&!mine.done};})()');
+              'var rows2=document.querySelectorAll("#memoList .memo-item");var row2=null;' +
+              'for(var q=0;q<rows2.length;q++){if((rows2[q].textContent||"").indexOf("小修")>=0){row2=rows2[q];break;}}' +
+              'var dels=row2?row2.querySelector("[data-role=del]"):null;if(dels)dels.click();' +
+              'var ms2=window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[];var still=null;' +
+              'for(var k=0;k<ms2.length;k++){if((ms2[k].text||"").indexOf("小修")>=0)still=ms2[k];}' +
+              'return {点完还是未完成:!!mine&&!mine.done,删除也被拦住:!!still};})()');
 
             /* ⑱ 交掉这轮 → 对应备忘自动完成（完成时间落在交稿那天） */
             SM['18-交掉后备忘完成'] = await jp(
@@ -1104,6 +1109,45 @@ function createWindow() {
               'return {小修备忘条数:mine.length,都已完成为:mine.length>0&&mine.every(function(m){return m.done;}),' +
               ' 这篇还没完成的备忘:un.length};})()');
 
+            /* ⑲ 论文完整信息：标题完整展示 + 「✎ 修改标题」才进编辑态；那句提示已经搬到「已投稿」的详细信息 */
+            SM['19-论文完整信息'] = await jp(
+              '(function(){var P=window.__pp;if(!P.ensure("改过标题"))return {没能展开这篇:true};' +
+              'var items=document.querySelectorAll("#paperList .paper-item");var item=null;' +
+              'for(var i=0;i<items.length;i++){if((items[i].textContent||"").indexOf("改过标题")>=0){item=items[i];break;}}' +
+              'if(!item)return {没找到这篇:true};' +
+              'if(!item.querySelector(".pp-detail")){var hh=item.querySelector(".pp-head");if(hh)hh.click();' +
+              ' items=document.querySelectorAll("#paperList .paper-item");' +
+              ' for(var j=0;j<items.length;j++){if((items[j].textContent||"").indexOf("改过标题")>=0){item=items[j];break;}}}' +
+              'var b=item.querySelector("[data-role=timeline]");if(!b)return {没有完整信息按钮:true};b.click();' +
+              'var ov=document.getElementById("ppTimelineOverlay");var txt=document.getElementById("ppTlTitleText");' +
+              'var box=document.getElementById("ppTlEditBox");var want="【冒烟】改过标题";' +
+              'var out={小窗开了:!!ov,标题完整显示:!!txt&&txt.textContent===want,' +
+              ' 一开始不是编辑态:!box||box.hidden===true||getComputedStyle(box).display==="none",' +
+              ' 提示已搬走:!!ov&&ov.textContent.indexOf("跟着状态走")<0};' +
+              'var eb=document.getElementById("ppTlEditTitle");if(eb)eb.click();' +
+              'var box2=document.getElementById("ppTlEditBox");' +
+              'out.点修改后出编辑框=!!box2&&box2.hidden===false&&getComputedStyle(box2).display!=="none";' +
+              'var inp=document.getElementById("ppTlTitle");out.编辑框里是老标题=!!inp&&inp.value===want;' +
+              'var cc=document.getElementById("ppTlCancelTitle");if(cc)cc.click();' +
+              'var box3=document.getElementById("ppTlEditBox");' +
+              'out.点取消回到展示=!!box3&&(box3.hidden===true||getComputedStyle(box3).display==="none");' +
+              'var cl=document.getElementById("ppTlClose");if(cl)cl.click();' +
+              'return out;})()');
+            /* ⑳ 删论文 → 它生成的备忘也要一起删（不留孤儿提醒） */
+            SM['20-删论文连备忘一起清'] = await jp(
+              '(function(){window.confirm=function(){return true;};' +
+              'var before=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).length;' +
+              'var items=document.querySelectorAll("#paperList .paper-item");var item=null;' +
+              'for(var i=0;i<items.length;i++){if((items[i].textContent||"").indexOf("改过标题")>=0){item=items[i];break;}}' +
+              'if(!item)return {没找到这篇:true};' +
+              'if(!item.querySelector(".pp-detail")){var h=item.querySelector(".pp-head");if(h)h.click();' +
+              ' items=document.querySelectorAll("#paperList .paper-item");' +
+              ' for(var j=0;j<items.length;j++){if((items[j].textContent||"").indexOf("改过标题")>=0){item=items[j];break;}}}' +
+              'var d=item.querySelector("[data-role=del]");if(!d)return {没有删除按钮:true};d.click();' +
+              'var after=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).length;' +
+              'var left=window.PAPERS._data().length;' +
+              'return {删之前备忘:before,删之后备忘:after,论文剩:left,' +
+              ' 这篇的备忘清干净了:after===0,第二篇还在:left===1};})()');
             diagLog('ppsmoke', SM);
           }
           if (DIAG.paper) {

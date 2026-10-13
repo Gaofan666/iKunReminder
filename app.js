@@ -3468,7 +3468,7 @@
       row.className = 'todo-item' + (t.done ? ' done' : '');
       row.dataset.id = t.id;
       row.innerHTML =
-        (isLinkedMemo(m.id) ? '<button class="item-chk locked" data-role="done" title="完成状态跟着「我的投稿」走：投出去 / 交了返修稿时它自己会完成">🔒</button>' : '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>') +
+        '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>'+
         '<div class="item-body">' +
           '<div class="item-text"></div>' +
           '<div class="item-meta"></div>' +
@@ -3693,7 +3693,13 @@
     }
   }
 
-  function deleteMemo(id) {
+  function deleteMemo(id) {    /* 投稿来的备忘：不许删 —— 删了会出现「投稿那边还盯着截止、备忘却没了」。
+       要取消这条提醒，请到投稿里处理（改截止，或记上已投稿 / 提交返修稿）。 */
+    if (isLinkedMemo(id)) {
+      setCaption('这条来自「我的投稿」：要取消它请到投稿里处理（改截止，或记上已投稿 / 提交返修稿）');
+      Sound.click();
+      return;
+    }
     const m = memoById(id);
     if (!m) return;
     if (!window.confirm('删除这条备忘？\n\n' + m.text)) return;
