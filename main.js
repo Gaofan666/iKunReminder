@@ -762,57 +762,93 @@ function createWindow() {
               await new Promise(function (r) { setTimeout(r, 300); });
             } catch (e) { }
 
-            /* 关主窗口时那句「坤坤躲到托盘里了」：走桌宠气泡小窗，但摆到主屏工作区右下角
-               （和系统气泡的位置一致），时长归「💬 气泡显示时长」这个设置（默认 3 秒）。 */
-            balloonShown = false;                  // 这句提示正常只弹一次，自检里放开
-            bubbleMsLast = 0;
-            hideToTray(false);
-            await new Promise(function (r) { setTimeout(r, 1000); });
-            let nearCorner = false, gapPx = -1, blankPx = -1, clippedPx = -1, bubbleWPx = 0, bubbleHPx = 0, shadowOk = false;
-            try {
-              const wa = screen.getPrimaryDisplay().workArea;
-              const bb = (bubbleWin && !bubbleWin.isDestroyed()) ? bubbleWin.getBounds() : null;
-              if (bb) {
-                gapPx = Math.round(Math.abs((wa.x + wa.width) - (bb.x + bb.width)));
-                nearCorner = gapPx <= 40 && Math.abs((wa.y + wa.height) - (bb.y + bb.height)) <= 400;
-                bubbleWPx = bb.width; bubbleHPx = bb.height;
-              }
-              /* 气泡里还剩多少空白 / 有没有被裁掉：量页面上最后一个元素的底边，和窗口内容高比 */
-              if (bubbleWin && !bubbleWin.isDestroyed()) {
-                const m = await bubbleWin.webContents.executeJavaScript(
-                  '(function(){var b=document.body;' +
-                  'var kids=b.querySelectorAll("*"),bottom=0;' +
-                  'for(var i=0;i<kids.length;i++){var r=kids[i].getBoundingClientRect();' +
-                  'if(r.width>2&&r.height>2&&r.bottom>bottom)bottom=r.bottom;}' +
-                  'var ih=window.innerHeight;' +
-                  /* 顺带看一眼卡片有没有外投影（内高光那层带 inset，外投影那层不带） */
-                  'var pm=(getComputedStyle(document.getElementById("bubble-inner")).boxShadow||"").split(",");' +
-                  'var hasOuter=false;for(var q=0;q<pm.length;q++){if(pm[q].trim()&&pm[q].indexOf("inset")<0)hasOuter=true;}' +
-                  'return {内容底边:Math.round(bottom),窗口内容高:Math.round(ih),' +
-                  ' 空白:Math.round(ih-bottom),被裁掉:Math.round(bottom-ih),有外投影:hasOuter};})()', true);
-                blankPx = m.空白;
-                clippedPx = m.被裁掉;
-                shadowOk = m.有外投影 === true;
-              }
-            } catch (e) { }
-            const trayHint = {
-              气泡窗可见: !!(bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()),
-              用的毫秒: bubbleMsLast,
-              跟设置同一个: bubbleMsLast === (bubbleMsUser || BUBBLE_MS),
-              默认是3秒: bubbleMsLast === 3000,
-              贴着右下角: nearCorner,
-              离右边缘像素: gapPx,
-              气泡窗宽: bubbleWPx,
-              气泡窗高: bubbleHPx,
-              比默认窄: bubbleWPx > 0 && bubbleWPx < 300,   // 默认 340；这条短提示按 232 发
-              底部空白像素: blankPx,
-              内容没被裁: clippedPx <= 2,
-              空白不算多: blankPx >= 0 && blankPx <= 28,
-              有外投影: shadowOk
+            /* 关主窗口时那句「坤坤躲到托盘里了」：走桌宠气泡小窗，摆到主屏工作区右下角
+               （和系统气泡的位置一致），时长归「💬 气泡显示时长」这个设置管。
+               跑两轮：先把设置改成 8 秒 → 应该用 8000；再改回 3 秒（默认）→ 应该用 3000。
+               只跑一轮、而且刚好停在默认值上的话，「时长跟着设置走」这件事根本测不出来。 */
+            const setBubbleSec = function (sec) {
+              return win.webContents.executeJavaScript(
+                '(function(){var s=document.getElementById("petBubbleSel");' +
+                's.value=' + JSON.stringify(String(sec)) + ';' +
+                's.dispatchEvent(new Event("change",{bubbles:true}));return s.value;})()', true);
             };
+            const hintRound = async function (sec) {
+              await setBubbleSec(sec);
+              await new Promise(function (r) { setTimeout(r, 350); });
+              balloonShown = false;              // 这句提示正常只弹一次，自检里放开
+              bubbleMsLast = 0;
+              hideToTray(false);
+              await new Promise(function (r) { setTimeout(r, 1000); });
+              const out = { 设置秒数: sec, 用的毫秒: bubbleMsLast };
+              try {
+                const wa = screen.getPrimaryDisplay().workArea;
+                const bb = (bubbleWin && !bubbleWin.isDestroyed()) ? bubbleWin.getBounds() : null;
+                out.气泡窗可见 = !!(bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible());
+                if (bb) {
+                  out.离右边缘像素 = Math.round(Math.abs((wa.x + wa.width) - (bb.x + bb.width)));
+                  out.贴着右下角 = out.离右边缘像素 <= 40 &&
+                    Math.abs((wa.y + wa.height) - (bb.y + bb.height)) <= 400;
+                  out.气泡窗宽 = bb.width; out.气泡窗高 = bb.height;
+                }
+                if (bubbleWin && !bubbleWin.isDestroyed()) {
+                  const m = await bubbleWin.webContents.executeJavaScript(
+                    '(function(){' +
+                    'var tip=document.querySelector(".pb-tip");' +
+                    'var inner=document.getElementById("bubble-inner");' +
+                    /* 真正要量的是「字有没有被裁」：内容的 scrollHeight 比可视高度大就是裁了。
+                       ⚠️ 别拿去比「元素底边 vs 窗口高」——卡片是 height:100%，那个差恒等于内边距，
+                       永远看不出问题（老版本就是这么写，等于没测）。 */
+                    'var tipOver=tip?(tip.scrollHeight-tip.clientHeight):-1;' +
+                    'var innerOver=inner?(inner.scrollHeight-inner.clientHeight):-1;' +
+                    /* 卡片里还剩多少空白：内容最后一行底边到卡片底边 */
+                    'var ir=inner?inner.getBoundingClientRect():null;var bottom=0;' +
+                    'var sel=[".pb-head",".pb-mer",".pb-tip",".pb-next"];' +
+                    'for(var i=0;i<sel.length;i++){var e=document.querySelector(sel[i]);' +
+                    'if(!e)continue;var rr=e.getBoundingClientRect();if(rr.height>1&&rr.bottom>bottom)bottom=rr.bottom;}' +
+                    'var blank=(ir&&bottom)?Math.round(ir.bottom-bottom):-1;' +
+                    /* 顺便把「自动量到多高」和「现在渲染多高」也带出来：
+                       两个数不一样就说明 bubble-fit 那次量法本身短了（不是窗口算错）。 */
+                    'var saveH=inner?inner.style.height:"";' +
+                    'var autoH=-1;if(inner){inner.style.height="auto";autoH=Math.round(inner.offsetHeight);inner.style.height=saveH;}' +
+                    'var nowH=inner?Math.round(inner.offsetHeight):-1;' +
+                    'var scrollH=inner?Math.round(inner.scrollHeight):-1;' +
+                    'var clientH=inner?Math.round(inner.clientHeight):-1;' +
+                    /* 真正判「有没有东西被卡片裁掉」：最后一个子元素的底边有没有越过卡片底边
+                       （两者都用 getBoundingClientRect，缩放一致，比得准）。
+                       别用 scrollHeight 判：它会把行高取整那几像素也算成溢出（实测多 4px），
+                       那是幻影，字其实没缺。 */
+                    'var over=0;if(inner&&ir){for(var q2=0;q2<inner.children.length;q2++){' +
+                    'var c2=inner.children[q2];if(!c2||!c2.offsetHeight)continue;' +
+                    'var d2=c2.getBoundingClientRect().bottom-ir.bottom;if(d2>over)over=d2;}}' +
+                    'var pm=(getComputedStyle(inner).boxShadow||"").split(",");' +
+                    'var hasOuter=false;for(var q=0;q<pm.length;q++){if(pm[q].trim()&&pm[q].indexOf("inset")<0)hasOuter=true;}' +
+                    'return {tip溢出:tipOver,卡片溢出:innerOver,内容被裁像素:Math.round(over),卡片内空白:blank,有外投影:hasOuter,' +
+                    ' 自动量到的高:autoH,现在渲染高:nowH,内容高:scrollH,可视高:clientH};})()', true);
+                  out.测量 = m;
+                  out.字没被裁 = m.tip溢出 >= 0 && m.tip溢出 <= 2 && m.内容被裁像素 <= 1;
+                  out.空白不算多 = m.卡片内空白 >= 0 && m.卡片内空白 <= 34;
+                  out.有外投影 = m.有外投影 === true;
+                }
+              } catch (e) { }
+              if (bubbleWin && !bubbleWin.isDestroyed()) hideBubble();
+              await new Promise(function (r) { setTimeout(r, 250); });
+              return out;
+            };
+            const hint8 = await hintRound('8');
+            const hint3 = await hintRound('3');
+            await setBubbleSec('3');                 // 收尾：设置回默认
             showWindow();
             await new Promise(function (r) { setTimeout(r, 500); });
-            diagLog('pet-tray-hint', trayHint);
+            diagLog('pet-tray-hint', {
+              '设置 8 秒时': hint8, '设置 3 秒时（默认）': hint3,
+              时长跟着设置走: hint8.用的毫秒 === 8000 && hint3.用的毫秒 === 3000,
+              默认是3秒: hint3.用的毫秒 === 3000,
+              贴着右下角: hint8.贴着右下角 === true && hint3.贴着右下角 === true,
+              比默认窄: hint8.气泡窗宽 > 0 && hint8.气泡窗宽 < 300,   // 默认 340；这条短提示按 232 发
+              字没被裁: hint8.字没被裁 === true && hint3.字没被裁 === true,
+              空白不算多: hint8.空白不算多 === true && hint3.空白不算多 === true,
+              有外投影: hint8.有外投影 === true
+            });
           }
           if (DIAG.tab) {
             await win.webContents.executeJavaScript(
@@ -1666,11 +1702,21 @@ function createWindow() {
             await waitW(80);
             const label80 = await labelsAt();
             const clickTrace = await jsw('(function(){return window.__clickRoles||[];})()');
-            await jsw('(function(){var c=document.querySelectorAll("#lateFillChips button");' +
+            /* ⚠️ 「填内容」和「点保存」必须在同一次 executeJavaScript 里做完：
+               分两次调用的话，中间那几十毫秒里弹窗有可能被重新打开一次（输入框被清空），
+               断言就会莫名其妙地挂 —— 这里要测的是「保存按钮会不会顺手完成」，不是时序。 */
+            const beforeSave = await jsw('(function(){' +
+              'var c=document.querySelectorAll("#lateFillChips button");' +
               'var t=Array.prototype.find.call(c,function(b){return b.textContent==="事情变多";});' +
-              'if(t)t.click();return true;})()');
-            await waitW(150);
-            const beforeSave = await labelsAt();
+              'if(t)t.click();' +
+              'var inp=document.getElementById("lateFillInput");' +
+              'if(!inp.value){inp.value="事情变多";inp.dispatchEvent(new Event("input",{bubbles:true}));}' +
+              'var shot={弹窗开着:!document.getElementById("lateFillOverlay").hidden,' +
+              ' 保存按钮:document.getElementById("lateFillSave").textContent,' +
+              ' 跳过按钮:document.getElementById("lateFillSkip").textContent,' +
+              ' 输入框:inp.value};' +
+              'document.getElementById("lateFillSave").click();' +
+              'return shot;})()');
             /* 点保存的那一刻同时把「输入框此刻的值 / 弹窗有没有关 / 字幕说了什么」抓下来：
                有时会看到原因没写进去，靠这三样就能判断是"输入框被清空了"还是"根本没执行"。 */
             const saveShot = await jsw('(function(){' +
@@ -2002,6 +2048,114 @@ function createWindow() {
               还是已完成: kAfter.完成 === true,
               逾期次数没变: kAfter.逾期次数 === kBefore.逾期次数,
               没冒出新逾期: kAfter.逾期标 === kBefore.逾期标
+            };
+
+            /* ⑪ 延期「不是一刀切」（这一版新加的勾选框）：编辑时把时间往后挪，弹窗里会露出
+                 「⏱ 记 1 次延期」那一行（默认勾上）。真往后拖 → 记 1 次；
+                 只是当初填错了 → 取消勾选 → 不能记。备忘和待办各验一遍
+                 （两边是两套控件，也确实是两条保存路径）。 */
+            const extCase = async function (kind, text) {
+              const rowId = (kind === 'memo' ? 'memoExtRow' : 'todoExtRow');
+              const chkId = (kind === 'memo' ? 'memoExtChk' : 'todoExtChk');
+              const listSel = (kind === 'memo' ? '.memo-item' : '.todo-item');
+              const saveId = (kind === 'memo' ? 'memoSave' : 'tdSave');
+              const arrName = (kind === 'memo' ? 'raw.memos' : 'raw.todos');
+              /* 用真实弹窗建一条（截止 / 提醒时间都在 3 小时后 → 不会立刻弹提醒） */
+              const mk = function (tag, off) {
+                const t = dtStr(Date.now() + off);
+                return jswC('(function(){' + G +
+                  (kind === 'memo'
+                    ? 'g("btnAddMemo").click();g("memoText").value=' + JSON.stringify(tag) + ';' +
+                      'var on=g("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change",{bubbles:true}));' +
+                      'g("memoDueDate").value=' + JSON.stringify(t.date) + ';' +
+                      'g("memoDueTime").value=' + JSON.stringify(t.time) + ';' +
+                      'g("memoRemindBefore").value="3600000";g("memoRemindEvery").value="0";g("memoSave").click();'
+                    : 'g("btnAddTodo").click();g("tdText").value=' + JSON.stringify(tag) + ';' +
+                      'g("tdDate").value=' + JSON.stringify(t.date) + ';' +
+                      'g("tdTime").value=' + JSON.stringify(t.time) + ';g("tdSave").click();') +
+                  'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                  'var arr=' + arrName + '||[];' +
+                  'var x=arr.filter(function(y){return y.text===' + JSON.stringify(tag) + ';})[0];' +
+                  'return x?{id:x.id,dueAt:x.dueAt}:null;})()');
+              };
+              /* 打开编辑、把时间往后挪到 off2；uncheck=true 就把那个勾取消掉再保存。
+                 日期/时间要派发 change（真实用户改时间是会发事件的，那行提示靠它刷新）。 */
+              const move = function (tag, off2, uncheck) {
+                const t = dtStr(Date.now() + off2);
+                const setDate = (kind === 'memo'
+                  ? 'g("memoDueDate").value=' + JSON.stringify(t.date) + ';' +
+                    'g("memoDueDate").dispatchEvent(new Event("change",{bubbles:true}));' +
+                    'g("memoDueTime").value=' + JSON.stringify(t.time) + ';' +
+                    'g("memoDueTime").dispatchEvent(new Event("change",{bubbles:true}));'
+                  : 'g("tdDate").value=' + JSON.stringify(t.date) + ';' +
+                    'g("tdDate").dispatchEvent(new Event("change",{bubbles:true}));' +
+                    'g("tdTime").value=' + JSON.stringify(t.time) + ';' +
+                    'g("tdTime").dispatchEvent(new Event("change",{bubbles:true}));');
+                return jswC('(function(){' + G +
+                  'var row=Array.prototype.find.call(document.querySelectorAll(' + JSON.stringify(listSel) + '),' +
+                  'function(r){return r.textContent.indexOf(' + JSON.stringify(tag) + ')>=0;});' +
+                  'if(!row)return {error:"没找到那行"};' +
+                  'row.querySelector("[data-role=edit]").click();' +
+                  (kind === 'memo'
+                    ? 'var on=g("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change",{bubbles:true}));'
+                    : '') +
+                  setDate +
+                  'var shown=!g(' + JSON.stringify(rowId) + ').hidden;' +
+                  'var checked=g(' + JSON.stringify(chkId) + ').checked;' +
+                  (uncheck ? 'g(' + JSON.stringify(chkId) + ').checked=false;' : '') +
+                  'g(' + JSON.stringify(saveId) + ').click();' +
+                  'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+                  'var arr=' + arrName + '||[];' +
+                  'var x=arr.filter(function(y){return y.text===' + JSON.stringify(tag) + ';})[0];' +
+                  'return {延期行露出来:shown, 默认勾上:checked, dueAt:x?x.dueAt:0, 延期次数:x?(x.extCount||0):-1};})()');
+              };
+              const keep = text + '·保留勾选';
+              const drop = text + '·取消勾选';
+              const made1 = await mk(keep, 3 * 3600000);
+              await waitC(350);
+              const made2 = await mk(drop, 3 * 3600000);
+              await waitC(350);
+              const rKeep = await move(keep, 5 * 3600000, false);
+              await waitC(350);
+              const rDrop = await move(drop, 5 * 3600000, true);
+              await waitC(350);
+              /* 待办还多一层：快捷档位（「明天 9:00」这种）是程序化改值的，
+                 也必须能把那一行刷出来（否则用快捷档位改时间就白取消不了延期）。 */
+              let quickCase = null;
+              if (kind === 'todo') {
+                const qTag = text + '·快捷档位';
+                await mk(qTag, 3 * 3600000);
+                await waitC(350);
+                quickCase = await jswC('(function(){' + G +
+                  'var row=Array.prototype.find.call(document.querySelectorAll(".todo-item"),' +
+                  'function(r){return r.textContent.indexOf(' + JSON.stringify(qTag) + ')>=0;});' +
+                  'if(!row)return {error:"没找到那行"};' +
+                  'row.querySelector("[data-role=edit]").click();' +
+                  'var before=!g("todoExtRow").hidden;' +
+                  'var qb=document.querySelector("#tdQuick button[data-at=tomorrow-0900]");' +
+                  'if(!qb)return {error:"没有快捷档位按钮"};' +
+                  'qb.click();' +
+                  'return {点之前露出来了吗:before, 点之后露出来了吗:!g("todoExtRow").hidden,' +
+                  ' 勾选框还是勾上的:g("todoExtChk").checked};})()');
+                await waitC(250);
+                await jswC('(function(){' + G + 'g("tdCancel").click();return true;})()');
+                await waitC(250);
+              }
+              return {
+                建的两条: { 保留勾选: made1, 取消勾选: made2 },
+                保留勾选那次: rKeep, 取消勾选那次: rDrop,
+                快捷档位: quickCase,
+                往后挪会露出勾选框: rKeep.延期行露出来 === true && rKeep.默认勾上 === true,
+                保留勾选记了一次: rKeep.延期次数 === 1,
+                取消勾选没记: rDrop.延期次数 === 0 && rDrop.dueAt !== made2.dueAt,
+                快捷档位也会刷新: quickCase
+                  ? (quickCase.点之后露出来了吗 === true && quickCase.勾选框还是勾上的 === true)
+                  : '(这次不适用)'
+              };
+            };
+            outC['11-延期勾选框'] = {
+              备忘: await extCase('memo', '【自检】延期勾选-备忘'),
+              待办: await extCase('todo', '【自检】延期勾选-待办')
             };
 
             /* 收尾：清掉自检造的备忘和待办 */
@@ -5030,6 +5184,91 @@ function createWindow() {
                 diagLog('cal-4c-addon', dayAdd);
               }
 
+              /* 4.7) 左栏备忘这一版改了两件事：**未完成按截止时间排**（最上面最先到期）、
+                    **已完成的折叠起来**（默认收起，点开才看）；另外已完成的备忘按
+                    「完成那一天」落到日历格子上，而不是它原来的截止日。
+                    这里造一条「截止明天、今天完成」的：它应该消失在左栏未完成列表里、
+                    出现在日历的今天清单里（而不是明天）。 */
+              const memoFold = {};
+              {
+                const t2 = new Date(Date.now() + 24 * 3600000);
+                const p2 = function (n) { return n < 10 ? '0' + n : String(n); };
+                const tmDate = t2.getFullYear() + '-' + p2(t2.getMonth() + 1) + '-' + p2(t2.getDate());
+                const todayKeyNow = dayStr(0);
+                await win.webContents.executeJavaScript(
+                  '(function(){var g=function(id){return document.getElementById(id);};' +
+                  'g("btnAddMemo").click();' +
+                  'g("memoText").value="【自检】已完成落格";' +
+                  'var on=g("memoDueOn");on.checked=true;on.dispatchEvent(new Event("change",{bubbles:true}));' +
+                  'g("memoDueDate").value=' + JSON.stringify(tmDate) + ';' +
+                  'g("memoDueTime").value="09:00";' +
+                  'g("memoRemindBefore").value="3600000";g("memoRemindEvery").value="0";' +
+                  'g("memoSave").click();return true;})()', true);
+                await wait2(500);
+                /* 在左栏那条上点一下勾 = 标记完成（未过期，不会弹「补原因」） */
+                const doneNow = await win.webContents.executeJavaScript(
+                  '(function(){var row=Array.prototype.find.call(document.querySelectorAll(".memo-item"),' +
+                  'function(r){return r.textContent.indexOf("【自检】已完成落格")>=0;});' +
+                  'if(!row)return {error:"没找到那条备忘"};' +
+                  'row.querySelector("[data-role=done]").click();' +
+                  'var raw={};try{raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");}catch(e){}' +
+                  'var m=(raw.memos||[]).filter(function(x){return x.text==="【自检】已完成落格";})[0];' +
+                  'return {完成:!!(m&&m.done),有完成时间:!!(m&&m.doneAt),截止日:' +
+                  JSON.stringify(tmDate) + '};})()', true);
+                await wait2(700);
+                memoFold.标记完成 = doneNow;
+
+                /* 日历那边：左栏该出现折叠条、已完成那条不该露在外面；点开折叠才看到 */
+                const leftCol = await calWin.webContents.executeJavaScript(
+                  '(function(){var box=document.getElementById("memoList");' +
+                  'var bar=document.getElementById("memoDoneToggle");' +
+                  'var pend=Array.prototype.slice.call(box.querySelectorAll(".memo"))' +
+                  '.filter(function(r){return !r.classList.contains("done");});' +
+                  'var vis=function(t){return Array.prototype.some.call(box.querySelectorAll(".memo"),' +
+                  'function(r){return r.textContent.indexOf(t)>=0;});};' +
+                  'var out={折叠条在:!!bar, 折叠条文字:bar?bar.textContent:null,' +
+                  ' 默认收着:!document.querySelector(".memo-done-list"),' +
+                  ' 已完成那条露在外吗:vis("已完成落格"),' +
+                  ' 第一行待办:pend.length?pend[0].textContent.slice(0,24):"(空)"};' +
+                  'if(bar)bar.click();' +
+                  'var boxed=document.querySelector(".memo-done-list");' +
+                  'out.点开后展开了=!!boxed;' +
+                  'out.点开后能看到=vis("已完成落格")&&!!boxed&&' +
+                  'boxed.textContent.indexOf("已完成落格")>=0;' +
+                  'out.展开后条数=boxed?boxed.querySelectorAll(".memo").length:0;' +
+                  'return out;})()', true);
+                memoFold.左栏 = leftCol;
+                memoFold.排序对 = String(leftCol.第一行待办).indexOf("今天截止的备忘") >= 0;
+                memoFold.折叠对 = leftCol.折叠条在 === true && leftCol.默认收着 === true &&
+                  leftCol.已完成那条露在外吗 === false && leftCol.点开后能看到 === true;
+
+                /* 落格：今天的清单里应该有它（按完成日），明天的清单里不该有 */
+                const openDay = function (key) {
+                  return calWin.webContents.executeJavaScript(
+                    '(function(){var c=Array.prototype.find.call(document.querySelectorAll(".cell"),' +
+                    'function(x){return x.dataset.key===' + JSON.stringify(key) + ';});' +
+                    'if(!c)return {error:"没找到那格"};' +
+                    'c.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
+                    'c.dispatchEvent(new PointerEvent("pointerup",{bubbles:true,button:0,clientX:5,clientY:5,screenX:5,screenY:5,pointerId:1}));' +
+                    'var list=document.getElementById("panelList");' +
+                    'var has=list.textContent.indexOf("已完成落格")>=0;' +
+                    'var memos=Array.prototype.filter.call(list.querySelectorAll(".pi.memo"),function(r){' +
+                    'return r.textContent.indexOf("已完成落格")>=0;});' +
+                    'return {面板开了:!document.getElementById("panel").hidden, 有这条:has,' +
+                    ' 标着已完成:memos.length?memos[0].textContent.indexOf("备忘已完成")>=0:false,' +
+                    ' 面板标题:document.getElementById("panelTitle").textContent};})()', true);
+                };
+                memoFold.今天 = await openDay(todayKeyNow);
+                await wait2(250);
+                memoFold.明天 = await openDay(tmDate);
+                await wait2(250);
+                await calWin.webContents.executeJavaScript(
+                  'document.getElementById("panelClose").click(); true', true);
+                memoFold.落在完成那天 = memoFold.今天.有这条 === true && memoFold.今天.标着已完成 === true;
+                memoFold.不在截止那天 = memoFold.明天.有这条 === false;
+                diagLog('cal-4d-备忘折叠与落格', memoFold);
+              }
+
               /* 5) 截图（先把当天清单面板关掉再截，它是盖在月历上的覆盖层）。
                   离屏窗抓 'paint' 那一帧最稳：可见窗会被 DWM 淡出/旧帧坑。 */
               try {
@@ -5886,7 +6125,9 @@ function hideToTray(silent) {
     showBubble({
       head: '💤 坤坤躲到托盘里了',
       tip: '到点会自动跳出来提醒你',
-      next: '点托盘图标就能随时叫出来',           // 底部那行带分隔线的脚注，气泡不至于只有两行白字
+      /* 底部那行带分隔线的脚注（气泡不至于只有两行白字）。
+         ⚠️ 托盘没建起来时不能还指路"点托盘图标"——那时候用户根本找不到它。 */
+      next: tray ? '点托盘图标就能随时叫出来' : '在设置页里可以随时把它叫回来',
       w: 232,
       h: 132,
       anchor: anchor
@@ -6449,7 +6690,10 @@ function applyCalStyle(st) {
   return calStyle;
 }
 
-/* 备忘录同理（左边那一栏） */
+/* 备忘录同理（左边那一栏）。
+   ⚠️ doneAt 必须留着：日历里「已完成的备忘按完成那一天落格」靠它算
+   （cal.js 的 whenOf = doneAt || dueAt）。这个白名单漏掉它，那条规则就退回按截止日，
+   等于没生效 —— 自检 cal-4d 专门盯这件事。 */
 function applyCalMemos(list) {
   calMemos = Array.isArray(list) ? list.filter(function (m) {
     return m && m.id && m.text;
@@ -6459,7 +6703,8 @@ function applyCalMemos(list) {
       text: String(m.text).slice(0, 500),
       done: !!m.done,
       at: +m.at || 0,
-      dueAt: +m.dueAt || 0
+      dueAt: +m.dueAt || 0,
+      doneAt: +m.doneAt || 0
     };
   }) : [];
   if (calWin && !calWin.isDestroyed()) calWin.webContents.send('cal-memos', calMemos);
@@ -7160,6 +7405,10 @@ function ensureBubbleWin() {
 /* 显示气泡：主进程负责算位置，渲染进程只提供文字内容 */
 function showBubble(data) {
   bubbleLastData = data || {};      // 自动适配时要拿它重放一遍（见上面的 bubble-fit）
+  /* 每次「新」显示都重新允许适配一次（bubble-fit 里那次重放不算新的：__fit 标记）。
+     不这么做的话，连着两条内容折行数相同的气泡，第二条会撞上"跟上一次量到的一样"，
+     尺寸改动被整条丢掉，一直比内容高出一截。 */
+  if (!(data && data.__fit)) { bubbleFitW = 0; bubbleFitH = 0; bubbleFitDone = false; }
   /* 贴着谁弹：默认桌宠位置（没开桌宠就退回主窗口位置）；
      data.anchor 可以让调用方指定一个矩形 —— 关窗提示用它贴到托盘那个角 */
   const b = (data && data.anchor) ? data.anchor
@@ -7274,20 +7523,25 @@ ipcMain.on('pet-hit', (e, hit) => {
 });
 
 /* 气泡按内容自动定尺寸：气泡页量完自然尺寸回报过来（设计单位），这里按同一个 showBubble
-   重算一遍 —— 宽度/高度、尾巴位置、贴哪块屏全都跟着重算，不用另写一份几何逻辑。
-   同尺寸直接忽略：气泡页量的是"内容自然尺寸"，和窗口当前尺寸无关，所以不会来回振荡。 */
+   重算一遍 —— 窗口高、尾巴位置、贴哪块屏全都跟着重算，不用另写一份几何逻辑。
+   同一轮显示里量到的尺寸没变就忽略（不会来回振荡）；showBubble 每次新显示会清掉这两个值，
+   所以下一条气泡照样能适配一次。 */
 let bubbleLastData = null;       // 最近一次显示气泡用的参数（自动适配时拿它重放）
 let bubbleFitW = 0, bubbleFitH = 0;
+let bubbleFitDone = false;       // 这一轮显示已经按内容适配过一次了吗
 ipcMain.on('bubble-fit', (e, size) => {
-  /* 封顶：气泡页量的是「一行不折」的自然宽度，内容长了会一直变宽 ——
-     超过默认宽度就按默认宽折行（高度也封一个上限，免得撑满屏）。 */
+  /* 封顶：宽度别超过默认宽（内容长了就按默认宽折行），高度也封一个上限，免得撑满屏。
+     ⚠️ 气泡页量到的宽度其实就是窗口当前的宽度（卡片是 100% 宽），所以宽度这条基本只是兜底：
+     真正变窄靠调用方传 data.w（关窗提示那条 232），高度才是按内容真的会变的。 */
   const w = Math.min(Math.round(Number(size && size.w) || 0), UI.DESIGN.bubbleW);
   const h = Math.min(Math.round(Number(size && size.h) || 0), 420);
   if (!(w > 60 && h > 30)) return;                        // 明显不合理的量法，忽略
   if (!bubbleLastData) return;
-  if (Math.abs(w - bubbleFitW) <= 2 && Math.abs(h - bubbleFitH) <= 2) return;
-  bubbleFitW = w; bubbleFitH = h;
-  const next = Object.assign({}, bubbleLastData, { w: w, h: h });
+  /* 气泡已经收了（用户点了完成 / 自动收起）：这条迟到的适配不能再把它弹出来 */
+  if (!bubbleWin || bubbleWin.isDestroyed() || !bubbleWin.isVisible()) return;
+  if (bubbleFitDone && Math.abs(w - bubbleFitW) <= 2 && Math.abs(h - bubbleFitH) <= 2) return;
+  bubbleFitW = w; bubbleFitH = h; bubbleFitDone = true;
+  const next = Object.assign({}, bubbleLastData, { w: w, h: h, __fit: true });
   try { showBubble(next); } catch (err) { }
 });
 

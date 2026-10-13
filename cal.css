@@ -284,6 +284,12 @@ body.locked .head button:not(#btnLock):hover{
   background:transparent;border:1px dashed rgba(62,154,168,.7);
   color:var(--lake);font-weight:500;box-sizing:border-box;
 }
+/* ⚠️ 已完成的备忘条要盖回「已完成」那一套：.ev.memo 和 .ev.done 权重一样、它写在后面，
+   不单独写一条的话背景/字色还是备忘的（只有划线生效），注释里说的"变灰"就不成立。 */
+.ev.memo.done{
+  background:var(--ev-done-bg);border-style:solid;border-color:transparent;
+  color:var(--ink-soft);font-weight:400;
+}
 .more{font-size:12px;line-height:14px;color:var(--ink-soft);padding-left:4px}
 
 /* 图例 */
@@ -348,6 +354,9 @@ body.locked .head button:not(#btnLock):hover{
 .pi.memo .box{border:1px dashed rgba(62,154,168,.7);background:transparent}
 .pi.memo .box::after{content:'📌';font-size:12px}
 .pi.memo .txt{color:var(--lake)}
+/* 同理：已完成的备忘，勾选样式要跟着「已完成」走，别再画 📌 */
+.pi.memo.done .box{border-style:solid;background:var(--lake);border-color:var(--lake)}
+.pi.memo.done .box::after{content:'✓'}
 .pi .body{flex:1;min-width:0}
 .pi .txt{font-size:18px;line-height:26px;color:var(--ink);word-break:break-word}
 .pi.done .txt{color:var(--ink-soft);text-decoration:line-through}
