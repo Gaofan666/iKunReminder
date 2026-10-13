@@ -983,7 +983,7 @@ function createWindow() {
 
             /* ⑨ 接收：接收时间 + 校稿 + 见刊 + 检索 + DOI 五个字段 */
             SM['9-接收五个字段'] = await jp(
-              '(function(){var P=window.__pp;P.add("accept");' +
+              '(function(){var P=window.__pp;if(!P.ensure("多轮返修"))return {没能展开这篇:true};P.add("accept");' +
               'P.set("ppDAt",P.day(-1));P.set("ppDProof",P.day(0));P.set("ppDPublish",P.day(1));' +
               'P.set("ppDIndex",P.day(2));P.set("ppDDoi","10.1109/TIM.2026.999");P.ok();' +
               'var arr=P.list();var p=arr[0];var e=null;' +
@@ -995,7 +995,7 @@ function createWindow() {
 
             /* ⑩ 检索（独立类型） */
             SM['10-检索条目'] = await jp(
-              '(function(){var P=window.__pp;P.add("index");P.set("ppDAt",P.day(3));' +
+              '(function(){var P=window.__pp;if(!P.ensure("多轮返修"))return {没能展开这篇:true};P.add("index");P.set("ppDAt",P.day(3));' +
               'P.set("ppDDoi","10.1109/TIM.2026.999");P.ok();' +
               'var p=P.list()[0];var n=0;(p.events||[]).forEach(function(x){if(x.type==="index")n++;});' +
               'return {状态:P.st(),检索条数:n,徽章:P.badge()};})()');

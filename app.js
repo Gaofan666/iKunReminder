@@ -3378,7 +3378,7 @@
       row.className = 'memo-item' + (m.done ? ' done' : '');
       row.dataset.id = m.id;
       row.innerHTML =
-        '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>' +
+        (isLinkedMemo(m.id) ? '<button class="item-chk locked" data-role="done" title="完成状态跟着「我的投稿」走：投出去 / 交了返修稿时它自己会完成">🔒</button>' : '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>') +
         '<div class="item-body">' +
           '<div class="item-text"></div>' +
           '<div class="item-meta"></div>' +
@@ -3468,7 +3468,7 @@
       row.className = 'todo-item' + (t.done ? ' done' : '');
       row.dataset.id = t.id;
       row.innerHTML =
-        '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>' +
+        (isLinkedMemo(m.id) ? '<button class="item-chk locked" data-role="done" title="完成状态跟着「我的投稿」走：投出去 / 交了返修稿时它自己会完成">🔒</button>' : '<button class="item-chk" data-role="done" title="标记完成 / 取消"></button>') +
         '<div class="item-body">' +
           '<div class="item-text"></div>' +
           '<div class="item-meta"></div>' +

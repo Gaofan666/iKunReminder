@@ -1434,3 +1434,7 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 .al-tag.ji{background:linear-gradient(140deg,#8C9BAA,#6B7A88)}
 .al-list{font-size:13.5px;line-height:1.9;color:var(--text);letter-spacing:.3px;padding-top:2px}
 
+
+/* 投稿来的备忘：完成状态由投稿决定，这里显示一把小锁，点也点不动 */
+.item-chk.locked{opacity:.62;cursor:not-allowed;background:#eef1f3;border-color:#dfe4e8;color:#8a949c}
+.item-chk.locked::after{content:''}
