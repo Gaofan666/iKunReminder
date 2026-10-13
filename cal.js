@@ -140,8 +140,14 @@
   var memoDoneOpen = false;      // 左栏「已完成」展开着吗（只在本次运行里记着）
 
   function renderMemos() {
+    /* 排序（用户要求）：按时间排 —— 最上面是最先到期的，最下面是最晚到期的。
+       没填截止时间的沉到最底下；同一时刻的按新增时间倒序（新的在上）。
+       已完成的那批平时收在折叠区里，这里只保证区内也是有期限的在前。 */
     const all = memos.slice().sort(function (a, b) {
       if (a.done !== b.done) return a.done ? 1 : -1;
+      const da = +a.dueAt || 0, db = +b.dueAt || 0;
+      if (!!da !== !!db) return da ? -1 : 1;
+      if (da !== db) return da - db;
       return (b.at || 0) - (a.at || 0);
     });
     const pending = all.filter(function (m) { return !m.done; });
