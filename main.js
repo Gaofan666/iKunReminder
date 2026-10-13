@@ -957,7 +957,7 @@ function createWindow() {
             SM['5-交掉这轮'] = await jp(
               '(function(){var P=window.__pp;P.openRow("收到意见：大修");' +
               'P.set("ppOpSubmit",P.day(0));P.ok();' +
-              'return {待返修:P.waiting(),列表还有报警:P.due()!=="",' +
+              'return {待返修:P.waiting(),列表上没报警:P.due()==="",' +
               ' 摘要写了已交:P.row("收到意见：大修").textContent.indexOf("已于")>=0};})()');
 
             /* ⑥ 再来一轮：小修 + 返修截止已经过期(-3)、也没交 → 应该标红报警 */
