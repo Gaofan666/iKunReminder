@@ -1518,6 +1518,72 @@
     return true;
   }
 
+  /* 弹窗里日期 + 时间选的这一刻（本地时区，和 dueAt 同一套算法）；算不出来返回 0 */
+  function extCandTs(dateEl, timeEl) {
+    const d = dateEl && dateEl.value;
+    if (!d) return 0;
+    const ts = new Date(d + 'T' + ((timeEl && timeEl.value) || '00:00')).getTime();
+    return isNaN(ts) ? 0 : ts;
+  }
+
+  /* 「往后挪算不算一次延期」由用户定：弹窗里那个勾选框默认勾上。
+     以前是「往后挪就自动记一笔」，但用户可能只是当初把时间填错了 —— 那种不该算延期。
+     找不到控件时按老行为（记），保证调用点永远不会因为控件缺失而漏记。 */
+  function extendWanted(chkId) {
+    const c = document.getElementById(chkId);
+    return !c || c.checked !== false;
+  }
+
+  /* 打开弹窗时把「记不记延期」那一行收起来、并把勾重新打上。
+     不这么做的话，上一次编辑留下的提示会一直挂在弹窗里，得再改一次时间才消失（用户报的）。 */
+  function resetExtendAsk(rowId, chkId) {
+    const row = document.getElementById(rowId), chk = document.getElementById(chkId);
+    if (row) row.hidden = true;
+    if (chk) chk.checked = true;
+  }
+
+  /* 编辑时把时间往后挪 → 露出那个勾选框（默认勾上）；换一条、或没往后挪就收起来。
+     idVar 取当前编辑的 id，srcOf 按 id 取条目，candOf 从日期/时间输入算新时间戳。 */
+  function bindExtendAsk(rowId, chkId, idVar, srcOf, candOf) {
+    const row = document.getElementById(rowId);
+    const chk = document.getElementById(chkId);
+    if (!row || !chk) return function () { };
+    let lastId = null;
+    return function () {
+      const id = idVar();
+      const src = id ? srcOf(id) : null;
+      if (!src) { row.hidden = true; lastId = null; return; }        // 新增条目，不存在"延期"
+      if (lastId !== id) { lastId = id; row.hidden = true; chk.checked = true; }   // 换了一条 → 复位
+      const cand = candOf(), cur = +src.dueAt || 0;
+      if (cand && cur && cand > cur) {
+        if (row.hidden) { row.hidden = false; chk.checked = true; }
+      } else {
+        row.hidden = true;
+        chk.checked = true;
+      }
+    };
+  }
+
+  /* 弹窗里的日期/时间输入是静态 DOM，所以在 document 上挂一次即可（不用去改两个 open 函数） */
+  const refreshMemoExt = bindExtendAsk('memoExtRow', 'memoExtChk',
+    function () { return editingMemoId; },
+    function (id) { return memoById(id); },
+    function () { return extCandTs(document.getElementById('memoDueDate'), document.getElementById('memoDueTime')); });
+  const refreshTodoExt = bindExtendAsk('todoExtRow', 'todoExtChk',
+    function () { return editingTodoId; },
+    function (id) { return todoById(id); },
+    function () { return extCandTs(document.getElementById('tdDate'), document.getElementById('tdTime')); });
+  document.addEventListener('input', function (e) {
+    const id = e.target && e.target.id;
+    if (id === 'memoDueDate' || id === 'memoDueTime') refreshMemoExt();
+    else if (id === 'tdDate' || id === 'tdTime') refreshTodoExt();
+  }, true);
+  document.addEventListener('change', function (e) {
+    const id = e.target && e.target.id;
+    if (id === 'memoDueDate' || id === 'memoDueTime') refreshMemoExt();
+    else if (id === 'tdDate' || id === 'tdTime') refreshTodoExt();
+  }, true);
+
   /* 扫一遍：到点了还没完成的（或者完成得比截止晚的）自己记一笔逾期 —— 不用等用户点弹窗。
      用户定的口径是「没完成、也没改截止时间，就算逾期」，这是截止时间的性质，
      不该取决于他点没点那个按钮（弹窗被晾着、被 12 小时宽限静默清掉，都不该漏记）。 */
@@ -3290,6 +3356,27 @@
     paintDoneBox('memo', doneRows, doneTotal);
   }
 
+  /* tick 里用的轻量刷新：只改每行「⏰ 时间 / 还有多久」两处文本，**不重建整张列表**。
+     以前 tick 每轮都 renderTodos() 整表重来 —— 鼠标正好停在「编辑」按钮上时，
+     那一行 DOM 被换掉、:hover 高亮被重置，看着就像按钮一直在闪（用户报的）。
+     逾期标签那种"真的变了"的情况由 sweepLate 记完账后整表重画，不走这里。 */
+  function refreshTodoTimes() {
+    if (!el.todoList) return;
+    const rows = el.todoList.querySelectorAll('.todo-item');
+    for (let i = 0; i < rows.length; i++) {
+      const t = todoById(rows[i].dataset.id);
+      if (!t) continue;
+      const meta = rows[i].querySelector('.item-meta');
+      if (!meta) continue;
+      const b = meta.querySelector('b'), when = meta.querySelector('[data-role="when"]');
+      if (b) b.textContent = fmtTodoTime(t.dueAt);
+      if (when) {
+        when.className = (!t.done && t.dueAt && t.dueAt < Date.now()) ? 'late' : '';
+        when.textContent = t.done ? '（已完成）' : fmtFromNow(t.dueAt);
+      }
+    }
+  }
+
   function renderTodos() {
     if (!el.todoList) return;
     const all = sortedTodos();
@@ -3323,9 +3410,9 @@
         '</div>';
       row.querySelector('.item-text').textContent = t.text;
       const meta = row.querySelector('.item-meta');
-      meta.innerHTML = '⏰ <b></b> <span class="' + (late ? 'late' : '') + '"></span>';
+      meta.innerHTML = '⏰ <b></b> <span data-role="when" class="' + (late ? 'late' : '') + '"></span>';
       meta.querySelector('b').textContent = fmtTodoTime(t.dueAt);
-      meta.querySelector('span').textContent = t.done ? '（已完成）' : fmtFromNow(t.dueAt);
+      meta.querySelector('[data-role="when"]').textContent = t.done ? '（已完成）' : fmtFromNow(t.dueAt);
       /* 分类小标排在最前面 */
       const ct = catOf(t);
       if (ct) {
@@ -3410,6 +3497,7 @@
      而且自动把「截止」开关打开（在日历上给某天加备忘，意思就是那天到期）。 */
   function openMemoModal(id, onDateKey) {
     editingMemoId = id || null;
+    resetExtendAsk('memoExtRow', 'memoExtChk');     // 每次打开都收起上次留下的「记不记延期」提示
     const m = id ? memoById(id) : null;
     el.memoTitle.textContent = m ? '修改备忘' : '新增备忘';
     el.memoText.value = m ? m.text : '';
@@ -3461,7 +3549,8 @@
         /* 往后挪截止时间 = 记一笔延期（改早、清空都不算，见 recordExtend）。
            lateOpen 复位保留着：那只是「这次逾期还没收尾」的标记，去重靠的是 lateDue。 */
         if (m.dueAt !== dueAt) {
-          recordExtend(m, m.dueAt, dueAt);
+          /* 往后挪要不要记这笔延期，交给弹窗里那个勾选框（默认勾上；原来是填错了就取消） */
+          if (extendWanted('memoExtChk')) recordExtend(m, m.dueAt, dueAt);
           m.lateOpen = false;
           /* ⚠️ 「重新变回未完成」只能在真的改了截止时间时做。
              这一句以前写在这个 if 外面 —— 结果是「只改个分类 / 只改个文字」也会把
@@ -3658,6 +3747,7 @@
      存完照常推回日历同步，不另做一套表单。 */
   function openTodoModal(id, onDateKey) {
     editingTodoId = id || null;
+    resetExtendAsk('todoExtRow', 'todoExtChk');     // 同上：打开就收起，别留着上一条的提示
     const t = id ? todoById(id) : null;
     el.tdTitle.textContent = t ? '修改待办' : '新增待办';
     el.tdText.value = t ? t.text : '';
@@ -3733,7 +3823,8 @@
         /* 往后挪截止时间 = 记一笔延期。重复待办的「勾完自动排下一期」不走这里
            （走 markTodoDone 直接改 dueAt），所以自动排期永远不会被算成延期。 */
         if (t.dueAt !== dueAt) {
-          recordExtend(t, t.dueAt, dueAt);
+          /* 同备忘：往后挪要不要记这笔延期，看弹窗里的勾选框 */
+          if (extendWanted('todoExtChk')) recordExtend(t, t.dueAt, dueAt);
           t.lateOpen = false;
           /* ⚠️ 「重新变回未完成」只能在真的改了截止时间时做（和备忘那边同一个口径）。
              这一句以前在 if 外面 —— 于是「只改个分类 / 只改个文字」也会把已完成点回未完成，
@@ -5595,8 +5686,9 @@
     if (!rt.alertId) {
       checkTodoDue();
       checkMemoDue();
-      /* 待办到点时如果正开着列表，顺手刷新一下「还有多久 / 已过期」 */
-      if (todoViewOpen()) renderTodos();
+      /* 待办到点时如果正开着列表，顺手刷新一下「还有多久 / 已过期」。
+         只做轻量文本刷新，不整表重建 —— 整表重建会把鼠标下的 :hover 重置，看着像在闪。 */
+      if (todoViewOpen()) refreshTodoTimes();
     } else {
       /* 弹窗正开着：顺手刷新「还有 N 条也到点了」—— 期间又有新的到点，数字要跟着变 */
       updateAlertMore();

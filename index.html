@@ -602,6 +602,12 @@
       <input type="date" id="memoDueDate">
       <input type="time" id="memoDueTime">
     </div>
+    <!-- 编辑时把截止时间往后挪 → 露出这一行（默认勾上，保持原来的行为）。
+         如果新的时间只是当初填错了、并不是真的往后拖，取消勾选就不记这笔延期。 -->
+    <label class="chk ext-row" id="memoExtRow" hidden>
+      <input type="checkbox" id="memoExtChk" checked>
+      <span>⏱ 记 1 次延期（<b>填错了</b>就取消）</span>
+    </label>
     <div class="it-row" id="memoRemindRow" hidden>
       <span class="it-label">提醒</span>
       <div class="memo-remind-cols">
@@ -614,6 +620,8 @@
           <option value="172800000">截止前 2 天开始</option>
           <option value="259200000">截止前 3 天开始</option>
           <option value="604800000">截止前 1 周开始</option>
+          <option value="864000000">截止前 10 天开始</option>
+          <option value="1209600000">截止前 2 周开始</option>
         </select>
         <select class="skin-sel" id="memoRemindEvery" title="开始后每隔多久提醒一次">
           <option value="0">提醒一次即可</option>
@@ -676,6 +684,11 @@
       <span class="it-label">提醒时间</span>
       <input type="time" id="tdTime">
     </div>
+    <!-- 同备忘：编辑时把时间往后挪才露出来，默认勾上；填错了就取消勾选，不记延期 -->
+    <label class="chk ext-row" id="todoExtRow" hidden>
+      <input type="checkbox" id="todoExtChk" checked>
+      <span>⏱ 记 1 次延期（<b>填错了</b>就取消）</span>
+    </label>
     <div class="it-row">
       <span class="it-label">优先级</span>
       <div class="seg prio-seg" id="tdPrio">
