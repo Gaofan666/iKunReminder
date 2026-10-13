@@ -250,6 +250,13 @@
     if (!r || typeof r !== 'object') return null;
     const kind = r.kind;
     if (kind === 'daily') return { kind: 'daily' };
+    /* 每隔 N 天（按天数滚动，不看「几号」）：流量套餐、按月清零这类周期用它更准 ——
+       「每月 30 号」会随月份长短漂，而「每隔 30 天」永远是上一次之后第 30 天。 */
+    if (kind === 'every') {
+      const days = Math.round(+r.days);
+      if (days >= 1 && days <= 365) return { kind: 'every', days: days };
+      return null;
+    }
     if (kind === 'weekly') {
       const days = Array.isArray(r.days)
         ? r.days.map(function (n) { return Math.round(+n); })
@@ -279,6 +286,7 @@
     const rep = normRepeat(r);
     if (!rep) return '';
     if (rep.kind === 'daily') return '每天';
+    if (rep.kind === 'every') return '每隔 ' + rep.days + ' 天';
     if (rep.kind === 'weekly') {
       return '每周' + rep.days.map(function (d) { return DOW_LABEL[d]; }).join('、');
     }
@@ -312,6 +320,17 @@
         t = withSameTime(fromMs, d.getFullYear(), d.getMonth(), d.getDate() + 1);
       }
       return t;
+    }
+
+    if (rep.kind === 'every') {
+      /* 每隔 N 天：一期一期往后滚（时刻保持不变），一次跳够 floor ——
+         程序关了很久再打开时，直接落到还没过的那一期，不会连着补一堆提醒。 */
+      let t = fromMs, guard = 0;
+      do {
+        const d = new Date(t);
+        t = withSameTime(fromMs, d.getFullYear(), d.getMonth(), d.getDate() + rep.days);
+      } while (t < floor && guard++ < 4000);
+      return t >= floor ? t : 0;
     }
 
     if (rep.kind === 'weekly') {
@@ -729,6 +748,9 @@
     tdPrio: $('#tdPrio'),
     tdRepeat: $('#tdRepeat'),
     tdRepeatHint: $('#tdRepeatHint'),
+    tdEveryRow: $('#tdEveryRow'),
+    tdEveryDays: $('#tdEveryDays'),
+    tdEveryHint: $('#tdEveryHint'),
     tdWeekRow: $('#tdWeekRow'),
     tdWeekDays: $('#tdWeekDays'),
     tdMonthRow: $('#tdMonthRow'),
@@ -3614,6 +3636,8 @@
     if (el.tdRepeat) el.tdRepeat.value = kind;
     if (el.tdWeekRow) el.tdWeekRow.hidden = kind !== 'weekly';
     if (el.tdMonthRow) el.tdMonthRow.hidden = kind !== 'monthly';
+    if (el.tdEveryRow) el.tdEveryRow.hidden = kind !== 'every';
+    if (el.tdEveryDays) el.tdEveryDays.value = String((r && r.kind === 'every') ? r.days : 30);
     /* 每周：默认勾上「当前选的那天是周几」，用户再自己加减 */
     const days = (r && r.kind === 'weekly') ? r.days.slice() : [isoDow(dueDate || new Date())];
     if (el.tdWeekDays) {
@@ -3639,12 +3663,33 @@
     updateRepeatHint(dueDate);
   }
 
+  /* 「每隔几天」那个输入框现在是多少天（1~365，空着或乱填就按 30 天算） */
+  function everyDaysVal() {
+    const n = Math.round(+(el.tdEveryDays && el.tdEveryDays.value));
+    if (!isFinite(n) || n < 1) return 30;
+    return Math.min(365, n);
+  }
+
   /* 那一行右边的小提示：把「会怎么重复」用人话写出来（选每年时尤其有用） */
   function updateRepeatHint(dueDate) {
     if (!el.tdRepeatHint) return;
     const kind = el.tdRepeat ? el.tdRepeat.value : 'none';
     if (kind === 'none') { el.tdRepeatHint.textContent = ''; return; }
     if (kind === 'daily') { el.tdRepeatHint.textContent = '每天都提醒'; return; }
+    if (kind === 'every') {
+      /* 把「下一次是哪天」直接算出来给用户看 —— 光写「每隔 30 天」看不出会落在哪天。
+         ⚠️ 时间要用弹窗里那个「时间」框里的时刻：pickedDueDate() 只给日期（00:00），
+         光用它会让提示写成「下一次：… 00:00」，和真正会提醒的时间对不上。 */
+      const n = everyDaysVal();
+      const d = dueDate || pickedDueDate();
+      const tv = String((el.tdTime && el.tdTime.value) || '').split(':');
+      const hh = +tv[0], mm = +tv[1];
+      const from = new Date(d.getFullYear(), d.getMonth(), d.getDate(),
+        isFinite(hh) ? hh : 0, isFinite(mm) ? mm : 0, 0, 0).getTime();
+      const next = nextOccurrence(from, { kind: 'every', days: n }, 0);
+      el.tdRepeatHint.textContent = '每隔 ' + n + ' 天' + (next ? '（下一次：' + fmtTodoTime(next) + '）' : '');
+      return;
+    }
     if (kind === 'weekly') {
       const on = [];
       if (el.tdWeekDays) {
@@ -3673,6 +3718,7 @@
     const kind = el.tdRepeat ? el.tdRepeat.value : 'none';
     if (kind === 'none') return null;
     if (kind === 'daily') return { kind: 'daily' };
+    if (kind === 'every') return { kind: 'every', days: everyDaysVal() };
     if (kind === 'weekly') {
       const on = [];
       if (el.tdWeekDays) {
@@ -6002,6 +6048,8 @@
         const kind = el.tdRepeat.value;
         if (el.tdWeekRow) el.tdWeekRow.hidden = kind !== 'weekly';
         if (el.tdMonthRow) el.tdMonthRow.hidden = kind !== 'monthly';
+        if (el.tdEveryRow) el.tdEveryRow.hidden = kind !== 'every';
+        if (kind === 'every' && el.tdEveryDays && !(+el.tdEveryDays.value > 0)) el.tdEveryDays.value = '30';
         if (kind === 'weekly' && el.tdWeekDays) {
           /* 刚切到每周：先按当前选的日期勾一天，别让用户面对一个空选择 */
           const anyOn = el.tdWeekDays.querySelector('button.on');
@@ -6037,6 +6085,17 @@
     if (el.tdMonthDay) {
       el.tdMonthDay.addEventListener('change', function () { updateRepeatHint(pickedDueDate()); });
     }
+    /* 「每隔几天」那个数字框：边打边更新提示；失焦/回车时把越界值和空值收一下 */
+    if (el.tdEveryDays) {
+      const syncEveryDays = function () {
+        const n = everyDaysVal();
+        el.tdEveryDays.value = String(n);
+        updateRepeatHint(pickedDueDate());
+      };
+      el.tdEveryDays.addEventListener('input', function () { updateRepeatHint(pickedDueDate()); });
+      el.tdEveryDays.addEventListener('change', syncEveryDays);
+      el.tdEveryDays.addEventListener('blur', syncEveryDays);
+    }
     /* 改了日期，重复提示里的「每年 X 月 X 日」要跟着变 */
     if (el.tdDate) {
       el.tdDate.addEventListener('change', function () {
@@ -6046,6 +6105,11 @@
           updateRepeatHint(pickedDueDate());
         }
       });
+    }
+    /* 改了时间也要跟着变：「每隔 N 天」的提示里写着下一次的具体时刻 */
+    if (el.tdTime) {
+      el.tdTime.addEventListener('change', function () { updateRepeatHint(pickedDueDate()); });
+      el.tdTime.addEventListener('input', function () { updateRepeatHint(pickedDueDate()); });
     }
 
     if (el.skinSel) {
