@@ -750,7 +750,6 @@
     tdRepeatHint: $('#tdRepeatHint'),
     tdEveryRow: $('#tdEveryRow'),
     tdEveryDays: $('#tdEveryDays'),
-    tdEveryHint: $('#tdEveryHint'),
     tdWeekRow: $('#tdWeekRow'),
     tdWeekDays: $('#tdWeekDays'),
     tdMonthRow: $('#tdMonthRow'),
@@ -2825,10 +2824,16 @@
         repeatText: t.repeat ? repeatLabel(t.repeat) : ''
       };
     }));
-    /* 左边那一栏的备忘录跟着一起推（存盘就推，两边永远一致） */
+    /* 左边那一栏的备忘录跟着一起推（存盘就推，两边永远一致）。
+       ⚠️ doneAt 必须一起推：日历里「已完成的备忘按完成那一天落格」就是靠它算的
+       （cal.js 的 whenOf = doneAt || dueAt）。以前这里只推了 dueAt，于是那条规则
+       永远退回按截止日放，等于没生效（自检 cal-4d 就是抓这个的）。 */
     if (native.calMemos) {
       native.calMemos(memos.map(function (m) {
-        return { id: m.id, text: m.text, done: !!m.done, at: m.at || 0, dueAt: m.dueAt || 0 };
+        return {
+          id: m.id, text: m.text, done: !!m.done, at: m.at || 0,
+          dueAt: m.dueAt || 0, doneAt: m.doneAt || 0
+        };
       }));
     }
   }
@@ -3891,6 +3896,15 @@
     d.setSeconds(0, 0);
     el.tdDate.value = localDateValue(d);
     el.tdTime.value = localTimeValue(d);
+    /* ⚠️ 程序化改值不会触发 input/change，而「⏱ 记 1 次延期」那一行就是靠这两个事件刷新的
+       （见 bindExtendAsk）——不补这一步，用快捷档位把「今天 12:00」改成「明天 9:00」
+       会被当成"往后拖"记一笔延期，用户连取消的机会都没有。 */
+    try {
+      el.tdDate.dispatchEvent(new Event('input', { bubbles: true }));
+      el.tdDate.dispatchEvent(new Event('change', { bubbles: true }));
+      el.tdTime.dispatchEvent(new Event('input', { bubbles: true }));
+      el.tdTime.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) { }
   }
 
   function saveTodoModal() {
