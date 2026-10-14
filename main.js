@@ -42,9 +42,21 @@ let forceDpiPending = false;    // 已发现换屏、等页面那边也反应过
    把计算用的像素比强行当成 150%，跑完存一张截图并退出。
    正常启动（不带参数）这段完全生效不了，一个分支都不会进。
    --diag-avail=WxH 可再模拟那块屏的可用区大小（DIP）。 */
+/* 性能采样模式开关：与自检解耦（自检块跑完会 app.exit，采样器需要长时间运行）。 */
+const PERF = process.argv.some(function (a) { return a.indexOf('--perf-sample') === 0; });
+
 const DIAG = (function () {
+  /* 注意：--perf-* 也要走这里解析，否则只给 --perf-sample 时 DIAG 直接是 null（曾经因此让采样器整晚没跑）*/
   const hit = process.argv.filter(function (a) { return a.indexOf('--diag') === 0; });
-  if (!hit.length) return null;
+  if (!hit.length) {
+    /* 性能采样模式：给 DIAG 一个替身对象。
+       原因：整个自检框架都长在 if (DIAG) 的处理函数里，而那个函数里第一句就是
+       if (DIAG.pet) —— DIAG 为 null 时会在 null 上取属性直接抛异常，
+       后面的性能采样块永远走不到（踩过一次）。
+       替身只带 perfSample，其余字段全是 undefined → 几十个自检分支一个都不会误跑。 */
+    if (process.argv.some(function (a) { return a.indexOf('--perf-sample') === 0; })) return { perfSample: true };
+    return null;
+  }
   const out = { ratio: 0, shot: '', win: '', avail: null, wait: 0 };
   hit.forEach(function (a) {
     let m = /^--diag=([\d.]+)$/.exec(a);
@@ -69,6 +81,8 @@ const DIAG = (function () {
     if (a === '--diag-paper') out.paper = true;
     /* --diag-ppsmoke：我的投稿冒烟测试（多轮返修的各种状态/时间/截稿 + 接收各字段；不测删除） */
     if (a === '--diag-ppsmoke') out.ppsmoke = true;
+    /* 性能测试专用（正式运行不带这些参数，零影响） */
+    if (a === '--perf-sample') out.perfSample = true;
     /* --diag-arxiv-hold：自检时把程序留着不退出（配合外面用真鼠标点气泡） */
     if (a === '--diag-arxiv-hold') { out.arxiv = true; out.arxivHold = true; }
     /* --diag-alertmusic：弹一次休息提醒，点「我休息了」之后音乐就该停（用户报的 bug） */
@@ -642,7 +656,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false,
+      /* 性能实验开关：默认保持原样 false；带 --perf-throttle 时打开正常节流，用于 A/B 对照 */
+      backgroundThrottling: process.argv.indexOf('--perf-throttle') >= 0,
       spellcheck: false
     }
   });
@@ -678,8 +693,9 @@ function createWindow() {
   /* ------------------------------------------------------------- 只跑一次的调试自检
      带 --diag 启动时：等界面画好，读一遍真实几何 + 存一张截图 + 打印出屏物理尺寸，然后退出。
      判据是「出屏物理尺寸」不随模拟的屏幕缩放改变 —— 这正是这次修复要保证的性质。 */
-  if (DIAG) {
+  if (DIAG || PERF) {
     win.webContents.on('did-finish-load', function () {
+      console.log('[PERFDBG] did-finish-load fired. PERF=' + PERF + ' args=' + JSON.stringify(process.argv.filter(function(x){return x.indexOf('--')===0;})));
       diagLog('did-finish-load', {});
       setTimeout(async function () {
         try {
@@ -1172,9 +1188,139 @@ function createWindow() {
               'var ok=false;window.PAPERS._data().forEach(function(x){if((x.title||"")==="【冒烟】改标题测试")ok=true;});' +
               'if(ok){window.PAPERS._data().forEach(function(x){if((x.title||"")==="【冒烟】改标题测试")x.title="【冒烟】第二篇";});}' +
               'return {有标题输入框:had,预填的是原标题:old==="【冒烟】第二篇",改了能存:ok};})()');
+            /* ㉒ 新状态（编辑初审 / 等待编辑决定）+ 其他进展的自定义说明 + 拒稿原因 */
+            SM['22-新状态与自定义说明'] = await jp(
+              '(function(){var P=window.__pp;P.ensure("第二篇");' +
+              'var items=document.querySelectorAll("#paperList .paper-item");var item=null;' +
+              'for(var i=0;i<items.length;i++){if((items[i].textContent||"").indexOf("第二篇")>=0){item=items[i];break;}}' +
+              'if(!item)return {没找到第二篇:true};' +
+              'if(!item.querySelector(".pp-detail")){var h=item.querySelector(".pp-head");if(h)h.click();}' +
+              'P.add("editorReview");P.ok();' +
+              'P.add("awaitingDecision");P.ok();' +
+              'P.add("other");P.set("ppDLabel","送外审");P.ok();' +
+              'P.add("reject");P.set("ppDReason","创新性不足");P.ok();' +
+              'var p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("第二篇")>=0)p=x;});' +
+              'if(!p)return {没找到数据:true};' +
+              'var ts=p.events.map(function(e){return e.type;});' +
+              'var lab=P.row("送外审");var rej=P.row("拒稿");' +
+              'return {加了编辑初审:ts.indexOf("editorReview")>=0,加了等待决定:ts.indexOf("awaitingDecision")>=0,' +
+              ' 自定义说明成了条目名:!!lab,拒稿原因显示在状态后:!!rej&&rej.textContent.indexOf("创新性不足")>=0,' +
+              ' 推导状态:window.PAPERS._status(p).id};})()');
+            /* ㉓ 状态名不再串台：编辑初审 / 审稿中 / 等待编辑决定各自独立（以前共用 review，徽章会显示成第一个）*/
+            SM['23-状态名不串台'] = await jp(
+              '(function(){var P=window.__pp;P.ensure("第二篇");' +
+              'var badge=function(){var its=document.querySelectorAll("#paperList .paper-item");' +
+              ' for(var i=0;i<its.length;i++){if((its[i].textContent||"").indexOf("第二篇")>=0){' +
+              '  var b=its[i].querySelector(".pp-status");return b?String(b.textContent):"";}}return "(不在列表里)";};' +
+              'P.add("editorReview");P.ok();var n1=badge();' +
+              'P.add("awaitingDecision");P.ok();var n2=badge();' +
+              'return {编辑初审时徽章:n1,等待决定时徽章:n2,' +
+              ' 两个名字不串台:(n1==="编辑初审"&&n2==="等待编辑决定")};})()');
             diagLog('ppsmoke', SM);
           }
-          if (DIAG.paper) {
+          /* ================= 性能测试：采样器 + 消融开关（--perf-*）=================
+             只用 app.getAppMetrics()：它自带进程类型，GPU 进程不会被误算进 Renderer。
+             每个进程的 cpu.percentCPUUsage 表示"距上次调用以来"的占用，所以按固定间隔连续调用
+             得到的就是该区间的单核等效百分比；再与 PowerShell 侧的"累计 CPU 秒"交叉核对。
+             仅在带 --perf-sample 时运行。 */
+          /* 性能采样故意不走 DIAG：一旦 DIAG 非 null，自检框架那套「跑完即退出」就会生效，
+             应用几秒就自己退了，采样器根本来不及跑。这里直接读 process.argv。 */
+          if (process.argv.some(function (a) { return a.indexOf('--perf-sample') === 0; })) {
+            console.log('[PERFDBG] 采样块进入');
+            const pfs = require('fs');
+            const ppath = require('path');
+            const argOf = function (name, dflt) {
+              const hit = process.argv.find(function (x) { return x.indexOf('--' + name + '=') === 0; });
+              return hit ? hit.split('=')[1] : dflt;
+            };
+            const label = argOf('perf-label', 'default');
+            const secs = parseInt(argOf('perf-seconds', '45'), 10) || 45;
+            const outDir = ppath.join(__dirname, 'reports', 'performance_optimization', 'raw');
+            try { pfs.mkdirSync(outDir, { recursive: true }); } catch (e) { }
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const csv = ppath.join(outDir, 'appmetrics-' + label + '-' + stamp + '.csv');
+            pfs.writeFileSync(csv, 'label,iso,type,pid,percentCPU,idleWakeupsPerSecond,workingSetMB\n');
+            /* 采样头里记下"窗口是否可见/聚焦"—— 实测这是最大的混淆变量：
+               窗口被遮挡时合成器不出帧（~2%），可见时才是真实负载（~140%）。
+               没有这一列，单次测量之间差 80 倍都无法解释。 */
+            const stateOf = function () {
+              try {
+                if (!win || win.isDestroyed()) return 'visible=-,focused=-,minimized=-';
+                return 'visible=' + (win.isVisible() ? 1 : 0) + ',focused=' + (win.isFocused() ? 1 : 0) +
+                  ',minimized=' + (win.isMinimized() ? 1 : 0);
+              } catch (e) { return 'visible=err'; }
+            };
+            try { pfs.appendFileSync(csv, '# ' + stateOf() + '\n'); } catch (e) { }
+            /* 消融：把 --perf-ablate=xxx 变成 body 上的类（对应 style.css 里那 9 种模式）*/
+            const abl = argOf('perf-ablate', '');
+            if (abl === 'js-off' || abl === 'js-off-minimal' || abl === 'nothing') {
+              /* 真正停掉页面里的 JS 循环：
+                 注意——只覆盖 window.setInterval 是没用的，它只影响"新"调用，
+                 已经存在的定时器照跑（这正是之前那次实验结论失真的原因）。
+                 这里把所有小整数 id 的 interval/timeout 全部清掉，并把 rAF 换掉。
+                 模拟器自己的定时器在**主进程**里，不受影响，所以采样照常。 */
+              win.webContents.executeJavaScript(
+                '(function(){var n=0;for(var i=1;i<200000;i++){clearInterval(i);clearTimeout(i);n++;}' +
+                'window.requestAnimationFrame=function(){return 0;};' +
+                'if("' + abl + '"==="js-off-minimal"){document.body.classList.add("ablate-minimal");}' +
+                'return "已停掉页面定时器与 rAF";})()', true
+              ).then(function (r) { diagLog('perf', { 消融: r }); }).catch(function () { });
+            } else if (abl) {
+              win.webContents.executeJavaScript(
+                'document.body.classList.add("ablate-' + abl + '"); "消融: ' + abl + '"', true
+              ).then(function (r) { diagLog('perf', { 消融: r }); }).catch(function () { });
+            }
+            const t0 = Date.now();
+            const iv = setInterval(function () {
+              /* 心跳：先无条件写一行，确认回调确实在跑（排查用，正式也留着，成本极低）*/
+              try { pfs.appendFileSync(csv, [label, new Date().toISOString(), 'HEARTBEAT', process.pid, 0, 0, 0].join(',') + '\n'); } catch (e) { }
+              let metrics = null;
+              try { metrics = app.getAppMetrics(); }
+              catch (e) {
+                pfs.appendFileSync(csv, [label, new Date().toISOString(), 'ERROR-getAppMetrics', 0, 0, 0,
+                  JSON.stringify(String((e && e.message) || e))].join(',') + '\n');
+              }
+              if (metrics) {
+                try {
+                  metrics.forEach(function (mt) {
+                    const memKB = mt.memory ? (mt.memory.workingSetSize || 0) : 0;
+                    pfs.appendFileSync(csv, [
+                      label, new Date().toISOString(), mt.type, mt.pid,
+                      ((mt.cpu && mt.cpu.percentCPUUsage) || 0).toFixed(1),
+                      ((mt.cpu && mt.cpu.idleWakeupsPerSecond) || 0),
+                      (memKB / 1024).toFixed(0),
+                      stateOf()
+                    ].join(',') + '\n');
+                  });
+                } catch (e2) {
+                  pfs.appendFileSync(csv, [label, new Date().toISOString(), 'ERROR-write', 0, 0, 0,
+                    JSON.stringify(String((e2 && e2.message) || e2))].join(',') + '\n');
+                }
+              }
+              if (Date.now() - t0 > secs * 1000) {
+                clearInterval(iv);
+                try { diagLog('perf', { csv: ppath.basename(csv), seconds: secs, label: label }); } catch (e) { }
+              }
+            }, 1000);
+            diagLog('perf', { 开始采样: label, 秒: secs, csv: ppath.basename(csv) });
+            /* 关键：判断是否落在软件合成（若有，则每帧合成大图层本身就是 CPU 开销来源）*/
+            try { diagLog('perf-gpu', app.getGPUFeatureStatus()); } catch (e) { }
+            /* 性能实验：--perf-win=WxH 会在采样中途把主窗口改尺寸，
+               用于在同一进程里判断「每帧成本是否正比于窗口像素量」。 */
+            const winArg = argOf('perf-win', '');
+            if (winArg) {
+              const mm2 = /^(\d+)x(\d+)$/.exec(winArg);
+              if (mm2 && win && !win.isDestroyed()) {
+                const delayMs = parseInt(argOf('perf-win-delay', '12'), 10) * 1000;
+                setTimeout(function () {
+                  try {
+                    win.setSize(parseInt(mm2[1], 10), parseInt(mm2[2], 10));
+                    diagLog('perf-win', { 改成: winArg, 实际: win.getSize().join('x') });
+                  } catch (e) { }
+                }, delayMs);
+              }
+            }
+          }          if (DIAG.paper) {
             const P = {};
             /* 这个自检块自己备一个等待函数：waitC 是别的自检块里的局部函数，这里拿不到 */
             const waitC = (ms) => new Promise(function (r) { setTimeout(r, ms); });
@@ -6405,7 +6551,8 @@ function createWindow() {
         quitting = true;
         /* --diag-eyequit 要验证「正常退出会不会还原色温」，所以走真正的 app.quit()，
            让 will-quit 跑一遍；其它自检仍然是 app.exit(0) 直接走人。 */
-        if (DIAG.eyequit) { try { app.quit(); } catch (e) { } } else { try { app.exit(0); } catch (e) { } }
+        if (PERF) { /* 性能采样：保持运行，外面采样完再杀进程 */ }
+        else if (DIAG.eyequit) { try { app.quit(); } catch (e) { } } else { try { app.exit(0); } catch (e) { } }
       }, 1500 + (DIAG.wait || 0));
     });
   }

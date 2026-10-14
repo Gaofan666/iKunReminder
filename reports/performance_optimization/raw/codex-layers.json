@@ -1,0 +1,839 @@
+[
+  {
+    "drawsContent": true,
+    "height": 0,
+    "layerId": "2",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "width": 0,
+    "compositingReasonIds": [],
+    "compositingReasons": []
+  },
+  {
+    "backendNodeId": 3,
+    "drawsContent": false,
+    "height": 653,
+    "layerId": "3",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "width": 914,
+    "compositingReasonIds": [
+      "OverflowScrolling"
+    ],
+    "compositingReasons": [
+      "Is a scrollable overflow element using accelerated scrolling."
+    ]
+  },
+  {
+    "backendNodeId": 3,
+    "drawsContent": true,
+    "height": 653,
+    "layerId": "4",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "width": 914,
+    "compositingReasonIds": [
+      "RootScroller",
+      "OverflowScrolling"
+    ],
+    "compositingReasons": [
+      "Is the document.rootScroller.",
+      "Is a scrollable overflow element using accelerated scrolling."
+    ]
+  },
+  {
+    "backendNodeId": 3,
+    "drawsContent": true,
+    "height": 653,
+    "layerId": "5",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "width": 914,
+    "compositingReasonIds": [
+      "RootScroller",
+      "OverflowScrolling"
+    ],
+    "compositingReasons": [
+      "Is the document.rootScroller.",
+      "Is a scrollable overflow element using accelerated scrolling."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 9,
+    "drawsContent": false,
+    "height": 405,
+    "layerId": "6",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "transform": [
+      1,
+      0,
+      0,
+      0,
+      -0.7989572608356469,
+      -0.5835634298254746,
+      0.9396926207859084,
+      -0.0017482653409970391,
+      -0.2907966613950337,
+      -1.2765774907386787,
+      0.3420201433256687,
+      -0.0006363165457221744,
+      -478.0642063631841,
+      647.560250235999,
+      -190.22168357174743,
+      1.3539008066451115
+    ],
+    "width": 2194,
+    "compositingReasonIds": [
+      "3DTransform"
+    ],
+    "compositingReasons": [
+      "Has a 3d transform."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 10,
+    "drawsContent": true,
+    "height": 485,
+    "layerId": "7",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      1,
+      0,
+      0,
+      0,
+      -0.7989572608356469,
+      -0.5835634298254746,
+      0,
+      -0.0017482653409970391,
+      0,
+      0,
+      1,
+      0,
+      -443.23819869852093,
+      672.997386208282,
+      0,
+      1.4301065126947028
+    ],
+    "width": 2194,
+    "compositingReasonIds": [
+      "Trivial3DTransform",
+      "ActiveTransformAnimation",
+      "WillChangeTransform"
+    ],
+    "compositingReasons": [
+      "Has a trivial 3d transform.",
+      "Has an active accelerated transform animation or transition.",
+      "Has a will-change: transform compositing hint."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 9,
+    "drawsContent": true,
+    "height": 411,
+    "layerId": "8",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      1,
+      0,
+      0,
+      0,
+      -0.7989572608356469,
+      -0.5835634298254746,
+      0.9396926207859084,
+      -0.0017482653409970391,
+      -0.2907966613950337,
+      -1.2765774907386787,
+      0.3420201433256687,
+      -0.0006363165457221744,
+      -478.66733458067716,
+      649.3109405254754,
+      -193.04076143410515,
+      1.3591456026681026
+    ],
+    "width": 2200,
+    "compositingReasonIds": [
+      "3DTransform"
+    ],
+    "compositingReasons": [
+      "Has a 3d transform."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 34,
+    "drawsContent": true,
+    "height": 458,
+    "layerId": "9",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      1.0121181011199951,
+      0,
+      0,
+      0,
+      0,
+      1.0121181011199951,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      -111.27423095703125,
+      -131.69239807128906,
+      0,
+      1
+    ],
+    "width": 1097,
+    "compositingReasonIds": [
+      "Trivial3DTransform",
+      "ActiveTransformAnimation"
+    ],
+    "compositingReasons": [
+      "Has a trivial 3d transform.",
+      "Has an active accelerated transform animation or transition."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 35,
+    "drawsContent": true,
+    "height": 1044,
+    "layerId": "10",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      36,
+      58,
+      0,
+      1
+    ],
+    "width": 1485,
+    "compositingReasonIds": [
+      "WillChangeTransform"
+    ],
+    "compositingReasons": [
+      "Has a will-change: transform compositing hint."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 13,
+    "drawsContent": true,
+    "height": 1122,
+    "layerId": "11",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 4,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      21.748504638671875,
+      43.748504638671875,
+      0,
+      1
+    ],
+    "width": 826,
+    "compositingReasonIds": [
+      "BackdropFilter"
+    ],
+    "compositingReasons": [
+      "Has a backdrop filter."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 37,
+    "drawsContent": true,
+    "height": 57,
+    "layerId": "12",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      55.95209884643555,
+      70.54132080078125,
+      0,
+      1
+    ],
+    "width": 57,
+    "compositingReasonIds": [
+      "ActiveOpacityAnimation"
+    ],
+    "compositingReasons": [
+      "Has an active accelerated opacity animation or transition."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 39,
+    "drawsContent": true,
+    "height": 576,
+    "layerId": "13",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      66.21317291259766,
+      97.90419006347656,
+      0,
+      1
+    ],
+    "width": 670,
+    "compositingReasonIds": [
+      "Overlap"
+    ],
+    "compositingReasons": [
+      "Overlaps other composited content."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 290,
+    "drawsContent": true,
+    "height": 573,
+    "layerId": "32",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      67.3532943725586,
+      98.47425842285156,
+      0,
+      1
+    ],
+    "width": 666,
+    "compositingReasonIds": [
+      "Canvas"
+    ],
+    "compositingReasons": [
+      "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 97,
+    "drawsContent": true,
+    "height": 1005,
+    "layerId": "18",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      55.38203811645508,
+      69.97126007080078,
+      0,
+      1
+    ],
+    "width": 708,
+    "compositingReasonIds": [
+      "Overlap"
+    ],
+    "compositingReasons": [
+      "Overlaps other composited content."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 99,
+    "drawsContent": true,
+    "height": 274,
+    "layerId": "14",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      439.6024169921875,
+      43.748504638671875,
+      0,
+      1
+    ],
+    "width": 792,
+    "compositingReasonIds": [
+      "BackdropFilter"
+    ],
+    "compositingReasons": [
+      "Has a backdrop filter."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 112,
+    "drawsContent": false,
+    "height": 544,
+    "layerId": "21",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      472.0958251953125,
+      172.58203125,
+      0,
+      1
+    ],
+    "width": 687,
+    "compositingReasonIds": [
+      "WillChangeTransform"
+    ],
+    "compositingReasons": [
+      "Has a will-change: transform compositing hint."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "drawsContent": true,
+    "height": 544,
+    "layerId": "23",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      855.7461547851562,
+      172.58203125,
+      0,
+      1
+    ],
+    "width": 13,
+    "compositingReasonIds": [
+      "Scrollbar"
+    ],
+    "compositingReasons": [
+      "Is an accelerated scrollbar."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 238,
+    "drawsContent": true,
+    "height": 394,
+    "layerId": "25",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 13,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      439.9365234375,
+      147.34730529785156,
+      0,
+      1
+    ],
+    "width": 779,
+    "compositingReasonIds": [
+      "BackdropFilter"
+    ],
+    "compositingReasons": [
+      "Has a backdrop filter."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "drawsContent": true,
+    "height": 552,
+    "layerId": "27",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      470.1496887207031,
+      170.71975708007812,
+      0,
+      1
+    ],
+    "width": 695,
+    "compositingReasonIds": [],
+    "compositingReasons": []
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 159,
+    "drawsContent": true,
+    "height": 394,
+    "layerId": "26",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 13,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      439.9365234375,
+      319.50537109375,
+      0,
+      1
+    ],
+    "width": 779,
+    "compositingReasonIds": [
+      "BackdropFilter"
+    ],
+    "compositingReasons": [
+      "Has a backdrop filter."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "drawsContent": true,
+    "height": 552,
+    "layerId": "29",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      470.1496887207031,
+      170.71975708007812,
+      0,
+      1
+    ],
+    "width": 695,
+    "compositingReasonIds": [],
+    "compositingReasons": []
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 112,
+    "drawsContent": true,
+    "height": 552,
+    "layerId": "28",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      469.8155822753906,
+      170.30178833007812,
+      0,
+      1
+    ],
+    "width": 695,
+    "compositingReasonIds": [
+      "Viewport",
+      "OverflowScrolling"
+    ],
+    "compositingReasons": [
+      "Is for the visual viewport.",
+      "Is a scrollable overflow element using accelerated scrolling."
+    ]
+  },
+  {
+    "anchorX": 0,
+    "anchorY": 0,
+    "anchorZ": 0,
+    "backendNodeId": 206,
+    "drawsContent": true,
+    "height": 227,
+    "layerId": "15",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "transform": [
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      0.5700598955154419,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      439.6024169921875,
+      508.9173583984375,
+      0,
+      1
+    ],
+    "width": 792,
+    "compositingReasonIds": [
+      "BackdropFilter"
+    ],
+    "compositingReasons": [
+      "Has a backdrop filter."
+    ]
+  },
+  {
+    "backendNodeId": 282,
+    "drawsContent": true,
+    "height": 58,
+    "layerId": "19",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 4,
+    "parentLayerId": "2",
+    "width": 914,
+    "compositingReasonIds": [
+      "Overlap"
+    ],
+    "compositingReasons": [
+      "Overlaps other composited content."
+    ]
+  },
+  {
+    "backendNodeId": 289,
+    "drawsContent": true,
+    "height": 653,
+    "layerId": "16",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 1,
+    "parentLayerId": "2",
+    "width": 914,
+    "compositingReasonIds": [
+      "Viewport",
+      "OverflowScrolling"
+    ],
+    "compositingReasons": [
+      "Is for the visual viewport.",
+      "Is a scrollable overflow element using accelerated scrolling."
+    ]
+  },
+  {
+    "drawsContent": false,
+    "height": 653,
+    "layerId": "1",
+    "offsetX": 0,
+    "offsetY": 0,
+    "paintCount": 0,
+    "parentLayerId": "2",
+    "width": 914,
+    "compositingReasonIds": [
+      "Viewport"
+    ],
+    "compositingReasons": [
+      "Is for the visual viewport."
+    ]
+  }
+]

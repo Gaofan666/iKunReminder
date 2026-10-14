@@ -1,0 +1,18 @@
+{
+  "backgroundThrottlingDisabled": true,
+  "animationContinuesWithoutFocus": true,
+  "unfocusedFramesIn2s": 61,
+  "pauseKeepsCountdown": true,
+  "resumeAdvancesCountdown": true,
+  "projectionMatchesCSS": true,
+  "maxProjectionErrorPixels": 0.0015773296070363705,
+  "cachedGridEnabled": true,
+  "tab-todo": true,
+  "tab-diary": true,
+  "tab-arxiv": true,
+  "tab-settings": true,
+  "tab-home": true,
+  "decorControlledAfterTabs": true,
+  "reminderOpens": true,
+  "reminderCompletes": true
+}

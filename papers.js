@@ -26,8 +26,11 @@
   var EVENTS = [
     { id: 'preparing', name: '准备中', color: '#8A9AA5', state: 'preparing' },
     { id: 'submitted', name: '已投稿', color: '#4A9BD4', state: 'submitted' },
+    { id: 'editorReview', name: '编辑初审', color: '#88A9C9', state: 'editorReview' },
     { id: 'review', name: '审稿中', color: '#7FA8D9', state: 'review' },
+    { id: 'awaitingDecision', name: '等待编辑决定', color: '#8FB3E0', state: 'awaitingDecision' },
     { id: 'opinion', name: '收到意见', color: '#E8B843', state: null, opinion: true },
+    { id: 'reject', name: '拒稿', color: '#D9534F', state: 'rejected', final: true },
     { id: 'accept', name: '接收', color: '#3F9E6E', state: 'accepted', final: true },
     { id: 'index', name: '检索', color: '#4FB3A8', state: null },
     { id: 'withdraw', name: '撤稿', color: '#9B8EA8', state: 'withdrawn', final: true },
@@ -38,11 +41,10 @@
   var KINDS = [
     { id: 'major', name: '大修', state: 'major' },
     { id: 'minor', name: '小修', state: 'minor' },
-    { id: 'resubOther', name: '重投', state: 'submitted' },
-    { id: 'reject', name: '拒稿', state: 'rejected' }
+    { id: 'resubOther', name: '重投', state: 'submitted' }
   ];
   var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', second: '二作', other: '其他参与' };
-  var OPEN_STATES = { preparing: 1, submitted: 1, review: 1, major: 1, minor: 1 };
+  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1 };
 
   var papers = [];
   var editingId = null;
@@ -70,6 +72,7 @@
   function evName(e) {
     var d = evOf(e.type);
     if (d.opinion) { var k = kindOf(D(e).kind); return '收到意见' + (k ? '：' + k.name : ''); }
+    if (e.type === 'other' && D(e).label) return String(D(e).label).slice(0, 30);
     return d.name;
   }
   function dayTs(v) {
@@ -139,6 +142,8 @@
     if (id === 'rejected') return '#D9534F';
     if (id === 'withdrawn') return '#9B8EA8';
     if (id === 'submitted') return '#4A9BD4';
+    if (id === 'editorReview') return '#88A9C9';
+    if (id === 'awaitingDecision') return '#8FB3E0';
     if (id === 'review') return '#7FA8D9';
     return '#8A9AA5';
   }
@@ -216,7 +221,7 @@
       /* ⚠️ 只转换**旧版的状态类型**（major/minor/reject/rejectResubmit → 收到意见 + kind）。
          绝不能把 accept 也算进来：v6 起「接收」是正经类型、带校稿/见刊/检索/DOI 字段，
          一转换就变成「收到意见：接收」—— 用户填在接收里的内容就"跑到收到意见里"了（实测踩过）。 */
-      var kindMap = { major: 'major', minor: 'minor', rejectResubmit: 'resubOther', reject: 'reject' };
+      var kindMap = { major: 'major', minor: 'minor', rejectResubmit: 'resubOther' };
       p.events.forEach(function (e) {
         if (!e.d) e.d = {};
         if (kindMap[e.type]) {
@@ -230,8 +235,12 @@
       /* 老数据里可能留着「收到意见 · kind=接收」：接收是独立状态，还原成 accept 条目并去掉 kind
          （KINDS 里已经没有 accept 了，留着它会选不中、显示成空白） */
       p.events.forEach(function (e) {
-        if (e.type === 'opinion' && (!e.d || !e.d.kind || e.d.kind === 'accept')) {
-          if (e.d && e.d.kind === 'accept') { e.type = 'accept'; delete e.d.kind; }
+        /* 老数据里把「接收 / 拒稿」记成了收到意见的类型 —— 它们现在是独立状态，还原过去 */
+        if (e.type === 'opinion' && e.d && e.d.kind === 'accept') { e.type = 'accept'; delete e.d.kind; }
+        if (e.type === 'opinion' && e.d && e.d.kind === 'reject') {
+          e.type = 'reject';
+          if (e.d.note && !e.d.reason) e.d.reason = e.d.note;
+          delete e.d.kind;
         }
       });
       var out = [];
@@ -334,6 +343,7 @@
      没写日期的（比如论文直接进终态）才退回用当前时间。 */
   function resolveDeadline(p, e) {
     var d = D(e);
+    /* 这里只回答「这条截止了结了吗、完成时间落在哪天」，返回 {done, doneAt}；不要写显示用的 HTML（曾被批量替换误插过一句拒稿原因）。 */
     if (e.type === 'preparing') {
       var sub = null;
       byCreated(p).forEach(function (x) {
@@ -425,7 +435,7 @@
     var counts = {};
     papers.forEach(function (p) { var st = statusOfPaper(p).id; counts[st] = (counts[st] || 0) + 1; });
     var items = [{ id: 'open', name: '进行中' }, { id: 'all', name: '全部' }];
-    ['submitted', 'review', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
+    ['submitted', 'editorReview', 'review', 'awaitingDecision', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
       if (counts[st]) items.push({ id: st, name: statusName(st) + ' ' + counts[st] });
     });
     box.innerHTML = items.map(function (it) {
@@ -459,6 +469,7 @@
       if (sub) return '<span class="pp-ev-ok">已于 ' + fmtDay(sub) + ' 提交</span>';
       return '<span class="pp-ev-tip">点「详细信息」填类型和返修时间</span>';
     }
+    if (e.type === 'reject' && d.reason) return '<span class="pp-ev-tip">' + esc(d.reason) + '</span>';
     if (e.type === 'preparing') {
       var t = [];
       if (d.venue) t.push(esc(d.venue));
@@ -740,9 +751,12 @@
     } else if (t === 'submitted') {
       body =
         field('作者', input('ppDAuthors', d.authors, '按顺序：张三, 李四')) +
-        field('我的角色', '<select class="skin-sel" id="ppDRole">' + Object.keys(ROLES).map(function (k) {
-          return '<option value="' + k + '"' + (k === (d.role || 'first') ? ' selected' : '') + '>' + esc(ROLES[k]) + '</option>';
-        }).join('') + '</select>') +
+        /* 角色：可以从候选里挑，也可以自己写（写什么就显示什么）*/
+        field('我的角色', '<input type="text" id="ppDRole" list="ppRoleList" maxlength="20" value="' +
+          esc(d.role ? (ROLES[d.role] || d.role) : '一作') + '">' +
+          '<datalist id="ppRoleList">' + Object.keys(ROLES).map(function (k) {
+            return '<option value="' + esc(ROLES[k]) + '"></option>';
+          }).join('') + '</datalist>') +
         field('期刊/会议', venueInput('ppDVenue', venue)) +
         field('类型', '<select class="skin-sel" id="ppDVenueType">' +
           '<option value="journal"' + (vtype === 'journal' ? ' selected' : '') + '>期刊</option>' +
@@ -768,6 +782,12 @@
         field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'index') {
       body = field('DOI', input('ppDDoi', d.doi, '10.1109/…', 200)) + field('备注', input('ppDNote', d.note, '可空'));
+    } else if (t === 'reject') {
+      body = field('拒稿原因（可空）', input('ppDReason', d.reason, '比如：创新性不足 / 版面不符 / 建议改投')) +
+        field('备注', input('ppDNote', d.note, '可空'));
+    } else if (t === 'other') {
+      body = field('状态说明（会显示在时间线上）', input('ppDLabel', d.label, '比如：送外审 / 补材料 / 等待答复')) +
+        field('备注', input('ppDNote', d.note, '可空'));
     } else {
       body = field('备注', input('ppDNote', d.note, '可空'));
     }
@@ -827,7 +847,11 @@
       if (ts('ppDDue')) e.at = e.at || dayTs(tsDay(Date.now()));
     } else if (t === 'submitted') {
       d.authors = val('ppDAuthors').slice(0, 200);
-      d.role = val('ppDRole') || 'first';
+      /* 角色存的是 key（一作→first）或自定义文字原样存 */
+      var roleRaw = val('ppDRole');
+      var roleKey = 'first';
+      Object.keys(ROLES).forEach(function (k) { if (ROLES[k] === roleRaw) roleKey = k; });
+      d.role = (roleKey === 'first' && roleRaw && roleRaw !== ROLES.first) ? roleRaw.slice(0, 20) : roleKey;
       d.venue = val('ppDVenue').slice(0, 120);
       d.venueType = val('ppDVenueType') || 'journal';
       d.level = val('ppDLevel').slice(0, 40);
@@ -848,6 +872,12 @@
       d.note = val('ppDNote').slice(0, 300);
     } else if (t === 'index') {
       d.doi = val('ppDDoi').slice(0, 200);
+      d.note = val('ppDNote').slice(0, 300);
+    } else if (t === 'reject') {
+      d.reason = val('ppDReason').slice(0, 200);
+      d.note = val('ppDNote').slice(0, 300);
+    } else if (t === 'other') {
+      d.label = val('ppDLabel').slice(0, 30);
       d.note = val('ppDNote').slice(0, 300);
     } else {
       d.note = val('ppDNote').slice(0, 300);
@@ -996,7 +1026,7 @@
     var lines = ['# 投稿记录', '', '> 导出时间：' + new Date().toLocaleString('sv-SE').slice(0, 16), ''];
     var groups = {};
     papers.forEach(function (p) { var st = statusOfPaper(p).id; (groups[st] = groups[st] || []).push(p); });
-    ['review', 'submitted', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
+    ['review', 'editorReview', 'awaitingDecision', 'submitted', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
       var arr = groups[st];
       if (!arr || !arr.length) return;
       lines.push('## ' + statusName(st) + '（' + arr.length + '）', '');

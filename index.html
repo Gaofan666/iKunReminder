@@ -222,18 +222,18 @@
      这一页只负责显示和改条件，抓的时候界面照样能用。
      点标题 → 用默认浏览器打开 PDF（只放行 arxiv.org 的链接）。 -->
 <main class="layout page" id="pageArxiv" hidden>
-  <!-- 这一页分两块：顶上一排切换「arXiv 订阅 / 我的投稿」。
-       切换条和「我的投稿」都用 grid-column:1/-1 占满整行，所以原来那两栏布局一点没动；
+  <!-- 这一页分两块：顶上一排切换「arXiv 订阅 / 我的论文」。
+       切换条和「我的论文」都用 grid-column:1/-1 占满整行，所以原来那两栏布局一点没动；
        切到哪块就把另一块 hidden 掉（hidden 的元素不参与 grid 排列）。 -->
   <div class="page-switch" id="arxivSwitch">
     <button class="psw-btn on" data-psw="arxiv">📡 arXiv 订阅</button>
-    <button class="psw-btn" data-psw="papers">📄 我的投稿</button>
+    <button class="psw-btn" data-psw="papers">📄 我的论文</button>
   </div>
 
-  <!-- ===== 我的投稿：论文投稿时间与状态监控 ===== -->
+  <!-- ===== 我的论文：论文投稿时间与状态监控 ===== -->
   <section class="card papers-pane" id="paperPane" hidden>
     <div class="col-head">
-      <h2>📄 我的投稿</h2>
+      <h2>📄 我的论文</h2>
       <div class="arxiv-acts">
         <button class="btn sm primary" id="btnPaperAdd">＋ 新增论文</button>
         <button class="btn sm" id="btnPaperExport" title="把全部投稿导出成 Markdown（写年报/简历用）">导出</button>
