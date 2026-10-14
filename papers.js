@@ -520,7 +520,8 @@
       /* 投稿 ddl 要和返修截止一样醒目：同一套变色（临近橙、过期红），不再只是灰色提示 */
       var ddl = '';
       if (+d.due) {
-        ddl = '<span class="' + (isOverdueDay(+d.due) ? 'pp-ev-late' : (isSoonDay(+d.due) ? 'pp-ev-soon' : 'pp-ev-tip')) + '">投稿 ddl ' +
+        /* 投稿 ddl：只要填了就醒目（橙色加粗），不设「临近 7 天」的门槛；只有过期才变红。 */
+      ddl = '<span class="' + (isOverdueDay(+d.due) ? 'pp-ev-late' : 'pp-ev-soon') + '">投稿 ddl ' +
           fmtDay(d.due) + ' · ' + fromNow(d.due) + '</span>';
       }
       return (t.length ? '<span class="pp-ev-tip">' + t.join(' · ') + '</span>' : '') + (ddl ? (t.length ? ' ' : '') + ddl : '');
