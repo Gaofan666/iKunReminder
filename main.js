@@ -875,7 +875,7 @@ function createWindow() {
             await jp('(function(){' +
               'localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));' +
               'localStorage.setItem("kunkun.paperlinks.v1","{}");' +
-              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
+              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).filter(function(m){return String(m.id).indexOf("pm_")===0;}).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
               'var a=window.PAPERS._data();if(a&&a.length){a.length=0;}' +
               'return true;})()');
             await jp('(function(){var t=document.querySelector(".tab-btn[data-tab=arxiv]");if(t)t.click();' +
@@ -993,7 +993,9 @@ function createWindow() {
               '(p.events||[]).forEach(function(x){if(x.type==="accept")e=x;});' +
               'var d=(e&&e.d)||{};' +
               'return {状态:P.st(),徽章:P.badge(),' +
-              ' 接收时间:!!d.proofAt,校稿:!!d.proofAt,见刊:!!d.publishAt,检索:!!d.indexAt,doi:d.doi||"",' +
+              /* ⚠️ 接收时间落在事件的 e.at（那个日期框是通用 ppDAt），不是 d.proofAt——
+                 以前这条断言抄了「校稿」，接收时间丢了照样 true，等于没测。 */
+              ' 接收时间:!!e&&!!e.at,校稿:!!d.proofAt,见刊:!!d.publishAt,检索:!!d.indexAt,doi:d.doi||"",' +
               ' 摘要含见刊:P.row("接收")?P.row("接收").textContent.indexOf("见刊")>=0:false};})()');
 
             /* ⑩ 检索（独立类型） */
@@ -1055,10 +1057,19 @@ function createWindow() {
               'var mine=ms.filter(function(m){return m.text.indexOf("改过标题")>=0;});' +
               'var live=null,done=null;mine.forEach(function(m){if(m.done)done=m;else live=m;});' +
               'var due=p?window.PAPERS._activeDue(p):-1;var liveN=p?window.PAPERS._live(p).length:-1;' +
+              /* ⚠️ 提醒点（remindAt）一定要在这里验：备忘的提醒是 checkMemoDue 按 remindAt 扫的，
+                 remindAt=0 就永远不弹 —— 光有备忘条数、时间对得上，用户还是收不到提醒
+                 （投稿联动生成的备忘没人点过「保存」，以前 remindAt 一直是 0）。
+                 注意别用 KUNKUN_MEMOS.list()：它只回 id/text/dueAt/done 四个字段，
+                 读落盘的 kunkun.todos.v1 才是真值。 */
+              'var raw=JSON.parse(localStorage.getItem("kunkun.todos.v1")||"{}");' +
+              'var st=(raw.memos||[]).filter(function(m){return live&&m.id===live.id;})[0]||{};' +
               'return {备忘总数:n1,再同步还是:n2,幂等:n1===n2,' +
               ' 属于这篇的备忘:mine.length,应该还没了结的截止数:liveN,' +
               ' 有未完成那条:!!live,未完成的文本:live?live.text:"",' +
               ' 当前算出的截止:due,备忘里的截止:live?live.dueAt:0,对得上:!!live&&Math.abs(live.dueAt-due)<1000,' +
+              ' 提前量:st.remindBefore||0,提醒点:st.remindAt||0,' +
+              ' 提醒点算出来了:!!st.remindAt&&!!st.dueAt&&Math.abs(st.remindAt-(st.dueAt-(st.remindBefore||0)))<1000,' +
               ' 有已完成那条:!!done,已完成的文本:done?done.text:""};})()');
 
             /* ⑯ 反向禁止：同步绝不能改动投稿的任何事件（快照前后完全一致） */
@@ -1172,6 +1183,18 @@ function createWindow() {
               'var ok=false;window.PAPERS._data().forEach(function(x){if((x.title||"")==="【冒烟】改标题测试")ok=true;});' +
               'if(ok){window.PAPERS._data().forEach(function(x){if((x.title||"")==="【冒烟】改标题测试")x.title="【冒烟】第二篇";});}' +
               'return {有标题输入框:had,预填的是原标题:old==="【冒烟】第二篇",改了能存:ok};})()');
+            /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
+               「改回内存」只动了内存对象，存储里还留着测试标题 —— 这里把两边的【冒烟】数据都清掉，
+               不然 diag 的临时目录（按进程号命名、进程号会复用）会把残留带进下一次。 */
+            await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'raw.papers=(raw.papers||[]).filter(function(p){return (p.title||"").indexOf("【冒烟】")<0;});' +
+              'localStorage.setItem("kunkun.papers.v1",JSON.stringify(raw));' +
+              'if(window.PAPERS){var a=window.PAPERS._data();' +
+              'for(var i=a.length-1;i>=0;i--){if(String(a[i].title||"").indexOf("【冒烟】")>=0)a.splice(i,1);}' +
+              'window.PAPERS._sync();window.PAPERS.open();}' +
+              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).filter(function(m){return String(m.id).indexOf("pm_")===0;}).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
+              'return true;})()');
+            await new Promise(function (r) { setTimeout(r, 300); });
             diagLog('ppsmoke', SM);
           }
           if (DIAG.paper) {
@@ -1191,7 +1214,7 @@ function createWindow() {
             await jp('(function(){' +
               'localStorage.setItem("kunkun.papers.v1",JSON.stringify({papers:[]}));' +
               'localStorage.setItem("kunkun.paperlinks.v1","{}");' +
-              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
+              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).filter(function(m){return String(m.id).indexOf("pm_")===0;}).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
               'var a=window.PAPERS._data();if(a&&a.length){a.length=0;}' +
               'return true;})()');
             await jp('(function(){var t=document.querySelector(".tab-btn[data-tab=arxiv]");if(t)t.click();' +
@@ -1201,10 +1224,13 @@ function createWindow() {
               'var cols=document.querySelectorAll("#pageArxiv > section.arxiv-col");var hidden=0;' +
               'for(var i=0;i<cols.length;i++)if(cols[i].hidden)hidden++;' +
               'var col=cols[0];' +
+              'var mh=p?getComputedStyle(p).maxHeight:"";' +
+              /* 面板不能是一条固定小高度、也不能随内容无限长：它的 max-height 必须真的算出来
+                 （calc(...) 解析后是个正数像素值），列表区自己滚动。 */
+              'var px=parseFloat(mh);' +
               'return {区块显示:!!p&&!p.hidden,arXiv两栏藏起来了:hidden===2,有筛选条:!!document.getElementById("paperFilter"),' +
-              /* 排版要求：面板和 arXiv 那栏用同一个高度公式（不是固定小条、也不随内容缩） */
-              '面板高度上限:getComputedStyle(p).maxHeight,arXiv栏高度上限:col?getComputedStyle(col).maxHeight:"",' +
-              '列表区:!!document.querySelector(".paper-list")&&getComputedStyle(document.querySelector(".paper-list")).overflowY};})()');
+              ' 面板高度上限:mh,上限是个正数:isFinite(px)&&px>200,' +
+              ' 列表区:!!document.querySelector(".paper-list")&&getComputedStyle(document.querySelector(".paper-list")).overflowY};})()');
 
             /* 打开弹窗先验一件事：字段多、窗口矮的时候，「保存」不能被顶到屏幕外面去
                （用户实测过：找不到保存按钮，只能干瞪眼） */
@@ -1224,13 +1250,22 @@ function createWindow() {
               'var set=function(id,v){var e=document.getElementById(id);if(e)e.value=v;};' +
               'set("ppTitle","【自检】投稿监控用例");set("ppAuthors","张三, 李四");' +
               'set("ppVenue","IEEE TIP");set("ppLevel","CCF A");' +
-              'set("ppSubmitted","2026-09-01");' +
+              /* ⚠️ 新增弹窗里「投稿日期」和「我的角色」以前没有任何代码读取（填了当场丢），
+                 这里按真实路径填进去，后面断言它会落库 —— 那两个框要是又变成摆设，这条会红。 */
+              'set("ppSubmitted","2026-09-01");set("ppRole","corresponding");' +
               'document.getElementById("paperSave").click();return true;})()');
             await waitC(500);
             P['2-新增一条'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
               'var p=(raw.papers||[]).filter(function(x){return x.title==="【自检】投稿监控用例";})[0];' +
+              'var e0=p&&(p.events||[])[0];' +
+              'var evD=(e0&&e0.d)||{};' +
+              'var d0=e0&&e0.at?new Date(e0.at):null;var p2=function(n){return n<10?"0"+n:String(n);};' +
               'return {存下来了:!!p,期刊:p?p.venue:"",等级:p?p.level:"",' +
-              '条目数:p?(p.events||[]).length:0,第一条是已投稿:!!p&&(p.events||[])[0]&&(p.events||[])[0].type==="submitted",' +
+              '条目数:p?(p.events||[]).length:0,第一条是已投稿:!!e0&&e0.type==="submitted",' +
+              /* 新增弹窗里填的「投稿日期」「我的角色」必须落库（以前这两个框没人读） */
+              '投稿日期对:d0?(d0.getFullYear()+"-"+p2(d0.getMonth()+1)+"-"+p2(d0.getDate())):"",' +
+              '投稿日期存对了:!!d0&&(d0.getFullYear()+"-"+p2(d0.getMonth()+1)+"-"+p2(d0.getDate()))==="2026-09-01",' +
+              '我的角色:evD.role||"",角色跟着存了:evD.role==="corresponding",' +
               '推导状态:window.PAPERS._status(p).id,状态名:document.querySelector("#paperList .pp-status").textContent,' +
               '列表行数:document.querySelectorAll("#paperList .paper-item").length,' +
               '统计:document.getElementById("paperStats").textContent};})()');
@@ -1280,13 +1315,26 @@ function createWindow() {
               '推导状态:window.PAPERS._status(p).id,' +
               '时间线行数:document.querySelector("#paperList .paper-item").querySelectorAll(".pp-ev").length};})()');
 
-            /* 删掉 4b 里那条「返修截止」（一次只删一条：删除会重绘，抓着的旧节点点不动），
-               免得留下一个没人配对的孤儿截止，把后面 6/6b 的断言带偏 */
+            /* 把 4b 里那条「返修截止」清掉，免得留下一个没人配对的孤儿截止，把后面 6/6b 的断言带偏。
+               ⚠️ 走「详细信息 → 把返修截止清空 → 保存」这条真实路径。
+               绝不能去点那条状态行上的 ✕：那是 papers.js 里的 window.confirm 删除确认，
+               渲染进程会被系统模态框挡住，executeJavaScript 的 promise 永不 resolve，
+               自检直接卡死（日志不写、收尾不跑、进程不退出）—— 实测卡了三分多钟。 */
             await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
-              'var rows=it.querySelectorAll(".pp-ev");' +
-              'for(var i=0;i<rows.length;i++){' +
-              'if(rows[i].textContent.indexOf("返修截止")>=0){rows[i].querySelector("[data-role=evdel]").click();return true;}}' +
-              'return false;})()');
+              'if(!it.querySelector(".pp-detail"))it.querySelector(".pp-head").click();' +
+              'var row=Array.prototype.find.call(it.querySelectorAll(".pp-ev"),function(r){' +
+              'return r.textContent.indexOf("返修截止")>=0;});' +
+              'if(!row)return {error:"没有带返修截止的那条"};' +
+              'var b=row.querySelector("[data-role=evdetail]");if(!b)return {error:"没有详细信息按钮"};' +
+              'b.click();return true;})()');
+            await waitC(450);
+            P['5b-清空返修截止'] = await jp('(function(){var d=document.getElementById("ppOpDue");' +
+              'if(!d)return {error:"没有返修截止输入框"};var was=String(d.value||"");' +
+              'd.value="";document.getElementById("ppOpOk").click();' +
+              'var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'var p=(raw.papers||[])[0];var e=null;(p.events||[]).forEach(function(x){if(x.type==="opinion")e=x;});' +
+              'return {清之前:was,清之后:(e&&e.d)?!!e.d.dueAt:"(没有这条意见)",' +
+              ' 时间线上还有返修截止:document.querySelector("#paperList .paper-item").textContent.indexOf("返修截止")>=0};})()');
             await waitC(400);
             /* 交掉这一轮：在同一个「详细信息」里填上「提交返修稿」→ 列表上不该再报警 */
             await jp('(function(){var it=document.querySelector("#paperList .paper-item");' +
@@ -1323,10 +1371,23 @@ function createWindow() {
             P['8-删除'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
               'return {剩几条:(raw.papers||[]).length,列表行数:document.querySelectorAll("#paperList .paper-item").length};})()');
 
+            /* 收尾：把自检造的论文清掉。
+               ⚠️ 只改 localStorage 不够 —— 内存里的 papers 数组还留着这些【自检】论文，
+               而 PAPERS.open() 只 render + syncMemos（不重新 load），于是它们会被当成"活的"，
+               给已经不存在的论文重建一批孤儿备忘写进 kunkun.todos.v1。
+               所以这里连内存一起清，再 _sync() 一次把联动备忘（pm_ 开头）收干净。 */
             await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
               'raw.papers=(raw.papers||[]).filter(function(p){return (p.title||"").indexOf("【自检】")<0;});' +
               'localStorage.setItem("kunkun.papers.v1",JSON.stringify(raw));' +
-              'if(window.PAPERS)window.PAPERS.open();return true;})()');
+              'if(window.PAPERS){var a=window.PAPERS._data();' +
+              'for(var i=a.length-1;i>=0;i--){if(String(a[i].title||"").indexOf("【自检】")>=0)a.splice(i,1);}' +
+              'window.PAPERS._sync();window.PAPERS.open();}' +
+              'if(window.KUNKUN_MEMOS){(window.KUNKUN_MEMOS.list()||[]).filter(function(m){return String(m.id).indexOf("pm_")===0;}).forEach(function(m){window.KUNKUN_MEMOS.remove(m.id);});}' +
+              'return true;})()');
+            await waitC(400);
+            P['9-收尾'] = await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
+              'return {论文剩:(raw.papers||[]).length,内存里剩:(window.PAPERS?window.PAPERS._data().length:-1),' +
+              ' 联动备忘剩:(window.KUNKUN_MEMOS?(window.KUNKUN_MEMOS.list()||[]).filter(function(m){return String(m.id).indexOf("pm_")===0;}).length:-1)};})()');
             diagLog('paper', P);
           }
           if (DIAG.tab) {
