@@ -2696,6 +2696,7 @@
           lateCount: 0, lateMs: 0, lateReason: '', lateOpen: false, lateLog: [], lateDue: 0,
           extCount: 0, extLog: []
         });
+        m = memos[memos.length - 1];
         changed = true;
       } else {
         if (m.text !== t) { m.text = t; changed = true; }
@@ -2710,6 +2711,12 @@
           changed = true;
         }
       }
+      /* ⚠️ remindAt 必须在这里算出来：备忘的提醒是 checkMemoDue 按 remindAt 扫的，
+         remindAt 一直是 0 就永远不会弹（这条备忘只能靠列表/日历/桌宠气泡看见）。
+         以前只有用户在备忘弹窗里点保存才会算，投稿联动生成的备忘没人点过，
+         于是「提前一天提醒」这句承诺是空的 —— 自检 ppsmoke 也测不出来（它只查备忘条数）。 */
+      const wantRemind = m.done ? 0 : nextMemoRemind({ dueAt: m.dueAt, remindBefore: m.remindBefore, remindEvery: m.remindEvery, done: false });
+      if (m.remindAt !== wantRemind) { m.remindAt = wantRemind; changed = true; }
       if (changed) saveTodoStore();
       return changed;
     },
@@ -4348,7 +4355,7 @@
     /* 关于那行：版本 + 版权 + 许可一句话 + 数据都在本机。
        ⚠️ 版权信息只在这里和 LICENSE / 安装向导里出现，发版说明里不提。 */
     if (el.setAbout) {
-      el.setAbout.innerHTML = '别感冒提醒器 v4.6 · © 2026 goafan（goafan@163.com）<br>' +
+      el.setAbout.innerHTML = '别感冒提醒器 v4.7 · © 2026 goafan（goafan@163.com）<br>' +
         '个人免费使用，<b>禁止商业用途</b>（PolyForm Noncommercial 1.0.0，商业授权请联系上面邮箱）。' +
         '数据全部存在本机，只有「检查更新」会访问 GitHub。';
     }

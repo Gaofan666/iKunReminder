@@ -1,20 +1,20 @@
 {
-  "version": "4.6.0",
-  "releaseDate": "2026-10-13T14:44:16.623Z",
-  "notes": "## iKunReminder v4.6\n\n1. ⏱ **「延期」不再是一刀切**\n   · 编辑时把时间**往后挪**，弹窗里会多一行 **「⏱ 记 1 次延期」（默认勾上）**。要是当初只是把时间**填错了**，就把勾去掉 —— 时间照样改，但**不计这笔延期**。\n   · 改早、清空时间、新增条目时这行不出现；用「明天 9:00」这类**快捷档位**改时间，这行也会正确刷出来。\n   · 修：那行提示保存后还留在弹窗里（打开弹窗时忘了复位），现在一进来就收起。\n   · 修：待办卡的「编辑」按钮悬停时一直闪（主循环每轮都重建列表，鼠标下的悬停被重置），现在只刷新「还有多久 / 已过期」两处文字。\n\n2. 🗓 **桌面日历里的备忘**\n   · **已完成的折叠起来**：左栏默认只列没做完的，底下一条「已完成 N 条 ▾」，点一下才展开。\n   · **已完成的按「完成那一天」落格**：昨天做完的就显示在昨天，而不是它原来那个截止日；格子里已完成那条灰化 + ✅，当天清单里也写明「备忘已完成 时间」。\n   · **左栏按时间排**：最上面是最先到期的；没填截止时间的沉到最底。\n   · **备忘提醒的提前量多了两档**：截止前 **10 天** / 截止前 **2 周**（原来最多 1 周）。\n\n3. 💬 **关主窗口时那句「坤坤躲到托盘里了」**\n   · 改走桌宠自己的气泡小窗，贴在**屏幕右下角（托盘那个角）**，显示时长跟着「💬 气泡显示时长」这个设置走（默认 3 秒）—— 以前是系统气泡，停留多久由系统定、改不了。\n   · 气泡按内容自动定尺寸（长文本仍按默认宽折行），外观也更清爽一点：左侧一道青色标记、圆角更大、一层很淡的外投影。\n\n4. 🧰 这几版（v4.5.0 ~ v4.6）合起来的新东西都在：日历左侧备忘折叠 / 按完成日落格 / 提前量两档、延期勾选框、关窗提示气泡，以及上一版的「待办每隔 N 天重复」和更早的桌宠点击范围、分类、逾期统计等。\n\n**下载**：`iKunReminder-setup-v4.6.0.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121885187,
-  "sha512": "YK7AP3wHyp1XQdsMTZUSwHw8ldiyHVwaDUuyJszvQYiQTbGyEpXF4Wzdj/+mFyvRgq1sbkmkE6AIpiZr4G/kCQ==",
+  "version": "4.7.0",
+  "releaseDate": "2026-10-14T11:58:10.979Z",
+  "notes": "## iKunReminder v4.7\n\n1. 📄 **「科研动态」页里多了「我的投稿」** —— 论文从投稿到接收，全过程都记在这里\n   · 一篇论文 = 一个标题 + 一串**状态条目**：准备中 / 已投稿 / 审稿中 / 收到意见 / 接收 / 检索 / 撤稿 / 其他进展。\n   · 新增时填标题，选「准备中」（顺手填**投稿 ddl**）或「已投稿」（顺手填**投稿日期**和我的角色）；作者 / 期刊 / 级别 / 链接这些点条目右侧「详细信息」填。\n   · **一轮返修就是一条**：返修截止和提交返修稿都记在「收到意见」那条里；没交的会倒计时，**临近 7 天变橙、过了截止标红**。\n   · **当前状态不用手填**，按条目自动推出来；列表能按「进行中 / 全部 / 各状态」筛选，顶部有统计（共几篇、进行中、平均审稿周期、平均几轮意见）。\n   · 「论文完整信息」看全过程，标题随时能改；整份记录可以导出成 Markdown；删条目 / 删论文都会先问一句，删错能「撤销」找回。\n\n2. 🔗 **投稿截止自动进备忘和日历**\n   · 投稿里**还没了结**的截止（准备中的投稿 ddl、还没交的返修截止）自动生成一条备忘 —— **提前一天开始提醒**，日历上也能看到。\n   · 在投稿里改了截止，备忘跟着改；**投出去 / 交了返修稿**之后那条备忘自动完成，完成时间落在投稿那天 / 交稿那天。\n   · 这类备忘的文字和日期跟着投稿走（列表里带一把小锁），提醒时间、分类、提醒频率可以照常自己设。\n\n3. 🧰 顺手修好的几处\n   · **打包版缺文件**：`papers.js` 没写进打包白名单，装出来的版本「我的投稿」整块打不开（开发模式看不出来）—— 已修。\n   · **联动备忘以前永远不提醒**：提醒点一直是 0，只有列表 / 日历 / 桌宠气泡看得到 —— 现在「提前一天提醒」是真的了。\n   · **新增论文弹窗里那三个框填了没用**（投稿 ddl / 我的角色 / 投稿日期），现在按「准备中 / 已投稿」显示对应那一行，填了就存。\n   · **截止倒计时差一天**：ddl 是明天会显示「就是今天」，截稿日当天一整天显示「已过期 1 天」并标红 —— 已改成按「当天」比。\n   · **清空截止被当成完成**：会把备忘标成「已完成（今天）」，之后填回同一日期也一直停在已完成 —— 现在只有真的投出去 / 交稿才算完成。\n   · 另外：投稿数据读取出错时不再往下覆盖写盘（先备份、停止保存）、筛选没记录时自动退回「全部」、导出不再出现「### undefined」、已完成的联动备忘里小锁和 ✓ 不再叠在一起。\n\n**下载**：`iKunReminder-setup-v4.7.0.exe`（约 116 MB，Windows x64，双击安装）\n",
+  "size": 121913828,
+  "sha512": "bhqqKja2L5XjXKFho686HgstRhVUnJzJiB1rTSsdusHhcgJsiGVOCbg+JalABcA3l1j1kQWa4glgdoVQgeIYqw==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.6/iKunReminder-setup-v4.6.0.exe.part1",
-      "size": 60942594,
-      "sha512": "AN+0Q8QVx64YyaKKBhkthMQJ8zE8gBTUVDgoMe4nFHXZ14gFSUN7j5+tUHJSC2rbSqzbloAXTdpk2pOp+jY/XQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7/iKunReminder-setup-v4.7.0.exe.part1",
+      "size": 60956914,
+      "sha512": "EVvC6VqCamcUWXzC0RGGfbHsVUXfVgJq1JFia3jk7SyRAUAT4h4Of3hlSk8CCHnqzCkJmXJs9E2R4SmnWqqc+A==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.6/iKunReminder-setup-v4.6.0.exe.part2",
-      "size": 60942593,
-      "sha512": "ARUrwL5y6FdskjnffyaNLKfoqTbepNLOokN9nDDqBj+FW+p3CDOdsb8sNcRKO6BPoZx7O0y1cMjKOmEDDsMOOw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7/iKunReminder-setup-v4.7.0.exe.part2",
+      "size": 60956914,
+      "sha512": "rMoNbh/vhtk4Di+ylND1Vbmy/F04Nt79YRPX2EDc8T301fqGUAsVXmclFXnsx7Kt6AejTUsOQnHP+scrqtToTQ==",
       "index": 2
     }
   ]

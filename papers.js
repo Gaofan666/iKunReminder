@@ -91,9 +91,21 @@
     return (d.getMonth() + 1) + '月' + d.getDate() + '日';
   }
   function days(a, b) { return Math.round((b - a) / 86400000); }
+  /* ⚠️ 这些日期都是「某一天」，不带时刻（dayTs 存的就是本地零点）。
+     所以「还剩几天 / 过期没有」必须拿**今天零点**去比，不能拿 Date.now() 比：
+     拿瞬时比的话，ddl 是明天会显示「就是今天」，ddl 当天一整天都会显示「已过期 1 天」并标红
+     （用户视角：截稿日当天一早就变红了）。 */
+  function midnight(ts) {
+    var d = new Date(ts || Date.now());
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }
+  function daysFromToday(ts) { return days(midnight(Date.now()), midnight(ts)); }
+  function isOverdueDay(ts) { return !!ts && midnight(ts) < midnight(Date.now()); }
+  function isSoonDay(ts) { return !!ts && !isOverdueDay(ts) && daysFromToday(ts) <= 7; }
   function fromNow(ts) {
     if (!ts) return '';
-    var d = days(Date.now(), ts);
+    var d = daysFromToday(ts);
     if (d === 0) return '就是今天';
     return d > 0 ? ('还有 ' + d + ' 天') : ('已过期 ' + (-d) + ' 天');
   }
@@ -184,12 +196,28 @@
   }
 
   /* ------------------------------------------------------------ 存储 + 迁移 */
+  /* ⚠️ 读失败（JSON 坏了、迁移抛错）时**不许再写盘**：以前 catch 里只是 papers=[]，
+     之后任何一次保存（新增一条、改标题、删条目）都会把这个空数组写回去，
+     用户攒了几个月的投稿就一次性没了。现在读失败会把原始串备份到一个单独的键，
+     并置 saveBlocked 让 save() 拒绝覆盖 —— 宁可这一次改动没存上，也不能把老数据抹掉。 */
+  var saveBlocked = false;
+  var saveWarned = false;
   function load() {
     papers = [];
+    saveBlocked = false;
+    var rawText = null;
     try {
-      var raw = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+      rawText = localStorage.getItem(STORE_KEY) || '{}';
+      var raw = JSON.parse(rawText);
       if (raw && Array.isArray(raw.papers)) papers = raw.papers.filter(Boolean).map(migrate);
-    } catch (e) { papers = []; }
+    } catch (e) {
+      papers = [];
+      saveBlocked = true;
+      try {
+        if (rawText && rawText !== '{}') localStorage.setItem(STORE_KEY + '.broken.' + Date.now(), rawText);
+      } catch (e2) { }
+      try { console.warn('[我的投稿] 读取出错：已备份原始数据并停止写盘', e); } catch (e3) { }
+    }
   }
   /* 老结构一路搬过来：固定日期 → 条目；独立「返修截止/返修已提交」→ 并进前一条「收到意见」；
      记录上的期刊/等级/角色 → 落到第一个「已投稿」条目的详细信息里（列表显示要用）。 */
@@ -289,6 +317,13 @@
     return p;
   }
   function save() {
+    if (saveBlocked) {
+      if (!saveWarned) {
+        saveWarned = true;
+        flash('投稿数据读取出错，这次改动没有保存（原数据已备份）');
+      }
+      return;
+    }
     try { localStorage.setItem(STORE_KEY, JSON.stringify({ papers: papers })); } catch (e) { }
     syncMemos();
   }
@@ -376,22 +411,27 @@
         var old = L[it.evId] || {};
         var memoId = old.memoId || ('pm_' + it.evId);
         live[it.evId] = 1;
-        /* 只有"投稿这边的截止变了"才把 dueAt 推过去；
-           否则 dueAt 传 0（不动它）—— 你在备忘里自己延期，不会被投稿改回去，
-           投稿这边也不会因为备忘改了就被反向修改（用户明确要求禁止反向）。 */
-        var push = (+old.due || 0) !== it.due;
-        bridge.upsert(memoId, deadlineText(p, evById(p, it.evId) || { type: 'preparing' }), push ? it.due : 0, 86400000, push);
+        /* 只推 dueAt：投稿这边的截止变了才动备忘的截止时间；备忘自己那边（提醒时间/分类、
+           以及用户手改过的截止）不会被反向修改（用户明确要求禁止反向）。
+           ⚠️ forceDue 一直给 true：桥那头是「due 和现在不一样才改」，重复调用是空操作；
+           以前这里靠映射里记的 due 判断，映射一旦没跟上（比如截止被清空过、又被填回同一个日期），
+           那次就永远是 false，备忘会一直停在"已完成"。 */
+        bridge.upsert(memoId, deadlineText(p, evById(p, it.evId) || { type: 'preparing' }), it.due, 86400000, true);
         L[it.evId] = { memoId: memoId, paperId: p.id, evId: it.evId, field: it.field, due: it.due };
       });
     });
-    /* 已经了结的（交掉了 / 投出去了 / 进了终态）：备忘标记完成 + 完成时间落在真实那天 */
+    /* 已经了结的（交掉了 / 投出去了 / 进了终态）：备忘标记完成 + 完成时间落在真实那天。
+       ⚠️ 只有 resolveDeadline 说"真的了结"才 finish；截止被清空（用户把那个日期删了）
+       不是完成 —— 那种情况这条截止已经不存在了，生成出来的备忘该直接删掉，
+       否则会被标成"已完成（今天）"，在日历上凭空多出一天完成记录。 */
     Object.keys(L).forEach(function (evId) {
       if (live[evId]) return;
       var ent = L[evId];
       var p = byId(ent.paperId);
       var e = p ? evById(p, evId) : null;
-      var res = (p && e) ? resolveDeadline(p, e) : { done: true, doneAt: 0 };
-      bridge.finish(ent.memoId, (p && e) ? deadlineText(p, e) : null, res.doneAt || 0);
+      var res = (p && e) ? resolveDeadline(p, e) : { done: false, doneAt: 0 };
+      if (res.done) bridge.finish(ent.memoId, (p && e) ? deadlineText(p, e) : null, res.doneAt || 0);
+      else bridge.remove(ent.memoId);
     });
     saveLinks(L);
   }
@@ -434,6 +474,9 @@
     if (!box) return;
     var counts = {};
     papers.forEach(function (p) { var st = statusOfPaper(p).id; counts[st] = (counts[st] || 0) + 1; });
+    /* ⚠️ 筛的那个状态可能已经没有论文了（删掉它下面最后一篇、或那篇换了状态）：
+       这种按钮不会再生成，界面就会「一个都没高亮、列表还空着」。先退回「全部」。 */
+    if (filter !== 'all' && filter !== 'open' && !counts[filter]) filter = 'all';
     var items = [{ id: 'open', name: '进行中' }, { id: 'all', name: '全部' }];
     ['submitted', 'editorReview', 'review', 'awaitingDecision', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
       if (counts[st]) items.push({ id: st, name: statusName(st) + ' ' + counts[st] });
@@ -465,7 +508,7 @@
     if (evOf(e.type).opinion) {
       var due = +d.dueAt || 0, sub = +d.submitAt || 0;
       if (due && sub) return '<span class="pp-ev-ok">截止 ' + fmtDay(due) + ' · 已于 ' + fmtDay(sub) + ' 提交</span>';
-      if (due) return '<span class="' + (due < Date.now() ? 'pp-ev-late' : 'pp-ev-soon') + '">返修截止 ' + fmtDay(due) + ' · ' + fromNow(due) + '</span>';
+      if (due) return '<span class="' + (isOverdueDay(due) ? 'pp-ev-late' : (isSoonDay(due) ? 'pp-ev-soon' : 'pp-ev-tip')) + '">返修截止 ' + fmtDay(due) + ' · ' + fromNow(due) + '</span>';
       if (sub) return '<span class="pp-ev-ok">已于 ' + fmtDay(sub) + ' 提交</span>';
       return '<span class="pp-ev-tip">点「详细信息」填类型和返修时间</span>';
     }
@@ -477,7 +520,7 @@
       /* 投稿 ddl 要和返修截止一样醒目：同一套变色（临近橙、过期红），不再只是灰色提示 */
       var ddl = '';
       if (+d.due) {
-        ddl = '<span class="' + (+d.due < Date.now() ? 'pp-ev-late' : 'pp-ev-soon') + '">投稿 ddl ' +
+        ddl = '<span class="' + (isOverdueDay(+d.due) ? 'pp-ev-late' : (isSoonDay(+d.due) ? 'pp-ev-soon' : 'pp-ev-tip')) + '">投稿 ddl ' +
           fmtDay(d.due) + ' · ' + fromNow(d.due) + '</span>';
       }
       return (t.length ? '<span class="pp-ev-tip">' + t.join(' · ') + '</span>' : '') + (ddl ? (t.length ? ' ' : '') + ddl : '');
@@ -543,8 +586,8 @@
     var open = openedId === p.id;
     var m = paperMeta(p);
     var due = activeDue(p);
-    var overdue = due && due < Date.now();
-    var soon = due && !overdue && days(Date.now(), due) <= 7;
+    var overdue = isOverdueDay(due);
+    var soon = isSoonDay(due);
     var dueLabel = (st.id === 'preparing') ? '投稿 ddl ' : '返修 ';
     var bits = [];
     if (m.venue) bits.push('<span class="pp-venue">' + esc(m.venue) + '</span>');
@@ -597,6 +640,11 @@
     var prep = mode === 'preparing';
     if ($('ppModePrep')) $('ppModePrep').classList.toggle('on', prep);
     if ($('ppModeSub')) $('ppModeSub').classList.toggle('on', !prep);
+    /* ⚠️ 这两行必须跟着模式切：准备中填「投稿 ddl」、已投稿填「投稿日期」。
+       以前只切了按钮的高亮，两行永远停在初始状态（「投稿日期」那行压根打不开），
+       而 saveModal 又不读这两个框 —— 用户在新增弹窗里填的日期当场被丢掉。 */
+    if ($('ppSubmitDueRow')) $('ppSubmitDueRow').hidden = !prep;
+    if ($('ppSubmittedRow')) $('ppSubmittedRow').hidden = prep;
   }
   function openModal(id) {
     editingId = id || null;
@@ -606,6 +654,16 @@
     paintMode('preparing');
     var row = $('paperModeRow');
     if (row) row.hidden = !!p;
+    if (p) {
+      /* 改标题：日期那两行藏起来（这一次只改标题，别让人以为填了会存） */
+      if ($('ppSubmitDueRow')) $('ppSubmitDueRow').hidden = true;
+      if ($('ppSubmittedRow')) $('ppSubmittedRow').hidden = true;
+    } else {
+      /* 新增：把三个框清干净，别留着上一次的值让人以为已经填好了 */
+      if ($('ppSubmitDue')) $('ppSubmitDue').value = '';
+      if ($('ppSubmitted')) $('ppSubmitted').value = '';
+      if ($('ppRole')) $('ppRole').value = 'first';
+    }
     var ov = $('paperOverlay');
     if (ov) ov.hidden = false;
     if ($('ppTitle')) { try { $('ppTitle').focus(); } catch (e) { } }
@@ -623,7 +681,18 @@
     }
     var isPrep = $('ppModePrep') ? $('ppModePrep').classList.contains('on') : true;
     var np = { id: newId('pp'), title: title, createdAt: Date.now(), updatedAt: Date.now(), events: [] };
-    np.events.push({ id: newId('ev'), type: isPrep ? 'preparing' : 'submitted', at: dayTs(tsDay(Date.now())), createdAt: Date.now(), d: {} });
+    var ev = { id: newId('ev'), type: isPrep ? 'preparing' : 'submitted', at: dayTs(tsDay(Date.now())), createdAt: Date.now(), d: {} };
+    /* 弹窗里填的「我的角色」和日期要真的存下来（以前这三个框没有任何代码读取） */
+    var role = $('ppRole') ? String($('ppRole').value || '') : '';
+    if (role) ev.d.role = role;
+    if (isPrep) {
+      var ddl = dayTs($('ppSubmitDue') ? $('ppSubmitDue').value : '');
+      if (ddl) ev.d.due = ddl;                 // 准备中：这就是那个会进备忘的投稿 ddl
+    } else {
+      var subDay = dayTs($('ppSubmitted') ? $('ppSubmitted').value : '');
+      if (subDay) ev.at = subDay;              // 已投稿：投出去那天
+    }
+    np.events.push(ev);
     papers.unshift(np);
     openedId = np.id;
     save(); closeModal(); render();
@@ -1032,7 +1101,7 @@
       lines.push('## ' + statusName(st) + '（' + arr.length + '）', '');
       arr.forEach(function (p) {
         var m = paperMeta(p);
-        lines.push('### ' + p.title);
+        lines.push('### ' + (p.title || '（没写标题）'));
         var meta = [];
         if (m.venue) meta.push('期刊/会议：' + m.venue);
         if (m.level) meta.push('等级：' + m.level);

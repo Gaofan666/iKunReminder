@@ -38,6 +38,7 @@
       "index.html",
       "style.css",
       "app.js",
+      "papers.js",
       "arxiv.js",
       "arxiv-db.js",
       "arxiv-service.js",
