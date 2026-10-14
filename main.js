@@ -1227,7 +1227,40 @@ function createWindow() {
               'P.add("awaitingDecision");P.ok();var n2=badge();' +
               'return {编辑初审时徽章:n1,等待决定时徽章:n2,' +
               ' 两个名字不串台:(n1==="编辑初审"&&n2==="等待编辑决定")};})()');
-            /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
+            /* ㉖ 时长：完整信息顶部有概览（投出/首轮审稿/返修），时间线逐段显示 +N 天。
+               为了不是"空过"，这里用数据层把第一条状态改到 30 天前，验证真的算出 +30 天。 */
+            SM['26-时长显示'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】时长";' +
+              'var m=document.getElementById("ppModePrep");if(m)m.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("submitted");P.ok();' +
+              'var ps=window.PAPERS._data().filter(function(x){return (x.title||"")==="【冒烟】时长";});' +
+              'if(!ps.length)return {没建出这篇:true};' +
+              'var p0=ps[0];var evs=(p0.events||[]).slice().sort(function(a,b){return (+a.at||0)-(+b.at||0);});' +
+              'if(evs.length<2)return {条目不够两条:true};' +
+              'evs[0].at=Date.now()-30*86400000;' +
+              'window.PAPERS._sync();window.PAPERS.open();' +
+              'var items=document.querySelectorAll("#paperList .paper-item");var item=null;' +
+              'for(var i=0;i<items.length;i++){if((items[i].textContent||"").indexOf("时长")>=0){item=items[i];break;}}' +
+              'if(!item)return {列表里没找到:true};' +
+              'if(!item.querySelector(".pp-detail")){var hh=item.querySelector(".pp-head");if(hh)hh.click();' +
+              ' items=document.querySelectorAll("#paperList .paper-item");' +
+              ' for(var j=0;j<items.length;j++){if((items[j].textContent||"").indexOf("时长")>=0){item=items[j];break;}}}' +
+              'var b=item.querySelector("[data-role=timeline]");if(!b)return {没有完整信息按钮:true};b.click();' +
+              'var ov=document.getElementById("ppTimelineOverlay");if(!ov)return {小窗没开:true};' +
+              'var dur=ov.querySelector(".pp-tl-dur");var gaps=ov.querySelectorAll(".pp-ev-gap");' +
+              'var dates=ov.querySelectorAll(".pp-tl-date").length;' +
+              'var first=gaps.length?String(gaps[0].textContent).trim():"";' +
+              'var out={有概览:!!dur,概览: dur?String(dur.textContent):"",' +
+              ' 概览里有投出:!!dur&&dur.textContent.indexOf("投出")>=0,' +
+              ' 逐段条数:gaps.length,日期条数:dates,' +
+              ' 第一段:first,第一段是加30天:first.indexOf("+30")===0,' +
+              ' 逐段都合规:Array.prototype.every.call(gaps,function(g){var s=String(g.textContent||"").trim();return s.charAt(0)==="+"&&s.indexOf(" 天")>0&&s.length>4;}),' +
+              ' 逐段不多于日期:gaps.length<=dates};' +
+              'var cl=document.getElementById("ppTlClose");if(cl)cl.click();' +
+              'return out;})()');            /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
                「改回内存」只动了内存对象，存储里还留着测试标题 —— 这里把两边的【冒烟】数据都清掉，
                不然 diag 的临时目录（按进程号命名、进程号会复用）会把残留带进下一次。 */
             await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +

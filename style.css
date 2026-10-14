@@ -1514,3 +1514,9 @@ body.ablate-noboth .card,
 body.ablate-noboth .overlay-card,
 body.ablate-noboth .item-card{backdrop-filter:none !important;-webkit-backdrop-filter:none !important}
 body.ablate-noboth .scanlines{mix-blend-mode:normal !important}
+
+/* 时长：完整信息顶部的概览 + 时间线里逐段的 +N 天 */
+.pp-tl-dur{margin:2px 0 9px;font-size:12.5px;color:var(--dim);letter-spacing:.2px}
+.pp-ev-gap{flex:none;font-size:11px;color:var(--dim);opacity:.75;margin-left:2px}
+
+.pp-tl-row .pp-ev-gap{margin-left:0;margin-right:2px}

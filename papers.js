@@ -43,7 +43,7 @@
     { id: 'minor', name: '小修', state: 'minor' },
     { id: 'resubOther', name: '重投', state: 'submitted' }
   ];
-  var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', second: '二作', other: '其他参与' };
+  var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', cocorresponding: '共同通讯', second: '二作', third: '三作', other: '其他作者' };
   var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1 };
 
   var papers = [];
@@ -544,6 +544,55 @@
     return '';
   }
 
+  /* ---------- 时长 ----------
+     一律用「日期差」（midnight 天差，和 days() 同一套），不受时刻与时区影响。
+     还没走到终态就算到今天；拒稿/接收/撤稿这类终态结算在那一天的日期。
+     首轮审稿 = 已投稿 → 之后第一条「收到意见」，与统计条里的「平均审稿周期」同口径。 */
+  function fmtSpan(n) {
+    if (n <= 0) return '当天';
+    if (n < 60) return n + ' 天';
+    return n + ' 天（约 ' + (Math.round(n / 3) / 10) + ' 个月）';
+  }
+  function paperTimeline(p) {
+    var evs = sortedEvents(p).filter(function (e) { return +evAt(e) > 0; });
+    if (!evs.length) return null;
+    var first = evs[0], last = evs[evs.length - 1];
+    var ended = !!evOf(last.type).final;
+    var total = days(midnight(+evAt(first)), midnight(ended ? +evAt(last) : Date.now()));
+    var sub = null, firstOp = null;
+    evs.forEach(function (e) {
+      if (!sub && e.type === 'submitted') sub = e;
+      if (sub && !firstOp && e.type === 'opinion' && (+evAt(e) > +evAt(sub))) firstOp = e;
+    });
+    var review = (sub && firstOp) ? days(midnight(+evAt(sub)), midnight(+evAt(firstOp))) : null;
+    var rounds = 0, revSum = 0;
+    evs.forEach(function (e) {
+      if (e.type !== 'opinion') return;
+      var s = +D(e).submitAt;
+      if (s > 0) { rounds++; revSum += days(midnight(+evAt(e)), midnight(s)); }
+    });
+    return { first: first, last: last, ended: ended, total: total, review: review, rounds: rounds, revSum: revSum };
+  }
+  function durationHtml(p) {
+    var t = paperTimeline(p);
+    if (!t) return '';
+    var bits = [];
+    bits.push('投出 ' + fmtDay(+evAt(t.first)) + ' · ' + (t.ended ? '共 ' + fmtSpan(t.total) : '已 ' + fmtSpan(t.total) + '（进行中）'));
+    if (t.review != null) bits.push('首轮审稿 ' + fmtSpan(t.review));
+    if (t.rounds) bits.push('返修 ' + t.rounds + ' 轮共 ' + fmtSpan(t.revSum));
+    return '<p class="pp-tl-dur">⏱ ' + bits.join(' ｜ ') + '</p>';
+  }
+  /* 这条状态距上一条多少天（没有上一条、或日期缺失就不显示）*/
+  function gapHtml(p, e) {
+    var evs = sortedEvents(p).filter(function (x) { return +evAt(x) > 0; });
+    for (var i = 0; i < evs.length; i++) {
+      if (evs[i].id === e.id && i > 0) {
+        var g = days(midnight(+evAt(evs[i - 1])), midnight(+evAt(e)));
+        return g > 0 ? '<span class="pp-ev-gap">+' + g + ' 天</span>' : '';
+      }
+    }
+    return '';
+  }
   function evRowHtml(p, e) {
     var d = evOf(e.type);
     /* 「还没了结」的截止整条给点警示：返修截止（没交稿）+ 投稿 ddl（还没投出去）*/
@@ -553,6 +602,7 @@
       '<span class="pp-ev-dot" style="background:' + (d.opinion ? (kindOf(D(e).kind) || { color: '#E8B843' }).color || '#E8B843' : d.color) + '"></span>' +
       '<span class="pp-ev-name">' + esc(evName(e)) + '</span>' +
       evSummary(e) +
+      gapHtml(p, e) +
       '<span class="pp-ev-date">' + esc(tsDay(evAt(e))) + '</span>' +
       '<button class="pp-ev-more" data-role="evdetail">详细信息</button>' +
       '<button class="pp-ev-ico del" data-role="evdel" title="删这条">✕</button>' +
@@ -992,6 +1042,7 @@
         '<span class="pp-tl-date">' + esc(tsDay(evAt(e))) + '</span>' +
         '<span class="pp-tl-dot" style="background:' + d.color + '"></span>' +
         '<span class="pp-tl-name">' + esc(evName(e)) + '</span>' +
+        gapHtml(p, e) +
         '<span class="pp-tl-ext">' + esc(extras.join(' · ')) + '</span>' +
       '</div>';
     }).join('');
@@ -1021,6 +1072,7 @@
       '</div>' +
       '<p class="col-sub">当前状态：<b style="color:' + statusColor(st.id) + '">' + esc(statusName(st.id)) + '</b>' +
         (st.at ? '（' + fmtDay(st.at) + '）' : '') + (head.length ? ' · ' + head.join(' · ') : '') + '</p>' +
+      durationHtml(p) +
       '<div class="pp-tl">' + (rows || '<div class="pp-empty">还没有状态条目。</div>') + '</div>' +
     '</div>';
     document.body.appendChild(ov);
