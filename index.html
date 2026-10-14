@@ -10,6 +10,7 @@
 <script src="pet-draw.js"></script>
 <script src="skin-picker.js"></script>
 <script src="arxiv-ui.js"></script>
+<script src="papers.js"></script>
 </head>
 <body>
 
@@ -221,6 +222,27 @@
      这一页只负责显示和改条件，抓的时候界面照样能用。
      点标题 → 用默认浏览器打开 PDF（只放行 arxiv.org 的链接）。 -->
 <main class="layout page" id="pageArxiv" hidden>
+  <!-- 这一页分两块：顶上一排切换「arXiv 订阅 / 我的投稿」。
+       切换条和「我的投稿」都用 grid-column:1/-1 占满整行，所以原来那两栏布局一点没动；
+       切到哪块就把另一块 hidden 掉（hidden 的元素不参与 grid 排列）。 -->
+  <div class="page-switch" id="arxivSwitch">
+    <button class="psw-btn on" data-psw="arxiv">📡 arXiv 订阅</button>
+    <button class="psw-btn" data-psw="papers">📄 我的投稿</button>
+  </div>
+
+  <!-- ===== 我的投稿：论文投稿时间与状态监控 ===== -->
+  <section class="card papers-pane" id="paperPane" hidden>
+    <div class="col-head">
+      <h2>📄 我的投稿</h2>
+      <div class="arxiv-acts">
+        <button class="btn sm primary" id="btnPaperAdd">＋ 新增论文</button>
+        <button class="btn sm" id="btnPaperExport" title="把全部投稿导出成 Markdown（写年报/简历用）">导出</button>
+      </div>
+    </div>
+    <p class="col-sub" id="paperStats">还没有投稿记录。点右边「＋ 新增投稿」开始记。</p>
+    <div class="paper-filter" id="paperFilter"></div>
+    <div class="paper-list" id="paperList"></div>
+  </section>
   <section class="card arxiv-col">
     <div class="col-head">
       <h2>🔬 科研动态</h2>
@@ -638,6 +660,54 @@
     <div class="alert-btns">
       <button class="btn primary big" id="memoSave">保存</button>
       <button class="btn big" id="memoCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 论文投稿：新增 / 编辑 =====================
+     字段较多，用两栏排（.paper-grid + .span2 跨两列），沿用待办/备忘弹窗那套 .overlay.modal。 -->
+<div class="overlay modal" id="paperOverlay" hidden>
+  <div class="overlay-card item-card paper-card">
+    <button class="close" id="paperClose" title="关闭">✕</button>
+    <h3 class="it-title" id="paperTitle">新增投稿</h3>
+    <div class="paper-grid">
+      <div class="it-row col span2">
+        <span class="it-label">论文标题</span>
+        <input type="text" id="ppTitle" maxlength="300" placeholder="论文题目">
+      </div>      <div class="it-row col">
+        <span class="it-label">我的角色</span>
+        <select class="skin-sel" id="ppRole">
+          <option value="first">一作</option>
+          <option value="cofirst">共同一作</option>
+          <option value="corresponding">通讯作者</option>
+          <option value="second">二作</option>
+          <option value="other">其他参与</option>
+        </select>
+      </div>
+      <div class="it-row col span2" id="paperModeRow">
+        <span class="it-label">现在</span>
+        <div class="seg" id="ppMode">
+          <button type="button" class="on" id="ppModePrep">📝 准备中</button>
+          <button type="button" id="ppModeSub">📤 已投稿</button>
+        </div>
+      </div>
+      <div class="it-row col" id="ppSubmitDueRow">
+        <span class="it-label">投稿 ddl</span>
+        <input type="date" id="ppSubmitDue" title="打算什么时候投出去（可空）">
+      </div>
+      <div class="it-row col" id="ppSubmittedRow" hidden>
+        <span class="it-label">投稿日期</span>
+        <input type="date" id="ppSubmitted">
+      </div>
+      <div class="it-row col span2">
+        <span class="it-label"> </span>
+        <span class="col-sub" style="margin:0">作者、期刊、等级、链接这些在「详细信息」里填（点条目右侧的按钮）。</span>
+      </div>
+    </div>
+    <p class="col-sub">状态不用在这里选 —— 存下来之后在记录里「＋ 添加一条状态」（已投稿 / 审稿中 / 收到意见：大修 / 返修截止 / 接收…），当前状态按最后一条自动推。</p>
+    <div class="alert-btns">
+      <button class="btn primary big" id="paperSave">保存</button>
+      <button class="btn big" id="paperCancel">取消</button>
     </div>
   </div>
 </div>
