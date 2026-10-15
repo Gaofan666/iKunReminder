@@ -875,7 +875,7 @@ function createWindow() {
           /* ============ 我的投稿 · 冒烟测试（--diag-ppsmoke） ============
              覆盖：新增（准备中/已投稿 + 从准备中继承）、审稿中、
                    收到意见四种意见类型 × 有/无返修截止 × 已交/未交、
-                   接收（接收时间+校稿+见刊+检索+DOI）、检索、筛选、完整信息改标题、导出、统计。
+                   接收（接收时间+校稿+见刊+DOI，检索改用独立状态）、检索、筛选、完整信息改标题、导出、统计。
              不覆盖：删除（用户要求先不测）。
              要点：时间线里的条目一律**按名字找**，不再"取第一条" —— 日期排序会骗人。 */
           if (DIAG.ppsmoke) {
@@ -1000,8 +1000,8 @@ function createWindow() {
               'P.set("ppOpKind","reject");P.set("ppOpAt",P.day(0));P.ok();' +
               'return {状态:P.st(),徽章:P.badge()};})()');
 
-            /* ⑨ 接收：接收时间 + 校稿 + 见刊 + 检索 + DOI 五个字段 */
-            SM['9-接收五个字段'] = await jp(
+            /* ⑨ 接收：接收时间 + 校稿 + 见刊 + DOI 四个字段（检索改用独立的「检索」状态，不再重复） */
+            SM['9-接收四字段'] = await jp(
               '(function(){var P=window.__pp;if(!P.ensure("多轮返修"))return {没能展开这篇:true};P.add("accept");' +
               'P.set("ppDAt",P.day(-1));P.set("ppDProof",P.day(0));P.set("ppDPublish",P.day(1));' +
               'P.set("ppDIndex",P.day(2));P.set("ppDDoi","10.1109/TIM.2026.999");P.ok();' +
@@ -1011,8 +1011,8 @@ function createWindow() {
               'return {状态:P.st(),徽章:P.badge(),' +
               /* ⚠️ 接收时间落在事件的 e.at（那个日期框是通用 ppDAt），不是 d.proofAt——
                  以前这条断言抄了「校稿」，接收时间丢了照样 true，等于没测。 */
-              ' 接收时间:!!e&&!!e.at,校稿:!!d.proofAt,见刊:!!d.publishAt,检索:!!d.indexAt,doi:d.doi||"",' +
-              ' 摘要含见刊:P.row("接收")?P.row("接收").textContent.indexOf("见刊")>=0:false};})()');
+              ' 接收时间:!!e&&!!e.at,接收里不再有校稿字段:!d.proofAt&&!d.proofDoneAt,接收里不再有见刊字段:!d.publishAt&&!d.indexAt,' +
+              ' 接收行摘要不含见刊:P.row("接收")?P.row("接收").textContent.indexOf("见刊")<0:false};})()');
 
             /* ⑩ 检索（独立类型） */
             SM['10-检索条目'] = await jp(
@@ -1071,7 +1071,7 @@ function createWindow() {
               'var ms=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);' +
               'var p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)p=x;});' +
               'var mine=ms.filter(function(m){return m.text.indexOf("改过标题")>=0;});' +
-              'var live=null,done=null;mine.forEach(function(m){if(m.done)done=m;else live=m;});' +
+              'var due0=p?window.PAPERS._activeDue(p):-1;var live=null,done=null;mine.forEach(function(m){if(due0>0&&Math.abs(m.dueAt-due0)<1000)live=m;if(m.done)done=m;});' +
               'var due=p?window.PAPERS._activeDue(p):-1;var liveN=p?window.PAPERS._live(p).length:-1;' +
               /* ⚠️ 提醒点（remindAt）一定要在这里验：备忘的提醒是 checkMemoDue 按 remindAt 扫的，
                  remindAt=0 就永远不弹 —— 光有备忘条数、时间对得上，用户还是收不到提醒
@@ -1173,7 +1173,7 @@ function createWindow() {
               'if(!item.querySelector(".pp-detail")){var h=item.querySelector(".pp-head");if(h)h.click();' +
               ' items=document.querySelectorAll("#paperList .paper-item");' +
               ' for(var j=0;j<items.length;j++){if((items[j].textContent||"").indexOf("改过标题")>=0){item=items[j];break;}}}' +
-              'var d=item.querySelector("[data-role=del]");if(!d)return {没有删除按钮:true};d.click();' +
+              'var d=item.querySelector("[data-role=del]");if(!d)return {没有删除按钮:true};d.click();var cy=document.getElementById("ppCfYes");if(cy)cy.click();' +
               'var after=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).length;' +
               'var left=window.PAPERS._data().length;' +
               'var badge=document.getElementById("paperFlash");' +
@@ -1260,7 +1260,199 @@ function createWindow() {
               ' 逐段都合规:Array.prototype.every.call(gaps,function(g){var s=String(g.textContent||"").trim();return s.charAt(0)==="+"&&s.indexOf(" 天")>0&&s.length>4;}),' +
               ' 逐段不多于日期:gaps.length<=dates};' +
               'var cl=document.getElementById("ppTlClose");if(cl)cl.click();' +
-              'return out;})()');            /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
+              'return out;})()');            /* ㉗ 拒稿原因有候选也能自填 + 返修耗时（交稿时间进时间线并算出天数）*/
+            SM['27-拒稿原因与返修耗时'] = await jp(
+              '(function(){var P=window.__pp;' +
+              /* 用数据层造一轮：某条「收到意见」在 19 天后交稿 */
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】返修耗时";' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("opinion");P.ok();' +
+              'var p=null;var ps=window.PAPERS._data();' +
+              'for(var i=0;i<ps.length;i++){if((ps[i].title||"").indexOf("返修耗时")>=0)p=ps[i];}' +
+              'if(!p)return {没建出返修耗时:true};' +
+              'var evs0=(p.events||[]).filter(function(e){return e.type==="opinion";});' +
+              'if(!evs0.length)return {没有收到意见:true};' +
+              /* 只留这一条，日期放 20 天前；交稿放 1 天前 → 两行之间的差必须正好是 19 天 */
+              'p.events=[evs0[0]];' +
+              'p.events[0].at=Date.now()-20*86400000;' +
+              'p.events[0].d={kind:"major",submitAt:Date.now()-1*86400000};' +
+              'window.PAPERS._sync();window.PAPERS.open();' +
+              'var want=String(p.title||"");' +
+              'var pick=function(){var its=document.querySelectorAll("#paperList .paper-item");for(var i=0;i<its.length;i++){if((its[i].textContent||"").indexOf(want)>=0)return its[i];}return its[0]||null;};' +
+              'var item=pick();if(!item)return {列表空:true};' +
+              'if(!item.querySelector(".pp-detail")){var h=item.querySelector(".pp-head");if(h)h.click();' +
+              ' item=pick();if(!item)return {展开后找不到:true};}' +
+              'var b=item.querySelector("[data-role=timeline]");if(!b)return {没有完整信息按钮:true};b.click();' +
+              'var ov=document.getElementById("ppTimelineOverlay");if(!ov)return {小窗没开:true};' +
+              'var txt=String(ov.textContent||"");' +
+              'var out={时间线里有交稿:txt.indexOf("提交返修稿")>=0,算出了用了19天:txt.indexOf("+19 天")>=0,行:Array.prototype.map.call(ov.querySelectorAll(".pp-tl-row"),function(r){return String(r.textContent).replace(/\s+/g," ").trim();})};' +
+              'var cl=document.getElementById("ppTlClose");if(cl)cl.click();' +
+              /* 新建一条拒稿，检查原因字段是「候选 + 可自填」*/
+              'P.add("reject");' +
+              'var dl=document.getElementById("ppReasonList");var inp=document.getElementById("ppDReason");' +
+              'out.拒稿原因有候选=!!dl&&dl.querySelectorAll("option").length>=5;' +
+              'out.拒稿原因可自填=!!inp&&inp.tagName==="INPUT";' +
+              'out.拒稿原因能存=!!inp;' +
+              'if(inp)inp.value="创新性不足";' +
+              'P.ok();' +
+              'return out;})()');            /* ㉘ 已经投稿之后，准备中的投稿 ddl 不该再强提醒（不再红、不再算「已过期 N 天」）。
+               场景与用户反馈一致：先只有准备中 ddl（应为红），再补一条已投稿（应转为灰色只留日期）。 */
+            SM['28-已投稿后ddl不再报警'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】ddl不报警";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'var p=null;var ps=window.PAPERS._data();' +
+              'for(var i=0;i<ps.length;i++){if((ps[i].title||"").indexOf("ddl不报警")>=0)p=ps[i];}' +
+              'if(!p)return {没建出这篇:true};' +
+              /* 把准备中的 ddl 放到 30 天前：此刻还没投稿，应当变红 */
+              'p.events[0].d={due:Date.now()-30*86400000};' +
+              'window.PAPERS._sync();window.PAPERS.open();' +
+              'var pick=function(){var its=document.querySelectorAll("#paperList .paper-item");' +
+              ' for(var i=0;i<its.length;i++){if((its[i].textContent||"").indexOf("ddl不报警")>=0){' +
+              '  var sp=its[i].querySelectorAll(".pp-ev span");' +
+              '  for(var j=0;j<sp.length;j++){if((sp[j].textContent||"").indexOf("投稿 ddl")>=0)return sp[j];}}}return null;};' +
+              'var before=pick();var beforeLate=!!before&&before.className.indexOf("pp-ev-late")>=0;' +
+              /* 补一条「已投稿」（今天）→ 之后就不该再红、也不该再说过期 */
+              'P.add("submitted");P.ok();' +
+              'var after=pick();' +
+              'var listTxt=String((document.querySelector("#paperList")||{}).textContent||"");' +
+              'return {投之前是红的:beforeLate,' +
+              ' 投之后不再红:!!after&&after.className.indexOf("pp-ev-late")<0,' +
+              ' 投之后是灰提示:!!after&&after.className.indexOf("pp-ev-tip")>=0,' +
+              ' 投之后不再说过期:listTxt.indexOf("已过期")<0,' +
+              ' ddl日期还留着:!!after&&String(after.textContent).indexOf("投稿 ddl")>=0};})()');            /* ㉙ 删状态不再用原生 confirm（它会卡住后面的日期选择器），
+               并且删完之后日期框仍然处于最上层（用 elementFromPoint 直接验，被盖住就测得出）。 */
+            SM['29-删状态后日期框可点'] = await jp(
+              '(function(){var P=window.__pp;window.__cfCalled=false;' +
+              'var origCf=window.confirm;window.confirm=function(){window.__cfCalled=true;return true;};' +
+              /* 新建一篇专用论文（默认「准备中」= 进行中，一定在默认筛选里，避开"筛选陷阱"）*/
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】删状态测试";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("review");P.ok();' +
+              'var pick=function(){var its=document.querySelectorAll("#paperList .paper-item");' +
+              ' for(var i=0;i<its.length;i++){if((its[i].textContent||"").indexOf("删状态测试")>=0)return its[i];}return null;};' +
+              'var item=pick();if(!item)return {没找到这篇:true};' +
+              'if(!item.querySelector(".pp-detail")){var h=item.querySelector(".pp-head");if(h)h.click();item=pick();}' +
+              'if(!item)return {展开后没找到:true};' +
+              'var del=item.querySelector("[data-role=evdel]");if(!del)return {没有删按钮:true};' +
+              'del.click();' +
+              'var cf=document.getElementById("ppConfirmOverlay");' +
+              'var out={出现了站内确认框:!!cf};' +
+              'if(cf){var yes=document.getElementById("ppCfYes");if(yes)yes.click();}' +
+              'out.没走原生confirm=window.__cfCalled===false;' +
+              'window.confirm=origCf;' +
+              /* 打开一条状态的详细信息，看里面的日期框是否在最上层 */
+              'P.add("review");' +
+              'var d=document.getElementById("ppDAt");' +
+              'out.有日期框=!!d;' +
+              'if(d){var r=d.getBoundingClientRect();' +
+              ' var top=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);' +
+              ' out.日期框在最上层=(top===d)||(d.contains(top));' +
+              ' out.最上层是谁=top?(top.id||top.className||top.tagName):"null";}' +
+              'var nb=document.getElementById("ppOpNo");if(nb)nb.click();' +
+              'return out;})()');            /* ㉚ 新增状态后直接叉掉，不该真的多出一条状态 */
+            SM['30-叉掉不新增'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】叉掉测试";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'var pick=function(){var its=document.querySelectorAll("#paperList .paper-item");' +
+              ' for(var i=0;i<its.length;i++){if((its[i].textContent||"").indexOf("叉掉测试")>=0)return its[i];}return null;};' +
+              'var item=pick();if(!item)return {没建出这篇:true};' +
+              'if(!item.querySelector(".pp-detail")){var h=item.querySelector(".pp-head");if(h)h.click();item=pick();}' +
+              'if(!item)return {展开后没找到:true};' +
+              'var cnt=function(){var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("叉掉测试")>=0)q=x;});return q?q.events.length:-1;};' +
+              'var before=cnt();' +
+              'var add=document.getElementById("ppEvAdd");if(!add)return {没有新增按钮:true};' +
+              'add.click();' +
+              'var mid=cnt();' +
+              'var closeBtn=document.getElementById("ppOpClose");var clicked=false;' +
+              'if(closeBtn){closeBtn.click();clicked=true;}' +
+              'var after=cnt();' +
+              'return {新增前:before,新增后:mid,叉掉后:after,' +
+              ' 确实加了一条:mid===before+1,叉掉后回到原来:after===before,点到了关闭按钮:clicked};})()');            /* ㉛ 「检索」不再重复：接收的详细信息里不再有「检索时间」输入框；
+               但老数据里的 indexAt 必须原样保留（保存一次也不能被清成 0）。 */
+            /* ㉛ 老数据的「接收」里记着的检索/DOI，一次性搬到独立的「见刊/检索」状态；
+               搬完旧字段清掉，且重复迁移不会再建（幂等）。 */
+            SM['31-检索搬到独立状态'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】迁移测试";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("accept");P.ok();' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("迁移测试")>=0)q=x;});' +
+              'if(!q)return {没建出:true};' +
+              'var ae=null;(q.events||[]).forEach(function(e){if(e.type==="accept")ae=e;});' +
+              'if(!ae)return {没有接收条目:true};' +
+              'if(!ae.d)ae.d={};' +
+              'ae.d.indexAt=Date.now()-5*86400000;ae.d.doi="10.1109/OLD.2026.1";' +
+              'window.PAPERS._migrate();' +
+              'var idx=null;(q.events||[]).forEach(function(e){if(e.type==="index")idx=e;});' +
+              'var out={搬出见刊检索条目:!!idx,搬过去了日期:!!idx&&+idx.at>0,' +
+              ' DOI也搬过去了:!!idx&&idx.d&&idx.d.doi==="10.1109/OLD.2026.1",' +
+              ' 旧字段已清掉:!ae.d.indexAt&&!ae.d.doi};' +
+              'var before=(q.events||[]).filter(function(e){return e.type==="index";}).length;' +
+              'window.PAPERS._migrate();' +
+              'var after=(q.events||[]).filter(function(e){return e.type==="index";}).length;' +
+              'out.重复迁移不会再建=before===after&&after===1;' +
+              /* 再验一遍"4.7.1 用户真实形状"：填过校稿时间、也见刊了，但那时还没有"校稿完成"这个字段
+                 → 迁过来的校稿必须是【已完成】，不能变成一条永远待办。 */
+              'ae.d.indexAt=0;ae.d.doi="10.1109/OLD.2026.1";delete ae.d.proofDoneAt;' +
+              'ae.d.proofAt=Date.now()-30*86400000;ae.d.publishAt=Date.now()-10*86400000;' +
+              'q.events=q.events.filter(function(e){return e.type!=="proof"&&e.type!=="index";});' +
+              'window.PAPERS._migrate();' +
+              'var pe2=null,ie2=null;(q.events||[]).forEach(function(e){if(e.type==="proof")pe2=e;if(e.type==="index")ie2=e;});' +
+              'out.老数据也搬出校稿=!!pe2;' +
+              'out.已见刊的校稿算已完成=!!pe2&&+pe2.d.submitAt>0;' +
+              'window.PAPERS._sync();' +
+              'out.已见刊的校稿不再提醒=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).filter(function(m){return (m.text||"").indexOf("校稿截止")>=0&&!m.done;}).length===0;' +
+              'return out;})()');
+            /* ㉜ 校稿是独立状态：填了截止就提醒（像返修一样），交了稿自动完成；
+               见刊/检索只记录、不提醒。 */
+            SM['32-校稿提醒'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】校稿提醒";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("accept");P.ok();' +
+              'P.add("proof");P.ok();' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("校稿提醒")>=0)q=x;});' +
+              'if(!q)return {没建出:true};' +
+              'var pe=null;(q.events||[]).forEach(function(e){if(e.type==="proof")pe=e;});' +
+              'if(!pe)return {没有校稿条目:true};' +
+              'if(!pe.d)pe.d={};' +
+              'var memos=function(){return (window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).filter(function(m){return (m.text||"").indexOf("校稿截止")>=0;});};' +
+              'window.PAPERS._sync();' +
+              'var out={没填截止不提醒:memos().length===0};' +
+              'pe.d.dueAt=Date.now()+3*86400000;' +
+              'window.PAPERS._sync();' +
+              'out.填了截止就提醒=memos().length===1;' +
+              'out.备忘文字是校稿截止=memos().length===1&&memos()[0].text.indexOf("校稿截止")>=0;' +
+              'out.计入活跃截止=window.PAPERS._activeDue(q)>0;' +
+              'window.PAPERS.open();' +
+              'var allChip=document.querySelector("#paperFilter [data-pf=all]");if(allChip)allChip.click();' +
+              'var txt=String((document.querySelector("#paperList")||{}).textContent||"");' +
+              'out.列表上写着校稿截止=txt.indexOf("校稿截止")>=0;' +
+              'pe.d.submitAt=Date.now();' +
+              'window.PAPERS._sync();' +
+              'var ms=memos();' +
+              'out.交稿后备忘完成=ms.length>0&&ms.every(function(m){return !!m.done;});' +
+              'out.交稿后不再计入活跃截止=window.PAPERS._activeEq?false:(window.PAPERS._activeDue(q)===0);' +
+              'P.add("index");P.ok();' +
+              'var ie=null;(q.events||[]).forEach(function(e){if(e.type==="index")ie=e;});' +
+              'if(ie){if(!ie.d)ie.d={};ie.d.doi="10.1109/TEST.2026.9";}' +
+              'window.PAPERS._sync();' +
+              'out.见刊检索不提醒=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).filter(function(m){return (m.text||"").indexOf("见刊")>=0||(m.text||"").indexOf("检索")>=0;}).length===0;' +
+              'return out;})()');
+/* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
                「改回内存」只动了内存对象，存储里还留着测试标题 —— 这里把两边的【冒烟】数据都清掉，
                不然 diag 的临时目录（按进程号命名、进程号会复用）会把残留带进下一次。 */
             await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
