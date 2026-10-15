@@ -179,6 +179,42 @@ if (DIAG) {
   } catch (e) { /* 设不上就照普通流程走 */ }
 }
 
+/* 自检/性能测试每跑一次都会在 %TEMP% 下留一个临时存档（每个约 19 MB），跑多了很占地方
+   （实际发生过：一天攒出 9.4 GB / 440 个）。这里在**自检启动时**顺手清一下。
+   严格只动「%TEMP% 正下方、名字以 kunkun- 开头」的目录：
+     - 保留最近的 2 个（方便追查上一次跑挂了什么）
+     - 跳过 kunkun-restore-src-*（那是真实存档的备份，要留）
+     - 跳过当前这次正在用的那个；被别的实例占用的删不掉就算了，不当错误
+   ⚠️ 只在带 --diag / --perf 时执行；正常启动一行都不做 —— 绝不碰用户自己的文件。 */
+function pruneDiagTemp() {
+  var tmp;
+  try { tmp = app.getPath('temp'); } catch (e) { return -1; }
+  var mine = '';
+  try { mine = path.basename(app.getPath('userData')); } catch (e) { }
+  var list;
+  try { list = fs.readdirSync(tmp, { withFileTypes: true }); } catch (e) { return -1; }
+  var rows = [];
+  list.forEach(function (d) {
+    if (!d.isDirectory || !d.isDirectory()) return;
+    if (d.name.indexOf('kunkun-') !== 0) return;
+    if (d.name.indexOf('kunkun-restore-src-') === 0) return;   /* 真实存档备份，留着 */
+    if (mine && d.name === mine) return;                       /* 当前这次正在用 */
+    var full = path.join(tmp, d.name);
+    var t = 0;
+    try { if (!fs.statSync(full).isDirectory()) return; t = +fs.statSync(full).mtimeMs || 0; } catch (e) { return; }
+    rows.push({ full: full, name: d.name, t: t });
+  });
+  rows.sort(function (a, b) { return b.t - a.t; });            /* 新的在前 */
+  var killed = 0;
+  rows.slice(2).forEach(function (r) {                         /* 留最近 2 个 */
+    try { fs.rmSync(r.full, { recursive: true, force: true, maxRetries: 2 }); killed++; } catch (e) { }
+  });
+  if (killed) console.log('[diag] 清理旧的自检临时存档：' + killed + ' 个（保留最近 2 个）');
+  return killed;
+}
+let diagTempPruned = 0;
+if (DIAG) { try { diagTempPruned = pruneDiagTemp(); } catch (e) { diagTempPruned = -1; } }
+
 /* 「当前这台显示器」的像素比：自检时用模拟值，正常运行就是真实值 */
 function effScale(d) {
   if (DIAG && DIAG.ratio > 0) return DIAG.ratio;
