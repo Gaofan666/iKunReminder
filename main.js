@@ -179,6 +179,42 @@ if (DIAG) {
   } catch (e) { /* 设不上就照普通流程走 */ }
 }
 
+/* 自检/性能测试每跑一次都会在 %TEMP% 下留一个临时存档（每个约 19 MB），跑多了很占地方
+   （实际发生过：一天攒出 9.4 GB / 440 个）。这里在**自检启动时**顺手清一下。
+   严格只动「%TEMP% 正下方、名字以 kunkun- 开头」的目录：
+     - 保留最近的 2 个（方便追查上一次跑挂了什么）
+     - 跳过 kunkun-restore-src-*（那是真实存档的备份，要留）
+     - 跳过当前这次正在用的那个；被别的实例占用的删不掉就算了，不当错误
+   ⚠️ 只在带 --diag / --perf 时执行；正常启动一行都不做 —— 绝不碰用户自己的文件。 */
+function pruneDiagTemp() {
+  var tmp;
+  try { tmp = app.getPath('temp'); } catch (e) { return -1; }
+  var mine = '';
+  try { mine = path.basename(app.getPath('userData')); } catch (e) { }
+  var list;
+  try { list = fs.readdirSync(tmp, { withFileTypes: true }); } catch (e) { return -1; }
+  var rows = [];
+  list.forEach(function (d) {
+    if (!d.isDirectory || !d.isDirectory()) return;
+    if (d.name.indexOf('kunkun-') !== 0) return;
+    if (d.name.indexOf('kunkun-restore-src-') === 0) return;   /* 真实存档备份，留着 */
+    if (mine && d.name === mine) return;                       /* 当前这次正在用 */
+    var full = path.join(tmp, d.name);
+    var t = 0;
+    try { if (!fs.statSync(full).isDirectory()) return; t = +fs.statSync(full).mtimeMs || 0; } catch (e) { return; }
+    rows.push({ full: full, name: d.name, t: t });
+  });
+  rows.sort(function (a, b) { return b.t - a.t; });            /* 新的在前 */
+  var killed = 0;
+  rows.slice(2).forEach(function (r) {                         /* 留最近 2 个 */
+    try { fs.rmSync(r.full, { recursive: true, force: true, maxRetries: 2 }); killed++; } catch (e) { }
+  });
+  if (killed) console.log('[diag] 清理旧的自检临时存档：' + killed + ' 个（保留最近 2 个）');
+  return killed;
+}
+let diagTempPruned = 0;
+if (DIAG) { try { diagTempPruned = pruneDiagTemp(); } catch (e) { diagTempPruned = -1; } }
+
 /* 「当前这台显示器」的像素比：自检时用模拟值，正常运行就是真实值 */
 function effScale(d) {
   if (DIAG && DIAG.ratio > 0) return DIAG.ratio;
@@ -1067,12 +1103,14 @@ function createWindow() {
                此时"小修"那轮还有截止没交 → 应有一条未完成备忘；
                "大修"那轮已经交掉了 → 对应备忘应已完成。 */
             SM['15-截止变备忘'] = await jp(
-              '(function(){var P=window.__pp;var n1=PAPERS._sync();var n2=PAPERS._sync();' +
+              '(function(){var P=window.__pp;/* 让这篇回到返修进行中：去掉后面的接收/检索事件 */var _p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)_p=x;});if(_p){_p.events=(_p.events||[]).filter(function(e){return e.type!=="accept"&&e.type!=="index";});PAPERS._sync();}/* 这些联动备忘之前可能已经完成过：删掉让 _sync 按新状态重建，提醒点才会重算 */var _ms0=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);_ms0.forEach(function(m){if((m.text||"").indexOf("小修")>=0){try{window.KUNKUN_MEMOS.remove(m.id);}catch(e){}}});PAPERS._sync();var n1=PAPERS._sync();var n2=PAPERS._sync();' +
               'var ms=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);' +
               'var p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)p=x;});' +
               'var mine=ms.filter(function(m){return m.text.indexOf("改过标题")>=0;});' +
               'var due0=p?window.PAPERS._activeDue(p):-1;var live=null,done=null;mine.forEach(function(m){if(due0>0&&Math.abs(m.dueAt-due0)<1000)live=m;if(m.done)done=m;});' +
               'var due=p?window.PAPERS._activeDue(p):-1;var liveN=p?window.PAPERS._live(p).length:-1;' +
+              'var _evTypes=p?(p.events||[]).map(function(e){return e.type+"@"+(+e.createdAt||0);}).join(","):"";' +
+              'var _dueDetail=p?window.PAPERS._live(p).map(function(it){return it.field+"|"+it.due;}):[];' +
               /* ⚠️ 提醒点（remindAt）一定要在这里验：备忘的提醒是 checkMemoDue 按 remindAt 扫的，
                  remindAt=0 就永远不弹 —— 光有备忘条数、时间对得上，用户还是收不到提醒
                  （投稿联动生成的备忘没人点过「保存」，以前 remindAt 一直是 0）。
@@ -1086,7 +1124,7 @@ function createWindow() {
               ' 当前算出的截止:due,备忘里的截止:live?live.dueAt:0,对得上:!!live&&Math.abs(live.dueAt-due)<1000,' +
               ' 提前量:st.remindBefore||0,提醒点:st.remindAt||0,' +
               ' 提醒点算出来了:!!st.remindAt&&!!st.dueAt&&Math.abs(st.remindAt-(st.dueAt-(st.remindBefore||0)))<1000,' +
-              ' 有已完成那条:!!done,已完成的文本:done?done.text:""};})()');
+              ' 有已完成那条:!!done,已完成的文本:done?done.text:"",事件类型:_evTypes,活跃截止明细:_dueDetail};})()');
 
             /* ⑯ 反向禁止：同步绝不能改动投稿的任何事件（快照前后完全一致） */
             SM['16-不做反向修改'] = await jp(
@@ -1097,7 +1135,7 @@ function createWindow() {
 
             /* ⑰ 投稿这边改了截止 → 备忘跟着改（单向：投稿说了算） */
             SM['17-投稿改期备忘跟随'] = await jp(
-              '(function(){var P=window.__pp;' +
+              '(function(){var P=window.__pp;/* 让这篇回到返修进行中：去掉后面的接收/检索事件 */var _p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)_p=x;});if(_p){_p.events=(_p.events||[]).filter(function(e){return e.type!=="accept"&&e.type!=="index";});PAPERS._sync();}/* 这些联动备忘之前可能已经完成过：删掉让 _sync 按新状态重建，提醒点才会重算 */var _ms0=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);_ms0.forEach(function(m){if((m.text||"").indexOf("小修")>=0){try{window.KUNKUN_MEMOS.remove(m.id);}catch(e){}}});PAPERS._sync();var n1=PAPERS._sync();var n2=PAPERS._sync();' +
               'if(!P.ensure("改过标题"))return {没能展开这篇:true};' +
               'if(!P.openRow("收到意见：小修"))return {没找到小修那行:true};' +
               'if(!P.set("ppOpDue",P.day(20)))return {没有返修截止输入框:true};' +
@@ -1386,22 +1424,31 @@ function createWindow() {
               'document.getElementById("ppTitle").value="【冒烟】迁移测试";' +
               'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
               'document.getElementById("paperSave").click();' +
+              'P.add("submitted");P.ok();' +
               'P.add("accept");P.ok();' +
               'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("迁移测试")>=0)q=x;});' +
               'if(!q)return {没建出:true};' +
               'var ae=null;(q.events||[]).forEach(function(e){if(e.type==="accept")ae=e;});' +
               'if(!ae)return {没有接收条目:true};' +
               'if(!ae.d)ae.d={};' +
-              'ae.d.indexAt=Date.now()-5*86400000;ae.d.doi="10.1109/OLD.2026.1";' +
+              'ae.d.indexAt=Date.now()-3*86400000;ae.d.publishAt=Date.now()-5*86400000;ae.d.doi="10.1109/OLD.2026.1";' +
               'window.PAPERS._migrate();' +
               'var idx=null;(q.events||[]).forEach(function(e){if(e.type==="index")idx=e;});' +
               'var out={搬出见刊检索条目:!!idx,搬过去了日期:!!idx&&+idx.at>0,' +
-              ' DOI也搬过去了:!!idx&&idx.d&&idx.d.doi==="10.1109/OLD.2026.1",' +
+              ' DOI搬到见刊:(function(){var _x=null;(q.events||[]).forEach(function(e){if(e.type==="publish")_x=e;});return !!_x&&_x.d&&_x.d.doi==="10.1109/OLD.2026.1";})(),' +
+              ' 见刊与检索是两个条目:(q.events||[]).filter(function(e){return e.type==="publish";}).length===1&&(q.events||[]).filter(function(e){return e.type==="index";}).length===1,' +
               ' 旧字段已清掉:!ae.d.indexAt&&!ae.d.doi};' +
               'var before=(q.events||[]).filter(function(e){return e.type==="index";}).length;' +
               'window.PAPERS._migrate();' +
               'var after=(q.events||[]).filter(function(e){return e.type==="index";}).length;' +
               'out.重复迁移不会再建=before===after&&after===1;' +
+              /* 用户实际情形：DOI 被填在「已投稿」的「链接」里 → 迁移搬到见刊并从链接去掉 */
+              'var sub=null;(q.events||[]).forEach(function(e){if(e.type==="submitted")sub=e;});' +
+              'if(sub){if(!sub.d)sub.d={};sub.d.link="10.1109/TGRS.2026.3709525";}' +
+              'window.PAPERS._migrate();' +
+              'var pb=null;(q.events||[]).forEach(function(e){if(e.type==="publish")pb=e;});' +
+              'out.见刊上有DOI=!!pb&&pb.d&&!!pb.d.doi;' +
+              'out.已投稿的链接已清空=!!sub&&!sub.d.link;' +
               /* 再验一遍"4.7.1 用户真实形状"：填过校稿时间、也见刊了，但那时还没有"校稿完成"这个字段
                  → 迁过来的校稿必须是【已完成】，不能变成一条永远待办。 */
               'ae.d.indexAt=0;ae.d.doi="10.1109/OLD.2026.1";delete ae.d.proofDoneAt;' +
@@ -1452,7 +1499,76 @@ function createWindow() {
               'window.PAPERS._sync();' +
               'out.见刊检索不提醒=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).filter(function(m){return (m.text||"").indexOf("见刊")>=0||(m.text||"").indexOf("检索")>=0;}).length===0;' +
               'return out;})()');
-/* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
+            /* ㉝ 已经接收（或拒稿/撤稿）的论文，之前没填交稿的返修截止不该再报警。 */
+            SM['33-接收后旧返修截止不再报警'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】旧返修";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("submitted");P.ok();' +
+              'P.add("opinion");P.set("ppOpKind","major");P.set("ppOpAt",P.day(-20));' +
+              'P.set("ppOpDue",P.day(3));P.ok();' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("旧返修")>=0)q=x;});' +
+              'if(!q)return {没建出:true};' +
+              'var op=null;(q.events||[]).forEach(function(e){if(e.type==="opinion")op=e;});' +
+              'if(!op)return {没有意见条目:true};' +
+              'var memos=function(){return (window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).filter(function(m){return (m.text||"").indexOf("旧返修")>=0;});};' +
+              'window.PAPERS._sync();' +
+              'var out={还没接收时是报警的:memos().length===1&&!memos()[0].done};' +
+              'P.add("accept");P.ok();' +
+              'window.PAPERS._sync();' +
+              'var ms=memos();' +
+              'out.接收后备忘变成已完成=ms.length>0&&ms.every(function(m){return !!m.done;});' +
+              'out.接收后不再计入活跃截止=window.PAPERS._activeDue(q)===0;' +
+              'window.PAPERS.open();' +
+              'var allChip=document.querySelector("#paperFilter [data-pf=all]");if(allChip)allChip.click();' +
+              'var txt=String((document.querySelector("#paperList")||{}).textContent||"");' +
+              '/* 只用「活跃截止=0」与「备忘已完成」判定；列表里别篇的报警不算这条的 */' +
+              'out.列表报警元素数=document.querySelectorAll("#paperList .pp-due").length;' +
+              'var _ms2=memos();out.备忘明细=_ms2.map(function(m){return m.text+"|done="+m.done;});' +
+              'return out;})()');
+            /* ㉞ 状态归属（用户明确要求的四条）：
+               只接收 → 主状态「接收」、不算进行中；
+               接收+校稿未交 → 主状态「校稿」、**同时**在进行中与接收里；
+               校稿交了 → 主状态退回「接收」、不算进行中、仍在接收里；
+               加了见刊/检索 → 主状态跟着变成见刊/检索。 */
+            SM['34-接收与校稿的状态归属'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】状态归属";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("submitted");P.ok();P.add("accept");P.ok();' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("状态归属")>=0)q=x;});' +
+              'if(!q)return {没建出:true};' +
+              'var st=function(){return window.PAPERS._status(q).id;};' +
+              'var op=function(){return window.PAPERS._open(q);};' +
+              'var mf=function(f){return window.PAPERS._match(q,f);};' +
+              'var out={只接收_主状态是接收:st()==="accepted",只接收_不算进行中:op()===false,只接收_在接收筛选里:mf("accepted")===true};' +
+              'P.add("proof");P.ok();' +
+              'out.校稿未交_主状态是校稿=(st()==="proof");' +
+              'out.校稿未交_算进行中=(op()===true);' +
+              'out.校稿未交_也在接收筛选里=(mf("accepted")===true);' +
+              'out.校稿未交_有校稿筛选=(mf("proof")===true);' +
+              'window.PAPERS.open();' +
+              /* 校稿/见刊/检索**不单独出筛选按钮**（都归「接收」大类，免得总数重复） */
+              'out.筛选里没有单独校稿见刊检索=(document.querySelectorAll("#paperFilter [data-pf=proof],#paperFilter [data-pf=published],#paperFilter [data-pf=indexed]").length===0);' +
+              'out.接收按钮存在=(function(){var b=document.querySelector("#paperFilter [data-pf=accepted]");return !!b&&b.textContent.indexOf("接收")>=0;})();' +
+              'var pe=null;(q.events||[]).forEach(function(e){if(e.type==="proof")pe=e;});' +
+              'if(!pe)return {没有校稿条目:true};if(!pe.d)pe.d={};' +
+              'pe.d.dueAt=Date.now()+5*86400000;pe.d.submitAt=Date.now();window.PAPERS._sync();' +
+              'out.校稿交了_主状态退回接收=(st()==="accepted");' +
+              'out.校稿交了_不算进行中=(op()===false);' +
+              'out.校稿交了_仍在接收筛选里=(mf("accepted")===true);' +
+              'P.add("publish");P.ok();' +
+              'out.加了见刊_主状态是见刊=(st()==="published");' +
+              'out.加了见刊_不算进行中=(op()===false);' +
+              'out.加了见刊_仍在接收筛选里=(mf("accepted")===true);' +
+              'P.add("index");P.ok();' +
+              'out.加了检索_主状态是检索=(st()==="indexed");' +
+              'return out;})()');
+            /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
                「改回内存」只动了内存对象，存储里还留着测试标题 —— 这里把两边的【冒烟】数据都清掉，
                不然 diag 的临时目录（按进程号命名、进程号会复用）会把残留带进下一次。 */
             await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
