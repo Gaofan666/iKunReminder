@@ -1,20 +1,20 @@
 {
-  "version": "4.7.0",
-  "releaseDate": "2026-10-14T11:58:10.979Z",
+  "version": "4.7.1",
+  "releaseDate": "2026-10-15T05:09:29.835Z",
   "notes": "## iKunReminder v4.7\n\n1. 📄 **「科研动态」页里多了「我的投稿」** —— 论文从投稿到接收，全过程都记在这里\n   · 一篇论文 = 一个标题 + 一串**状态条目**：准备中 / 已投稿 / 审稿中 / 收到意见 / 接收 / 检索 / 撤稿 / 其他进展。\n   · 新增时填标题，选「准备中」（顺手填**投稿 ddl**）或「已投稿」（顺手填**投稿日期**和我的角色）；作者 / 期刊 / 级别 / 链接这些点条目右侧「详细信息」填。\n   · **一轮返修就是一条**：返修截止和提交返修稿都记在「收到意见」那条里；没交的会倒计时，**临近 7 天变橙、过了截止标红**。\n   · **当前状态不用手填**，按条目自动推出来；列表能按「进行中 / 全部 / 各状态」筛选，顶部有统计（共几篇、进行中、平均审稿周期、平均几轮意见）。\n   · 「论文完整信息」看全过程，标题随时能改；整份记录可以导出成 Markdown；删条目 / 删论文都会先问一句，删错能「撤销」找回。\n\n2. 🔗 **投稿截止自动进备忘和日历**\n   · 投稿里**还没了结**的截止（准备中的投稿 ddl、还没交的返修截止）自动生成一条备忘 —— **提前一天开始提醒**，日历上也能看到。\n   · 在投稿里改了截止，备忘跟着改；**投出去 / 交了返修稿**之后那条备忘自动完成，完成时间落在投稿那天 / 交稿那天。\n   · 这类备忘的文字和日期跟着投稿走（列表里带一把小锁），提醒时间、分类、提醒频率可以照常自己设。\n\n3. 🧰 顺手修好的几处\n   · **打包版缺文件**：`papers.js` 没写进打包白名单，装出来的版本「我的投稿」整块打不开（开发模式看不出来）—— 已修。\n   · **联动备忘以前永远不提醒**：提醒点一直是 0，只有列表 / 日历 / 桌宠气泡看得到 —— 现在「提前一天提醒」是真的了。\n   · **新增论文弹窗里那三个框填了没用**（投稿 ddl / 我的角色 / 投稿日期），现在按「准备中 / 已投稿」显示对应那一行，填了就存。\n   · **截止倒计时差一天**：ddl 是明天会显示「就是今天」，截稿日当天一整天显示「已过期 1 天」并标红 —— 已改成按「当天」比。\n   · **清空截止被当成完成**：会把备忘标成「已完成（今天）」，之后填回同一日期也一直停在已完成 —— 现在只有真的投出去 / 交稿才算完成。\n   · 另外：投稿数据读取出错时不再往下覆盖写盘（先备份、停止保存）、筛选没记录时自动退回「全部」、导出不再出现「### undefined」、已完成的联动备忘里小锁和 ✓ 不再叠在一起。\n\n**下载**：`iKunReminder-setup-v4.7.0.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121913828,
-  "sha512": "bhqqKja2L5XjXKFho686HgstRhVUnJzJiB1rTSsdusHhcgJsiGVOCbg+JalABcA3l1j1kQWa4glgdoVQgeIYqw==",
+  "size": 121921784,
+  "sha512": "vbsTgFhlBcUTrnitlyGJEy5eCykPRABeX92y6vkJE5IUD6dzIZK7b3PYaO0IRk2kwdsRgKBUHcVQyqILOU+mHA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7/iKunReminder-setup-v4.7.0.exe.part1",
-      "size": 60956914,
-      "sha512": "EVvC6VqCamcUWXzC0RGGfbHsVUXfVgJq1JFia3jk7SyRAUAT4h4Of3hlSk8CCHnqzCkJmXJs9E2R4SmnWqqc+A==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.1/iKunReminder-setup-v4.7.1.exe.part1",
+      "size": 60960892,
+      "sha512": "wb/brsTA7bjA944CPyrr5DsCjpmyvqpVF9Ek6zXueIFzXgh+Yb4cKui2NDyw19nHSQZ9bnPEQuhTiiYesYjisg==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7/iKunReminder-setup-v4.7.0.exe.part2",
-      "size": 60956914,
-      "sha512": "rMoNbh/vhtk4Di+ylND1Vbmy/F04Nt79YRPX2EDc8T301fqGUAsVXmclFXnsx7Kt6AejTUsOQnHP+scrqtToTQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.1/iKunReminder-setup-v4.7.1.exe.part2",
+      "size": 60960892,
+      "sha512": "AtBS3lQsETIdANOGbPO9NtFM0g3gQAsabTE6fByQXclgpZkFPcCDByGoYQ+RyXMfAh8+E9dEUM93rU+v4E/GlA==",
       "index": 2
     }
   ]
