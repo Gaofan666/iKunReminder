@@ -32,7 +32,8 @@
     { id: 'opinion', name: '收到意见', color: '#E8B843', state: null, opinion: true },
     { id: 'reject', name: '拒稿', color: '#D9534F', state: 'rejected', final: true },
     { id: 'accept', name: '接收', color: '#3F9E6E', state: 'accepted', final: true },
-    { id: 'index', name: '检索', color: '#4FB3A8', state: null },
+    { id: 'proof', name: '校稿', color: '#6FA8B8', state: 'proof' },
+    { id: 'index', name: '见刊/检索', color: '#4FB3A8', state: null },
     { id: 'withdraw', name: '撤稿', color: '#9B8EA8', state: 'withdrawn', final: true },
     { id: 'other', name: '其他进展', color: '#8A9AA5', state: null }
   ];
@@ -44,7 +45,10 @@
     { id: 'resubOther', name: '重投', state: 'submitted' }
   ];
   var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', cocorresponding: '共同通讯', second: '二作', third: '三作', other: '其他作者' };
-  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1 };
+  /* 拒稿原因：给几个常见的候选，也可以自己写（写什么就显示什么）*/
+  var REASONS = ['创新性不足', '与期刊范围不符', '工作量 / 实验不够充分', '方法或分析有缺陷',
+    '结果不够显著', '英文表达问题', '编辑直接拒（未送外审）', '建议改投其他期刊'];
+  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1, proof: 1 };
 
   var papers = [];
   var editingId = null;
@@ -154,6 +158,7 @@
     if (id === 'rejected') return '#D9534F';
     if (id === 'withdrawn') return '#9B8EA8';
     if (id === 'submitted') return '#4A9BD4';
+    if (id === 'proof') return '#6FA8B8';
     if (id === 'editorReview') return '#88A9C9';
     if (id === 'awaitingDecision') return '#8FB3E0';
     if (id === 'review') return '#7FA8D9';
@@ -174,7 +179,33 @@
   }
   /* 还在等的返修轮次：返修截止有值、交稿还空着 */
   function waitingRounds(p) {
-    return sortedEvents(p).filter(function (e) { return evOf(e.type).opinion && +D(e).dueAt && !+D(e).submitAt; });
+    return sortedEvents(p).filter(function (e) { return (evOf(e.type).opinion || e.type === 'proof') && +D(e).dueAt && !+D(e).submitAt; });
+  }
+  /* 最早那条活跃截止是谁：投稿 ddl / 返修截止 / 校稿截止（列表卡片上那行小字用它当标签）。
+     候选逻辑与 activeDue 完全一致，只是顺带记住标签 —— 刻意不改 activeDue 的返回值，
+     免得影响已有断言与备忘同步。 */
+  function activeDueLabel(p) {
+    var best = 0, label = '';
+    var list = sortedEvents(p), lastSubAt = 0;
+    list.forEach(function (e) { if (e.type === 'submitted') lastSubAt = Math.max(lastSubAt, +e.createdAt || 0); });
+    list.forEach(function (e) {
+      if (e.type !== 'preparing') return;
+      var due = +D(e).due;
+      if (!due) return;
+      if (lastSubAt && (+e.createdAt || 0) < lastSubAt) return;
+      if (!best || due < best) { best = due; label = '投稿 ddl'; }
+    });
+    var w = waitingRounds(p);
+    if (w.length) {
+      var wd = +D(w[0]).dueAt;
+      if (wd && (!best || wd < best)) { best = wd; label = (w[0].type === 'proof' ? '校稿截止' : '返修'); }
+    }
+    list.forEach(function (e) {
+      if (e.type !== 'accept') return;
+      var d = D(e);
+    /* 同上：标签不再为 accept 特判。 */
+    });
+    return label;
   }
   function activeDue(p) {
     var cand = [], list = sortedEvents(p);
@@ -188,6 +219,12 @@
       if (!due) return;
       if (lastSubAt && (+e.createdAt || 0) < lastSubAt) return;   // 这之后的某次已投稿 = 已经投出去了
       cand.push(due);
+    });
+    /* 「接收」里填了校稿时间、又还没见刊：校稿这一环还没过，计入活跃截止（和返修截止一个待遇）。 */
+    list.forEach(function (e) {
+      if (e.type !== 'accept') return;
+      var d2 = D(e);
+    /* 校稿已是独立状态，走上面通用路径；不再特判 accept。 */
     });
     var w = waitingRounds(p);
     if (w.length) cand.push(+D(w[0]).dueAt);
@@ -259,6 +296,26 @@
           e.type = 'opinion';
         }
         delete e.kind; delete e.dueAt; delete e.submitAt;
+      });
+      /* 「接收」里原来记着校稿/见刊/检索/DOI —— 现在它们各自成为独立状态。
+         一次性搬过去（幂等：已有对应条目就不再建），搬完把旧字段删掉，免得两处显示同一件事。 */
+      p.events.forEach(function (e) {
+        if (e.type !== 'accept') return;
+        var d = e.d || {};
+        var hasProof = p.events.some(function (x) { return x.type === 'proof'; });
+        if (+d.proofAt && !hasProof) {
+          p.events.push({ id: newId('ev'), type: 'proof', at: +d.proofAt, createdAt: Date.now(),
+            d: { dueAt: +d.proofAt, submitAt: +d.proofDoneAt || +d.publishAt || +d.indexAt || 0 } });
+        }
+        var hasIndex = p.events.some(function (x) { return x.type === 'index'; });
+        var idxAt = +d.publishAt || +d.indexAt || 0;
+        if ((idxAt || d.doi) && !hasIndex) {
+          p.events.push({ id: newId('ev'), type: 'index', at: idxAt || Date.now(), createdAt: Date.now(),
+            d: { doi: d.doi || '' } });
+        }
+        if (+d.proofAt || +d.proofDoneAt || +d.publishAt || +d.indexAt || d.doi) {
+          delete d.proofAt; delete d.proofDoneAt; delete d.publishAt; delete d.indexAt; delete d.doi;
+        }
       });
       /* 老数据里可能留着「收到意见 · kind=接收」：接收是独立状态，还原成 accept 条目并去掉 kind
          （KINDS 里已经没有 accept 了，留着它会选不中、显示成空白） */
@@ -356,13 +413,22 @@
     });
     list.forEach(function (e) {
       var d = D(e);
-      if (!evOf(e.type).opinion) return;
+      if (!evOf(e.type).opinion && e.type !== 'proof') return;
       if (!(+d.dueAt) || +d.submitAt) return;                  // 没截止、或已经交掉了
       var k = kindOf(d.kind);
       out.push({
         evId: e.id, field: 'dueAt', due: +d.dueAt,
-        text: '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 返修截止' + (k ? '（' + k.name + '）' : '')
+        text: '📄 投稿 · ' + (p.title || '（没写标题）') + ' · ' + (e.type === 'proof' ? '校稿截止' : '返修截止') + (k ? '（' + k.name + '）' : '')
       });
+    });
+    /* 「接收」里的校稿时间：填了就生成关联备忘（提前一天提醒、日历可见）；
+       填了「发表/见刊」就表示这一环过去了，备忘会自动完成。没填校稿时间则完全不提醒。 */
+    list.forEach(function (e) {
+      if (e.type !== 'accept') return;
+      var d2 = D(e);
+    /* 同上：accept 不再自己生成校稿备忘。 */
+      out.push({ evId: e.id, field: 'proofAt', due: +d2.proofAt,
+        text: deadlineText(p, e) });
     });
     return out;
   }
@@ -370,6 +436,7 @@
   function deadlineText(p, e) {
     var k = kindOf(D(e).kind);
     if (e.type === 'preparing') return '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 投稿 ddl';
+    if (e.type === 'proof') return '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 校稿截止';
     return '📄 投稿 · ' + (p.title || '（没写标题）') + ' · 返修截止' + (k ? '（' + k.name + '）' : '');
   }
   /* 一条截止"了结"了吗？了结的**完成时间落在真实发生的那一天**（用户要求）：
@@ -386,7 +453,14 @@
       });
       return sub ? { done: true, doneAt: evAt(sub) } : { done: false, doneAt: 0 };
     }
-    if (evOf(e.type).opinion && +d.submitAt) return { done: true, doneAt: +d.submitAt };
+    /* 接收里的校稿时间：填了「发表/见刊」就算这一环了结，完成时间落在见刊那天。 */
+    if (e.type === 'accept' && +d.proofAt) return { done: !!(+d.proofDoneAt || +d.publishAt), doneAt: +d.proofDoneAt || +d.publishAt || 0 };
+    /* 兜底：校稿后面已经出现「见刊/检索」条目 → 说明这一环早就过去了（老数据可能没有交稿时间）。 */
+    if (e.type === 'proof') {
+      var later = byCreated(p).some(function (x) { return x.type === 'index' && (+x.createdAt || 0) > (+e.createdAt || 0); });
+      if (later) return { done: true, doneAt: +D(byCreated(p).filter(function (x) { return x.type === 'index' && (+x.createdAt || 0) > (+e.createdAt || 0); })[0]).at || +evAt(e) };
+    }
+    if ((evOf(e.type).opinion || e.type === 'proof') && +d.submitAt) return { done: true, doneAt: +d.submitAt };
     return { done: false, doneAt: 0 };
   }
   /* 幂等：一切以 paperlinks 里的 memoId 为准，绝不无脑新建 */
@@ -503,13 +577,15 @@
   }
 
   /* 一行摘要里该显示什么（按类型） */
-  function evSummary(e) {
+  function evSummary(e, p) {
     var d = D(e);
-    if (evOf(e.type).opinion) {
+    if (evOf(e.type).opinion || e.type === 'proof') {
       var due = +d.dueAt || 0, sub = +d.submitAt || 0;
-      if (due && sub) return '<span class="pp-ev-ok">截止 ' + fmtDay(due) + ' · 已于 ' + fmtDay(sub) + ' 提交</span>';
-      if (due) return '<span class="' + (isOverdueDay(due) ? 'pp-ev-late' : (isSoonDay(due) ? 'pp-ev-soon' : 'pp-ev-tip')) + '">返修截止 ' + fmtDay(due) + ' · ' + fromNow(due) + '</span>';
-      if (sub) return '<span class="pp-ev-ok">已于 ' + fmtDay(sub) + ' 提交</span>';
+      var rev = reviseDays(e);
+      var revTxt = rev != null ? '（用了 ' + fmtSpan(rev) + '）' : '';
+      if (due && sub) return '<span class="pp-ev-ok">截止 ' + fmtDay(due) + ' · 已于 ' + fmtDay(sub) + ' 提交' + revTxt + '</span>';
+      if (due) return '<span class="' + (isOverdueDay(due) ? 'pp-ev-late' : (isSoonDay(due) ? 'pp-ev-soon' : 'pp-ev-tip')) + '">' + (e.type === 'proof' ? '校稿截止 ' : '返修截止 ') + fmtDay(due) + ' · ' + fromNow(due) + '</span>';
+      if (sub) return '<span class="pp-ev-ok">已于 ' + fmtDay(sub) + ' 提交' + revTxt + '</span>';
       return '<span class="pp-ev-tip">点「详细信息」填类型和返修时间</span>';
     }
     if (e.type === 'reject' && d.reason) return '<span class="pp-ev-tip">' + esc(d.reason) + '</span>';
@@ -521,8 +597,9 @@
       var ddl = '';
       if (+d.due) {
         /* 投稿 ddl：只要填了就醒目（橙色加粗），不设「临近 7 天」的门槛；只有过期才变红。 */
-      ddl = '<span class="' + (isOverdueDay(+d.due) ? 'pp-ev-late' : 'pp-ev-soon') + '">投稿 ddl ' +
-          fmtDay(d.due) + ' · ' + fromNow(d.due) + '</span>';
+      var settled = p ? resolveDeadline(p, e).done : false;   /* 已经投出去了就不再强提醒 */
+      ddl = '<span class="' + (settled ? 'pp-ev-tip' : (isOverdueDay(+d.due) ? 'pp-ev-late' : 'pp-ev-soon')) + '">投稿 ddl ' +
+          fmtDay(d.due) + (settled ? '' : ' · ' + fromNow(d.due)) + '</span>';
       }
       return (t.length ? '<span class="pp-ev-tip">' + t.join(' · ') + '</span>' : '') + (ddl ? (t.length ? ' ' : '') + ddl : '');
     }
@@ -535,11 +612,21 @@
     }
     if (e.type === 'accept') {
       var a = [];
+      /* 校稿这一环：填了校稿时间才显示；已完成/已见刊就不再是提醒  */
+      if (+d.proofAt) {
+        var pf = +d.proofAt;
+        if (+d.proofDoneAt) a.push('校稿 ' + fmtDay(pf) + ' · 已完成（' + fmtDay(+d.proofDoneAt) + '）');
+        else if (+d.publishAt) a.push('校稿 ' + fmtDay(pf) + ' · 已见刊');
+        else a.push('校稿 ' + fmtDay(pf) + ' · ' + fromNow(pf));
+      }
       if (+d.publishAt) a.push('见刊 ' + fmtDay(d.publishAt));
       if (+d.indexAt) a.push('检索 ' + fmtDay(d.indexAt));
       if (d.doi) a.push(esc(d.doi));
-      return a.length ? '<span class="pp-ev-tip">' + a.join(' · ') + '</span>' : '';
+      if (!a.length) return '';
+      var pend = (+d.proofAt && !+d.proofDoneAt && !+d.publishAt);
+      return '<span class="' + (pend ? (isOverdueDay(+d.proofAt) ? 'pp-ev-late' : 'pp-ev-soon') : 'pp-ev-tip') + '">' + a.join(' · ') + '</span>';
     }
+    /* 「接收」的校稿时间：还没见刊就按同一套规则提醒（填了就醒目、临近橙、过期红）。 */
     if (e.type === 'index' && d.doi) return '<span class="pp-ev-tip">' + esc(d.doi) + '</span>';
     return '';
   }
@@ -552,6 +639,11 @@
     if (n <= 0) return '当天';
     if (n < 60) return n + ' 天';
     return n + ' 天（约 ' + (Math.round(n / 3) / 10) + ' 个月）';
+  }
+  /* 一轮返修用了多少天：收到意见那天 → 交稿那天（没有交稿就返回 null）*/
+  function reviseDays(e) {
+    var s = +D(e).submitAt;
+    return (s > 0 && +evAt(e) > 0) ? days(midnight(+evAt(e)), midnight(s)) : null;
   }
   function paperTimeline(p) {
     var evs = sortedEvents(p).filter(function (e) { return +evAt(e) > 0; });
@@ -596,12 +688,13 @@
   function evRowHtml(p, e) {
     var d = evOf(e.type);
     /* 「还没了结」的截止整条给点警示：返修截止（没交稿）+ 投稿 ddl（还没投出去）*/
-    var urgent = (d.opinion && +D(e).dueAt && !+D(e).submitAt) ||
-      (e.type === 'preparing' && +D(e).due && !resolveDeadline(p, e).done);
+    var urgent = ((d.opinion || e.type === 'proof') && +D(e).dueAt && !+D(e).submitAt) ||
+      (e.type === 'preparing' && +D(e).due && !resolveDeadline(p, e).done) ||
+      false;
     return '<div class="pp-ev' + (urgent ? ' urgent' : '') + '" data-ev="' + esc(e.id) + '">' +
       '<span class="pp-ev-dot" style="background:' + (d.opinion ? (kindOf(D(e).kind) || { color: '#E8B843' }).color || '#E8B843' : d.color) + '"></span>' +
       '<span class="pp-ev-name">' + esc(evName(e)) + '</span>' +
-      evSummary(e) +
+      evSummary(e, p) +
       gapHtml(p, e) +
       '<span class="pp-ev-date">' + esc(tsDay(evAt(e))) + '</span>' +
       '<button class="pp-ev-more" data-role="evdetail">详细信息</button>' +
@@ -639,7 +732,8 @@
     var due = activeDue(p);
     var overdue = isOverdueDay(due);
     var soon = isSoonDay(due);
-    var dueLabel = (st.id === 'preparing') ? '投稿 ddl ' : '返修 ';
+      /* 标签跟着「是哪条截止」走：准备中的投稿 ddl / 收到意见的返修 / 接收里的校稿截止 */
+      var dueLabel = (activeDueLabel(p) || '返修') + ' ';
     var bits = [];
     if (m.venue) bits.push('<span class="pp-venue">' + esc(m.venue) + '</span>');
     if (m.level) bits.push('<span class="pp-level">' + esc(m.level) + '</span>');
@@ -788,6 +882,30 @@
     }, undo ? 7000 : 2200);
   }
 
+  /* 站内确认框：不再用原生 window.confirm。
+     原生 confirm 是阻塞式模态，它返回后的一小段时间里，原生「日期 / 时间」选择器会点了没反应
+     （Windows + Chromium 的合成层时序问题，偶发难复现；style.css 里对 backdrop-filter 祖先
+     也有一条同类告警）。用户实测：删掉一条状态后再点「新增状态」里的日期框，点不动，过一会儿才恢复。 */
+  function askConfirm(msg, onYes) {
+    var old = $('ppConfirmOverlay');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var ov = document.createElement('div');
+    ov.className = 'overlay modal';
+    ov.id = 'ppConfirmOverlay';
+    ov.innerHTML = '<div class="overlay-card item-card pp-confirm-card">' +
+      '<h3 class="it-title">确认一下</h3>' +
+      '<p class="col-sub" style="white-space:pre-line;margin:0 0 16px">' + esc(msg) + '</p>' +
+      '<div class="pp-acts">' +
+        '<button class="btn sm" id="ppCfNo">取消</button>' +
+        '<button class="btn sm primary" id="ppCfYes">确定</button>' +
+      '</div>' +
+    '</div>';
+    document.body.appendChild(ov);
+    var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+    if ($('ppCfNo')) $('ppCfNo').addEventListener('click', close);
+    if ($('ppCfYes')) $('ppCfYes').addEventListener('click', function () { close(); if (onYes) onYes(); });
+  }
+
   /* ------------------------------------------------------------ 详细信息（字段随类型变） */
   function field(label, inner) {
     return '<label>' + esc(label) + '</label>' + inner;
@@ -837,7 +955,7 @@
     if (t === 'submitted') return '投稿日期';
     if (t === 'review') return '开始审稿';
     if (t === 'accept') return '接收时间';
-    if (t === 'index') return '检索日期';
+    if (t === 'index') return '见刊/检索日期';
     if (t === 'withdraw') return '撤稿日期';
     return '日期';
   }
@@ -846,16 +964,16 @@
     if (t === 'submitted') return '投稿日期';
     if (t === 'review') return '开始审稿';
     if (t === 'accept') return '接收时间';
-    if (t === 'index') return '检索日期';
+    if (t === 'index') return '见刊/检索日期';
     if (t === 'withdraw') return '撤稿日期';
     return '日期';
   }
 
-  function openDetail(pid, eid) {
+  function openDetail(pid, eid, isNew) {
     var p = byId(pid);
     var e = evById(p, eid);
     if (!p || !e) return;
-    detailFor = { pid: pid, eid: eid };
+    detailFor = { pid: pid, eid: eid, isNew: !!isNew };
     var t = e.type, d = D(e);
     var inh = (t === 'submitted') ? inheritFrom(p, eid) : { venue: '', level: '', venueType: 'journal' };
     var venue = d.venue || inh.venue || '';
@@ -893,17 +1011,23 @@
         field('返修截止', '<input type="date" id="ppOpDue" value="' + tsDay(d.dueAt) + '">') +
         field('提交返修稿', '<input type="date" id="ppOpSubmit" value="' + tsDay(d.submitAt) + '">') +
         field('备注', input('ppDNote', d.note, '可空'));
-    } else if (t === 'accept') {
+    } else if (t === 'proof') {
+      /* 校稿：和「收到意见」同一套字段（dueAt 截止 / submitAt 交稿），
+         这样"截止→提醒、交稿→完成"整套逻辑可以直接复用。 */
       body =
-        field('校稿时间', dateIn('ppDProof', d.proofAt)) +
-        field('发表/见刊', dateIn('ppDPublish', d.publishAt)) +
-        field('检索时间', dateIn('ppDIndex', d.indexAt)) +
-        field('DOI', input('ppDDoi', d.doi, '10.1109/…', 200)) +
+        field('校稿截止', dateIn('ppDProofDue', d.dueAt)) +
+        field('交稿时间', dateIn('ppDProofSubmit', d.submitAt)) +
         field('备注', input('ppDNote', d.note, '可空'));
+    } else if (t === 'accept') {
+      body = field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'index') {
       body = field('DOI', input('ppDDoi', d.doi, '10.1109/…', 200)) + field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'reject') {
-      body = field('拒稿原因（可空）', input('ppDReason', d.reason, '比如：创新性不足 / 版面不符 / 建议改投')) +
+      body = field('拒稿原因（可空）', '<input type="text" id="ppDReason" list="ppReasonList" maxlength="200" value="' +
+        esc(d.reason || '') + '">' +
+        '<datalist id="ppReasonList">' + REASONS.map(function (r) {
+          return '<option value="' + esc(r) + '"></option>';
+        }).join('') + '</datalist>') +
         field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'other') {
       body = field('状态说明（会显示在时间线上）', input('ppDLabel', d.label, '比如：送外审 / 补材料 / 等待答复')) +
@@ -945,6 +1069,16 @@
   function closeDetail() {
     var ov = $('ppOpinionOverlay');
     if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    /* 是「新增状态」刚建出来还没保存的那条：叉掉/取消要把它一起撤掉，
+       否则会出现「叉掉了却多出一条状态」（用户反馈）。保存路径会先把 isNew 清掉。 */
+    if (detailFor && detailFor.isNew) {
+      var p0 = byId(detailFor.pid);
+      if (p0 && Array.isArray(p0.events)) {
+        p0.events = p0.events.filter(function (x) { return x.id !== detailFor.eid; });
+        touch(p0);
+        save(); render();
+      }
+    }
     detailFor = null;
   }
   function saveDetail() {
@@ -984,11 +1118,13 @@
       d.dueAt = ts('ppOpDue');
       d.submitAt = ts('ppOpSubmit');
       d.note = val('ppDNote').slice(0, 300);
+    } else if (t === 'proof') {
+      d.dueAt = ts('ppDProofDue');
+      d.submitAt = ts('ppDProofSubmit');
+      d.note = val('ppDNote').slice(0, 300);
     } else if (t === 'accept') {
-      d.proofAt = ts('ppDProof');
-      d.publishAt = ts('ppDPublish');
-      d.indexAt = ts('ppDIndex');
-      d.doi = val('ppDDoi').slice(0, 200);
+      /* 接收只剩「接收时间」（就是这条自己的日期）与备注 ——
+         校稿/见刊/检索都各自成为独立状态了（老数据由 migrate 一次性搬过去）。 */
       d.note = val('ppDNote').slice(0, 300);
     } else if (t === 'index') {
       d.doi = val('ppDDoi').slice(0, 200);
@@ -1004,6 +1140,7 @@
     }
     if ($('ppDAt')) { var a2 = ts('ppDAt'); if (a2) e.at = a2; }
     touch(p);
+    if (detailFor) detailFor.isNew = false;   /* 保存成功：这条已经正式存在了，关窗时别撤 */
     closeDetail();
     save(); render();
     flash('已保存：' + evName(e));
@@ -1014,12 +1151,14 @@
     var p = byId(pid);
     if (!p) return;
     var st = statusOfPaper(p);
-    var rows = sortedEvents(p).map(function (e) {
+    /* 时间线：把「提交返修稿」从「收到意见」里拆出来单列一条 ——
+       这样两条各有日期，右侧就能算出这一轮返修实际用了多少天。
+       返修截止不在这里体现（它是"待办"性质，列表卡片与详细信息里有倒计时）。*/
+    var tlRows = [];
+    sortedEvents(p).forEach(function (e) {
       var d = evOf(e.type), dd = D(e);
       var extras = [];
       if (d.opinion) {
-        if (+dd.dueAt) extras.push('返修截止 ' + tsDay(dd.dueAt));
-        if (+dd.submitAt) extras.push('交稿 ' + tsDay(dd.submitAt));
         if (dd.note) extras.push(dd.note);
       } else if (e.type === 'preparing') {
         if (dd.venue) extras.push(dd.venue);
@@ -1033,17 +1172,31 @@
         if (dd.link) extras.push(dd.link);
       } else if (e.type === 'accept') {
         if (+dd.proofAt) extras.push('校稿 ' + tsDay(dd.proofAt));
+        if (+dd.proofDoneAt) extras.push('校稿完成 ' + tsDay(dd.proofDoneAt));
         if (+dd.publishAt) extras.push('见刊 ' + tsDay(dd.publishAt));
         if (+dd.indexAt) extras.push('检索 ' + tsDay(dd.indexAt));
         if (dd.doi) extras.push('DOI ' + dd.doi);
       } else if (e.type === 'index' && dd.doi) extras.push('DOI ' + dd.doi);
       if (dd.note && extras.indexOf(dd.note) < 0) extras.push(dd.note);
+      tlRows.push({ sort: +evAt(e) || 0, name: evName(e), color: d.color, extras: extras.join(' · ') });
+      /* 收到意见里填了「提交返修稿」→ 单独再出一条，日期就是交稿那天 */
+      if (e.type === 'opinion' && +dd.submitAt > 0) {
+        tlRows.push({ sort: +dd.submitAt, name: '提交返修稿', color: '#3F9E6E', extras: '' });
+      }
+    });
+    tlRows.sort(function (a, b) { return a.sort - b.sort; });
+    var rows = tlRows.map(function (r, i) {
+      var gap = '';
+      if (i > 0 && r.sort > 0 && tlRows[i - 1].sort > 0) {
+        var g = days(midnight(tlRows[i - 1].sort), midnight(r.sort));
+        if (g > 0) gap = '<span class="pp-ev-gap">+' + g + ' 天</span>';
+      }
       return '<div class="pp-tl-row">' +
-        '<span class="pp-tl-date">' + esc(tsDay(evAt(e))) + '</span>' +
-        '<span class="pp-tl-dot" style="background:' + d.color + '"></span>' +
-        '<span class="pp-tl-name">' + esc(evName(e)) + '</span>' +
-        gapHtml(p, e) +
-        '<span class="pp-tl-ext">' + esc(extras.join(' · ')) + '</span>' +
+        '<span class="pp-tl-date">' + esc(tsDay(r.sort)) + '</span>' +
+        '<span class="pp-tl-dot" style="background:' + r.color + '"></span>' +
+        '<span class="pp-tl-name">' + esc(r.name) + '</span>' +
+        gap +
+        '<span class="pp-tl-ext">' + esc(r.extras) + '</span>' +
       '</div>';
     }).join('');
     var m = paperMeta(p);
@@ -1121,7 +1274,7 @@
     p.events.push(e);
     touch(p);
     save(); render();
-    openDetail(pid, e.id);        // 加完直接打开详细信息填内容
+    openDetail(pid, e.id, true);        // 加完直接打开详细信息填内容
   }
   function delEvent(pid, eid) {
     var p = byId(pid);
@@ -1129,7 +1282,7 @@
     var e = p.events.filter(function (x) { return x.id === eid; })[0];
     if (!e) return;
     /* 删状态也要问一句：以前一个 ✕ 就没了，手滑就找不回来（用户反馈） */
-    if (!window.confirm('删掉「' + evName(e) + '」这条状态？\n（删了可以用下面的「撤销」找回）')) return;
+    askConfirm('删掉「' + evName(e) + '」这条状态？\n（删了可以用下面的「撤销」找回）', function () {
     var idx = p.events.indexOf(e);
     p.events = p.events.filter(function (x) { return x.id !== eid; });
     if (detailFor && detailFor.eid === eid) closeDetail();
@@ -1140,6 +1293,7 @@
       touch(p);
       save(); render();
       flash('已找回「' + evName(e) + '」');
+    });
     });
   }
 
@@ -1248,8 +1402,8 @@
           if (what === 'del') {
             var p = byId(pid);
             if (!p) return;
-            if (!window.confirm('删除「' + (p.title || '') + '」这篇论文？\n' +
-              '它下面 ' + ((p.events || []).length) + ' 条状态会一起删掉。\n（删了可以用下面的「撤销」找回）')) return;
+            askConfirm('删除「' + (p.title || '') + '」这篇论文？\n' +
+              '它下面 ' + ((p.events || []).length) + ' 条状态会一起删掉。\n（删了可以用下面的「撤销」找回）', function () {
             var idx = papers.indexOf(p);
             papers = papers.filter(function (x) { return x.id !== pid; });
             if (openedId === pid) openedId = null;
@@ -1259,6 +1413,7 @@
               openedId = p.id;
               save(); render();
               flash('已找回「' + (p.title || '') + '」');
+            });
             });
             return;
           }
@@ -1297,6 +1452,8 @@
     _meta: function (p) { return paperMeta(p); },
     /* 供自检用：手动触发一次同步，返回同步后备忘条数（验幂等） */
     _sync: function () { syncMemos(); return window.KUNKUN_MEMOS ? window.KUNKUN_MEMOS.list().length : -1; },
+  /* 供自检用：按现有规则跑一遍数据迁移（幂等），返回论文数 */
+  _migrate: function () { papers = papers.map(migrate); return papers.length; },
     _live: function (p) { return liveDeadlines(p); }
   };
 

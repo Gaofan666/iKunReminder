@@ -1520,3 +1520,9 @@ body.ablate-noboth .scanlines{mix-blend-mode:normal !important}
 .pp-ev-gap{flex:none;font-size:11px;color:var(--dim);opacity:.75;margin-left:2px}
 
 .pp-tl-row .pp-ev-gap{margin-left:0;margin-right:2px}
+
+/* 站内确认框：内容少，卡片收紧一点，别留一大片空白（用户反馈）*/
+.pp-confirm-card{width:min(92vw,360px);text-align:left;padding:18px 22px 16px}
+.pp-confirm-card .it-title{margin:0 0 10px;font-size:16px;letter-spacing:.5px}
+.pp-confirm-card .col-sub{font-size:13px;line-height:1.65;margin:0 0 14px;white-space:pre-line}
+.pp-confirm-card .pp-acts{margin:0;justify-content:flex-end}
