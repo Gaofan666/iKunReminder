@@ -1388,22 +1388,31 @@ function createWindow() {
               'document.getElementById("ppTitle").value="【冒烟】迁移测试";' +
               'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
               'document.getElementById("paperSave").click();' +
+              'P.add("submitted");P.ok();' +
               'P.add("accept");P.ok();' +
               'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("迁移测试")>=0)q=x;});' +
               'if(!q)return {没建出:true};' +
               'var ae=null;(q.events||[]).forEach(function(e){if(e.type==="accept")ae=e;});' +
               'if(!ae)return {没有接收条目:true};' +
               'if(!ae.d)ae.d={};' +
-              'ae.d.indexAt=Date.now()-5*86400000;ae.d.doi="10.1109/OLD.2026.1";' +
+              'ae.d.indexAt=Date.now()-3*86400000;ae.d.publishAt=Date.now()-5*86400000;ae.d.doi="10.1109/OLD.2026.1";' +
               'window.PAPERS._migrate();' +
               'var idx=null;(q.events||[]).forEach(function(e){if(e.type==="index")idx=e;});' +
               'var out={搬出见刊检索条目:!!idx,搬过去了日期:!!idx&&+idx.at>0,' +
-              ' DOI也搬过去了:!!idx&&idx.d&&idx.d.doi==="10.1109/OLD.2026.1",' +
+              ' DOI搬到见刊:(function(){var _x=null;(q.events||[]).forEach(function(e){if(e.type==="publish")_x=e;});return !!_x&&_x.d&&_x.d.doi==="10.1109/OLD.2026.1";})(),' +
+              ' 见刊与检索是两个条目:(q.events||[]).filter(function(e){return e.type==="publish";}).length===1&&(q.events||[]).filter(function(e){return e.type==="index";}).length===1,' +
               ' 旧字段已清掉:!ae.d.indexAt&&!ae.d.doi};' +
               'var before=(q.events||[]).filter(function(e){return e.type==="index";}).length;' +
               'window.PAPERS._migrate();' +
               'var after=(q.events||[]).filter(function(e){return e.type==="index";}).length;' +
               'out.重复迁移不会再建=before===after&&after===1;' +
+              /* 用户实际情形：DOI 被填在「已投稿」的「链接」里 → 迁移搬到见刊并从链接去掉 */
+              'var sub=null;(q.events||[]).forEach(function(e){if(e.type==="submitted")sub=e;});' +
+              'if(sub){if(!sub.d)sub.d={};sub.d.link="10.1109/TGRS.2026.3709525";}' +
+              'window.PAPERS._migrate();' +
+              'var pb=null;(q.events||[]).forEach(function(e){if(e.type==="publish")pb=e;});' +
+              'out.见刊上有DOI=!!pb&&pb.d&&!!pb.d.doi;' +
+              'out.已投稿的链接已清空=!!sub&&!sub.d.link;' +
               /* 再验一遍"4.7.1 用户真实形状"：填过校稿时间、也见刊了，但那时还没有"校稿完成"这个字段
                  → 迁过来的校稿必须是【已完成】，不能变成一条永远待办。 */
               'ae.d.indexAt=0;ae.d.doi="10.1109/OLD.2026.1";delete ae.d.proofDoneAt;' +
@@ -1482,6 +1491,46 @@ function createWindow() {
               '/* 只用「活跃截止=0」与「备忘已完成」判定；列表里别篇的报警不算这条的 */' +
               'out.列表报警元素数=document.querySelectorAll("#paperList .pp-due").length;' +
               'var _ms2=memos();out.备忘明细=_ms2.map(function(m){return m.text+"|done="+m.done;});' +
+              'return out;})()');
+            /* ㉞ 状态归属（用户明确要求的四条）：
+               只接收 → 主状态「接收」、不算进行中；
+               接收+校稿未交 → 主状态「校稿」、**同时**在进行中与接收里；
+               校稿交了 → 主状态退回「接收」、不算进行中、仍在接收里；
+               加了见刊/检索 → 主状态跟着变成见刊/检索。 */
+            SM['34-接收与校稿的状态归属'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】状态归属";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("submitted");P.ok();P.add("accept");P.ok();' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("状态归属")>=0)q=x;});' +
+              'if(!q)return {没建出:true};' +
+              'var st=function(){return window.PAPERS._status(q).id;};' +
+              'var op=function(){return window.PAPERS._open(q);};' +
+              'var mf=function(f){return window.PAPERS._match(q,f);};' +
+              'var out={只接收_主状态是接收:st()==="accepted",只接收_不算进行中:op()===false,只接收_在接收筛选里:mf("accepted")===true};' +
+              'P.add("proof");P.ok();' +
+              'out.校稿未交_主状态是校稿=(st()==="proof");' +
+              'out.校稿未交_算进行中=(op()===true);' +
+              'out.校稿未交_也在接收筛选里=(mf("accepted")===true);' +
+              'out.校稿未交_有校稿筛选=(mf("proof")===true);' +
+              'window.PAPERS.open();' +
+              /* 校稿/见刊/检索**不单独出筛选按钮**（都归「接收」大类，免得总数重复） */
+              'out.筛选里没有单独校稿见刊检索=(document.querySelectorAll("#paperFilter [data-pf=proof],#paperFilter [data-pf=published],#paperFilter [data-pf=indexed]").length===0);' +
+              'out.接收按钮存在=(function(){var b=document.querySelector("#paperFilter [data-pf=accepted]");return !!b&&b.textContent.indexOf("接收")>=0;})();' +
+              'var pe=null;(q.events||[]).forEach(function(e){if(e.type==="proof")pe=e;});' +
+              'if(!pe)return {没有校稿条目:true};if(!pe.d)pe.d={};' +
+              'pe.d.dueAt=Date.now()+5*86400000;pe.d.submitAt=Date.now();window.PAPERS._sync();' +
+              'out.校稿交了_主状态退回接收=(st()==="accepted");' +
+              'out.校稿交了_不算进行中=(op()===false);' +
+              'out.校稿交了_仍在接收筛选里=(mf("accepted")===true);' +
+              'P.add("publish");P.ok();' +
+              'out.加了见刊_主状态是见刊=(st()==="published");' +
+              'out.加了见刊_不算进行中=(op()===false);' +
+              'out.加了见刊_仍在接收筛选里=(mf("accepted")===true);' +
+              'P.add("index");P.ok();' +
+              'out.加了检索_主状态是检索=(st()==="indexed");' +
               'return out;})()');
             /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
                「改回内存」只动了内存对象，存储里还留着测试标题 —— 这里把两边的【冒烟】数据都清掉，

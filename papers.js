@@ -33,7 +33,8 @@
     { id: 'reject', name: '拒稿', color: '#D9534F', state: 'rejected', final: true },
     { id: 'accept', name: '接收', color: '#3F9E6E', state: 'accepted', final: true },
     { id: 'proof', name: '校稿', color: '#6FA8B8', state: 'proof' },
-    { id: 'index', name: '见刊/检索', color: '#4FB3A8', state: null },
+    { id: 'publish', name: '见刊', color: '#4FB3A8', state: 'published' },
+    { id: 'index', name: '检索', color: '#4FB3A8', state: 'indexed' },
     { id: 'withdraw', name: '撤稿', color: '#9B8EA8', state: 'withdrawn', final: true },
     { id: 'other', name: '其他进展', color: '#8A9AA5', state: null }
   ];
@@ -48,7 +49,10 @@
   /* 拒稿原因：给几个常见的候选，也可以自己写（写什么就显示什么）*/
   var REASONS = ['创新性不足', '与期刊范围不符', '工作量 / 实验不够充分', '方法或分析有缺陷',
     '结果不够显著', '英文表达问题', '编辑直接拒（未送外审）', '建议改投其他期刊'];
-  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1, proof: 1 };
+  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1 };
+  /* 接收之后的那几个状态都算「已接收」这个大类：接收 / 校稿 / 见刊 / 检索 ——
+     这样筛选「接收」时，已经走到校稿或已见刊的论文也能一起看到（用户要求）。 */
+  var ACCEPTED_STATES = { accepted: 1, proof: 1, published: 1, indexed: 1 };
 
   var papers = [];
   var editingId = null;
@@ -135,12 +139,17 @@
   function byId(id) { return papers.filter(function (x) { return x.id === id; })[0]; }
   function evById(p, eid) { return ((p && p.events) || []).filter(function (x) { return x.id === eid; })[0]; }
 
-  /* 当前状态：按录入顺序，最后一条带状态的条目说了算 */
+  /* 当前状态：按录入顺序，最后一条带状态的条目说了算。
+     ⚠️ 两个特例（用户明确要求）：
+     1. 「校稿」只在**还没交稿**时才算当前状态 —— 交了稿，这一环就过去了，
+        主状态退回「接收」（而不是永远停在「校稿」）；
+     2. 「见刊」「检索」是独立状态，做到哪一步就显示哪一步（加了见刊就显示见刊）。 */
   function statusOfPaper(p) {
     var st = 'preparing', lastAt = 0;
     byCreated(p).forEach(function (e) {
       var d = evOf(e.type);
       var s = d.opinion ? ((kindOf(D(e).kind) || {}).state || null) : d.state;
+      if (e.type === 'proof' && resolveDeadline(p, e).done) s = null;
       if (s) { st = s; lastAt = evAt(e); }
     });
     return { id: st, at: lastAt };
@@ -159,12 +168,33 @@
     if (id === 'withdrawn') return '#9B8EA8';
     if (id === 'submitted') return '#4A9BD4';
     if (id === 'proof') return '#6FA8B8';
+    if (id === 'published' || id === 'indexed') return '#4FB3A8';
     if (id === 'editorReview') return '#88A9C9';
     if (id === 'awaitingDecision') return '#8FB3E0';
     if (id === 'review') return '#7FA8D9';
     return '#8A9AA5';
   }
-  function isOpen(p) { return !!OPEN_STATES[statusOfPaper(p).id]; }
+  /* 有没有「还挂着的校稿截止」：接收之后、交稿之前 */
+  function hasPendingProof(p) {
+    return byCreated(p).some(function (e) { return e.type === 'proof' && !resolveDeadline(p, e).done; });
+  }
+  /* 「进行中」= 还有事情没做完：
+     - 处于未完成状态（准备中/已投稿/编辑初审/审稿中/等待决定/大修/小修）；或
+     - 已经接收、但校稿还没交 → 这时它**同时**属于「进行中」和「接收」（用户要求）；
+     校稿交了、或者已经见刊/检索，就不算进行中了。 */
+  function isOpen(p) {
+    if (OPEN_STATES[statusOfPaper(p).id]) return true;
+    return hasPendingProof(p);
+  }
+  /* 筛选按钮的归属判断（唯一口径，列表与计数都用它）：
+     「接收」是个大类，包含 接收/校稿/见刊/检索 —— 走到后面的步骤也还在这类里。 */
+  function matchesFilter(p, f) {
+    if (f === 'all') return true;
+    if (f === 'open') return isOpen(p);
+    var st = statusOfPaper(p).id;
+    if (f === 'accepted') return !!ACCEPTED_STATES[st];
+    return st === f;
+  }
 
   /* 列表上那行小字：期刊/级别/角色 —— 按录入顺序取最后一次填的 */
   function paperMeta(p) {
@@ -287,24 +317,49 @@
         }
         delete e.kind; delete e.dueAt; delete e.submitAt;
       });
-      /* 「接收」里原来记着校稿/见刊/检索/DOI —— 现在它们各自成为独立状态。
-         一次性搬过去（幂等：已有对应条目就不再建），搬完把旧字段删掉，免得两处显示同一件事。 */
+      /* 「接收」里原来记着校稿/见刊/检索/DOI —— 现在各自成为独立状态（见刊与检索是两个时间）。
+         一次性搬过去（幂等），搬完清旧字段。⚠️ DOI 只搬不删：有见刊就挂见刊，没有就挂检索，
+         两者都没有就补一条见刊 —— 绝不能因为"已经有对应条目"就把 DOI 丢掉（踩过）。 */
       p.events.forEach(function (e) {
+        if (e.type !== 'accept') return;
         var d = e.d || {};
-        var hasProof = p.events.some(function (x) { return x.type === 'proof'; });
-        if (+d.proofAt && !hasProof) {
+        var pick = function (ty) { return p.events.filter(function (x) { return x.type === ty; })[0] || null; };
+        if (+d.proofAt && !pick('proof')) {
           p.events.push({ id: newId('ev'), type: 'proof', at: +d.proofAt, createdAt: Date.now(),
             d: { dueAt: +d.proofAt, submitAt: +d.proofDoneAt || +d.publishAt || +d.indexAt || 0 } });
         }
-        var hasIndex = p.events.some(function (x) { return x.type === 'index'; });
-        var idxAt = +d.publishAt || +d.indexAt || 0;
-        if ((idxAt || d.doi) && !hasIndex) {
-          p.events.push({ id: newId('ev'), type: 'index', at: idxAt || Date.now(), createdAt: Date.now(),
-            d: { doi: d.doi || '' } });
+        if (+d.publishAt && !pick('publish')) {
+          p.events.push({ id: newId('ev'), type: 'publish', at: +d.publishAt, createdAt: Date.now(), d: { doi: '' } });
         }
-        if (+d.proofAt || +d.proofDoneAt || +d.publishAt || +d.indexAt || d.doi) {
-          delete d.proofAt; delete d.proofDoneAt; delete d.publishAt; delete d.indexAt; delete d.doi;
+        if (+d.indexAt && !pick('index')) {
+          p.events.push({ id: newId('ev'), type: 'index', at: +d.indexAt, createdAt: Date.now(), d: {} });
         }
+        if (d.doi) {
+          var tgt = pick('publish') || pick('index');
+          if (!tgt) {
+            tgt = { id: newId('ev'), type: 'publish', at: +d.publishAt || +d.indexAt || Date.now(), createdAt: Date.now(), d: {} };
+            p.events.push(tgt);
+          }
+          if (!tgt.d) tgt.d = {};
+          if (!tgt.d.doi) tgt.d.doi = d.doi;
+        }
+        delete d.proofAt; delete d.proofDoneAt; delete d.publishAt; delete d.indexAt; delete d.doi;
+      });
+      /* 以前没有「DOI」这个字段，用户会把 DOI 填在「已投稿」的「链接」里（形如 10.xxxx/…）——
+         那其实就是 DOI，搬到「见刊」（没有见刊条目就补一条，日期用投稿日期），并从链接里去掉。 */
+      p.events.forEach(function (e) {
+        if (e.type !== 'submitted') return;
+        var d = e.d || {};
+        var lk = String(d.link || '').trim();
+        if (!/^10\.\d{4,9}\//.test(lk)) return;
+        var tgt2 = p.events.filter(function (x) { return x.type === 'publish'; })[0] || null;
+        if (!tgt2) {
+          tgt2 = { id: newId('ev'), type: 'publish', at: +e.at || Date.now(), createdAt: Date.now(), d: {} };
+          p.events.push(tgt2);
+        }
+        if (!tgt2.d) tgt2.d = {};
+        if (!tgt2.d.doi) tgt2.d.doi = lk;
+        delete d.link;
       });
       /* 老数据里可能留着「收到意见 · kind=接收」：接收是独立状态，还原成 accept 条目并去掉 kind
          （KINDS 里已经没有 accept 了，留着它会选不中、显示成空白） */
@@ -437,8 +492,8 @@
     if (e.type === 'accept' && +d.proofAt) return { done: !!(+d.proofDoneAt || +d.publishAt), doneAt: +d.proofDoneAt || +d.publishAt || 0 };
     /* 兜底：校稿后面已经出现「见刊/检索」条目 → 说明这一环早就过去了（老数据可能没有交稿时间）。 */
     if (e.type === 'proof') {
-      var later = byCreated(p).some(function (x) { return x.type === 'index' && (+x.createdAt || 0) > (+e.createdAt || 0); });
-      if (later) return { done: true, doneAt: +D(byCreated(p).filter(function (x) { return x.type === 'index' && (+x.createdAt || 0) > (+e.createdAt || 0); })[0]).at || +evAt(e) };
+      var later = byCreated(p).some(function (x) { return (x.type === 'index' || x.type === 'publish') && (+x.createdAt || 0) > (+e.createdAt || 0); });
+      if (later) return { done: true, doneAt: +D(byCreated(p).filter(function (x) { return (x.type === 'index' || x.type === 'publish') && (+x.createdAt || 0) > (+e.createdAt || 0); })[0]).at || +evAt(e) };
     }
     if ((evOf(e.type).opinion || e.type === 'proof') && +d.submitAt) return { done: true, doneAt: +d.submitAt };
     /* 返修截止还有个更常见的情况：用户没填「交稿时间」，但论文后面已经「接收/拒稿/撤稿」了 ——
@@ -505,8 +560,8 @@
     var gaps = [], decided = 0, roundSum = 0, roundCnt = 0;
     papers.forEach(function (p) {
       var st = statusOfPaper(p).id;
-      if (OPEN_STATES[st]) open++;
-      if (st === 'accepted') accepted++;
+      if (isOpen(p)) open++;
+      if (ACCEPTED_STATES[st]) accepted++;
       if (st === 'rejected') rejected++;
       if (activeDue(p)) waiting++;
       var list = sortedEvents(p), sub = 0, firstOp = 0, n = 0;
@@ -536,12 +591,21 @@
     if (!box) return;
     var counts = {};
     papers.forEach(function (p) { var st = statusOfPaper(p).id; counts[st] = (counts[st] || 0) + 1; });
+    /* 「接收」按钮算的是大类：接收 + 校稿 + 见刊 + 检索 */
+    var accN = papers.filter(function (p) { return matchesFilter(p, 'accepted'); }).length;
     /* ⚠️ 筛的那个状态可能已经没有论文了（删掉它下面最后一篇、或那篇换了状态）：
-       这种按钮不会再生成，界面就会「一个都没高亮、列表还空着」。先退回「全部」。 */
-    if (filter !== 'all' && filter !== 'open' && !counts[filter]) filter = 'all';
+       这种按钮不会再生成，界面就会「一个都没高亮、列表还空着」。先退回「全部」。
+       另外筛的 id 得是**确实有按钮的**那几个 —— 校稿/见刊/检索不是按钮，
+       万一是上次留下的筛选项（比如 restored 的界面状态），也要退回「全部」。 */
+    var FILTERABLE = { open: 1, all: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1, preparing: 1, accepted: 1, rejected: 1, withdrawn: 1 };
+    if (!FILTERABLE[filter]) filter = 'all';
+    else if (filter !== 'all' && filter !== 'open' && !(filter === 'accepted' ? accN : counts[filter])) filter = 'all';
     var items = [{ id: 'open', name: '进行中' }, { id: 'all', name: '全部' }];
+    /* ⚠️ 这里**只出这几个按钮**：校稿/见刊/检索不单独成按钮（它们属于「接收」大类，
+       单独出按钮会让总数重复计算；状态本身照旧——卡片徽章的颜色是区分的）。 */
     ['submitted', 'editorReview', 'review', 'awaitingDecision', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
-      if (counts[st]) items.push({ id: st, name: statusName(st) + ' ' + counts[st] });
+      var n = (st === 'accepted') ? accN : (counts[st] || 0);
+      if (n) items.push({ id: st, name: statusName(st) + ' ' + n });
     });
     box.innerHTML = items.map(function (it) {
       return '<button class="ax-tab' + (filter === it.id ? ' on' : '') + '" data-pf="' + it.id + '">' + esc(it.name) + '</button>';
@@ -746,11 +810,7 @@
   function renderList() {
     var box = $('paperList');
     if (!box) return;
-    var list = papers.filter(function (p) {
-      if (filter === 'all') return true;
-      if (filter === 'open') return isOpen(p);
-      return statusOfPaper(p).id === filter;
-    });
+    var list = papers.filter(function (p) { return matchesFilter(p, filter); });
     list.sort(function (a, b) {
       var da = activeDue(a), db = activeDue(b);
       if (!!da !== !!db) return da ? -1 : 1;
@@ -943,7 +1003,8 @@
     if (t === 'submitted') return '投稿日期';
     if (t === 'review') return '开始审稿';
     if (t === 'accept') return '接收时间';
-    if (t === 'index') return '见刊/检索日期';
+    if (t === 'publish') return '见刊日期';
+    if (t === 'index') return '检索日期';
     if (t === 'withdraw') return '撤稿日期';
     return '日期';
   }
@@ -952,7 +1013,8 @@
     if (t === 'submitted') return '投稿日期';
     if (t === 'review') return '开始审稿';
     if (t === 'accept') return '接收时间';
-    if (t === 'index') return '见刊/检索日期';
+    if (t === 'publish') return '见刊日期';
+    if (t === 'index') return '检索日期';
     if (t === 'withdraw') return '撤稿日期';
     return '日期';
   }
@@ -1008,8 +1070,13 @@
         field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'accept') {
       body = field('备注', input('ppDNote', d.note, '可空'));
+    } else if (t === 'publish') {
+      /* 见刊：带 DOI 的记录；检索是另一条独立状态，两个时间分开记。 */
+      body =
+        field('DOI', input('ppDDoi', d.doi, '10.1109/…', 200)) +
+        field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'index') {
-      body = field('DOI', input('ppDDoi', d.doi, '10.1109/…', 200)) + field('备注', input('ppDNote', d.note, '可空'));
+      body = field('备注', input('ppDNote', d.note, '可空'));   /* 检索只记日期与备注，DOI 归「见刊」 */
     } else if (t === 'reject') {
       body = field('拒稿原因（可空）', '<input type="text" id="ppDReason" list="ppReasonList" maxlength="200" value="' +
         esc(d.reason || '') + '">' +
@@ -1114,9 +1181,14 @@
       /* 接收只剩「接收时间」（就是这条自己的日期）与备注 ——
          校稿/见刊/检索都各自成为独立状态了（老数据由 migrate 一次性搬过去）。 */
       d.note = val('ppDNote').slice(0, 300);
-    } else if (t === 'index') {
+    } else if (t === 'publish') {
       d.doi = val('ppDDoi').slice(0, 200);
       d.note = val('ppDNote').slice(0, 300);
+    } else if (t === 'index') {
+      /* 检索界面上已没有 DOI 框：只有它真的在页面上时才写，免得把老数据清掉 */
+      if (document.getElementById('ppDDoi')) d.doi = val('ppDDoi').slice(0, 200);
+      d.note = val('ppDNote').slice(0, 300);
+    } else if (t === 'index') {
     } else if (t === 'reject') {
       d.reason = val('ppDReason').slice(0, 200);
       d.note = val('ppDNote').slice(0, 300);
@@ -1164,7 +1236,7 @@
         if (+dd.publishAt) extras.push('见刊 ' + tsDay(dd.publishAt));
         if (+dd.indexAt) extras.push('检索 ' + tsDay(dd.indexAt));
         if (dd.doi) extras.push('DOI ' + dd.doi);
-      } else if (e.type === 'index' && dd.doi) extras.push('DOI ' + dd.doi);
+      } else if ((e.type === 'index' || e.type === 'publish') && dd.doi) extras.push('DOI ' + dd.doi);
       if (dd.note && extras.indexOf(dd.note) < 0) extras.push(dd.note);
       tlRows.push({ sort: +evAt(e) || 0, name: evName(e), color: d.color, extras: extras.join(' · ') });
       /* 收到意见里填了「提交返修稿」→ 单独再出一条，日期就是交稿那天 */
@@ -1290,7 +1362,12 @@
     var lines = ['# 投稿记录', '', '> 导出时间：' + new Date().toLocaleString('sv-SE').slice(0, 16), ''];
     var groups = {};
     papers.forEach(function (p) { var st = statusOfPaper(p).id; (groups[st] = groups[st] || []).push(p); });
-    ['review', 'editorReview', 'awaitingDecision', 'submitted', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
+    /* ⚠️ 章节顺序从状态定义里推出来，**不要写死清单**：
+       以前写死了一份，加了「校稿/见刊/检索」之后，处于这些状态的论文导出会整篇消失（只剩表头）。 */
+    var order = [];
+    EVENTS.forEach(function (e) { if (e.state && order.indexOf(e.state) < 0) order.push(e.state); });
+    KINDS.forEach(function (k) { if (k.state && order.indexOf(k.state) < 0) order.push(k.state); });
+    order.forEach(function (st) {
       var arr = groups[st];
       if (!arr || !arr.length) return;
       lines.push('## ' + statusName(st) + '（' + arr.length + '）', '');
@@ -1305,7 +1382,7 @@
         lines.push('', '**状态时间线**：');
         sortedEvents(p).forEach(function (e) {
           var dd = D(e), extra = [];
-          if (evOf(e.type).opinion) {
+          if (evOf(e.type).opinion || e.type === 'proof') {
             if (+dd.dueAt) extra.push('截止 ' + tsDay(dd.dueAt));
             if (+dd.submitAt) extra.push('已交 ' + tsDay(dd.submitAt));
           }
@@ -1442,7 +1519,10 @@
     _sync: function () { syncMemos(); return window.KUNKUN_MEMOS ? window.KUNKUN_MEMOS.list().length : -1; },
   /* 供自检用：按现有规则跑一遍数据迁移（幂等），返回论文数 */
   _migrate: function () { papers = papers.map(migrate); return papers.length; },
-    _live: function (p) { return liveDeadlines(p); }
+    _live: function (p) { return liveDeadlines(p); },
+    /* 供自检用：是否算「进行中」、某个筛选按钮是否包含这篇 */
+    _open: function (p) { return isOpen(p); },
+    _match: function (p, f) { return matchesFilter(p, f); }
   };
 
   function boot() {
