@@ -1,20 +1,20 @@
 {
-  "version": "4.7.2",
-  "releaseDate": "2026-10-15T07:16:37.284Z",
-  "notes": "## iKunReminder v4.7\n\n1. 📄 **「科研动态」页里多了「我的投稿」** —— 论文从投稿到接收，全过程都记在这里\n   · 一篇论文 = 一个标题 + 一串**状态条目**：准备中 / 已投稿 / 审稿中 / 收到意见 / 接收 / 检索 / 撤稿 / 其他进展。\n   · 新增时填标题，选「准备中」（顺手填**投稿 ddl**）或「已投稿」（顺手填**投稿日期**和我的角色）；作者 / 期刊 / 级别 / 链接这些点条目右侧「详细信息」填。\n   · **一轮返修就是一条**：返修截止和提交返修稿都记在「收到意见」那条里；没交的会倒计时，**临近 7 天变橙、过了截止标红**。\n   · **当前状态不用手填**，按条目自动推出来；列表能按「进行中 / 全部 / 各状态」筛选，顶部有统计（共几篇、进行中、平均审稿周期、平均几轮意见）。\n   · 「论文完整信息」看全过程，标题随时能改；整份记录可以导出成 Markdown；删条目 / 删论文都会先问一句，删错能「撤销」找回。\n\n2. 🔗 **投稿截止自动进备忘和日历**\n   · 投稿里**还没了结**的截止（准备中的投稿 ddl、还没交的返修截止）自动生成一条备忘 —— **提前一天开始提醒**，日历上也能看到。\n   · 在投稿里改了截止，备忘跟着改；**投出去 / 交了返修稿**之后那条备忘自动完成，完成时间落在投稿那天 / 交稿那天。\n   · 这类备忘的文字和日期跟着投稿走（列表里带一把小锁），提醒时间、分类、提醒频率可以照常自己设。\n\n3. 🧰 顺手修好的几处\n   · **打包版缺文件**：`papers.js` 没写进打包白名单，装出来的版本「我的投稿」整块打不开（开发模式看不出来）—— 已修。\n   · **联动备忘以前永远不提醒**：提醒点一直是 0，只有列表 / 日历 / 桌宠气泡看得到 —— 现在「提前一天提醒」是真的了。\n   · **新增论文弹窗里那三个框填了没用**（投稿 ddl / 我的角色 / 投稿日期），现在按「准备中 / 已投稿」显示对应那一行，填了就存。\n   · **截止倒计时差一天**：ddl 是明天会显示「就是今天」，截稿日当天一整天显示「已过期 1 天」并标红 —— 已改成按「当天」比。\n   · **清空截止被当成完成**：会把备忘标成「已完成（今天）」，之后填回同一日期也一直停在已完成 —— 现在只有真的投出去 / 交稿才算完成。\n   · 另外：投稿数据读取出错时不再往下覆盖写盘（先备份、停止保存）、筛选没记录时自动退回「全部」、导出不再出现「### undefined」、已完成的联动备忘里小锁和 ✓ 不再叠在一起。\n\n**下载**：`iKunReminder-setup-v4.7.0.exe`（约 116 MB，Windows x64，双击安装）\n",
-  "size": 121926877,
-  "sha512": "/baLlYQIGqmsvMXhKt0bZzEfx3ED9xzRzkjd2QbxlU/ZOuet0BD3I4Yj0PuOc3gBvoQrrtcGVhenzyyWj15tBg==",
+  "version": "4.7.3",
+  "releaseDate": "2026-10-15T14:50:03.385Z",
+  "notes": "## iKunReminder v4.7.3\n\n1. 📄 「我的论文」状态理顺\n   · **「见刊」与「检索」拆成两条独立状态**（两个时间）：见刊填 **DOI**，检索只记日期。\n   · **DOI 归「见刊」**：以前把 DOI 填在「已投稿」的「链接」里的，会自动搬到「见刊」那一条（形如 `10.xxxx/…` 才认），并从链接里去掉 —— 内容不会丢。\n   · **卡片徽章跟着最新进展走**：接收了、校稿还没交 → 显示「校稿」且同时算「进行中」和「接收」；校稿交了 → 退回显示「接收」；加了见刊 / 检索 → 显示「见刊」「检索」。\n   · **筛选不重复计数**：校稿 / 见刊 / 检索 都归入「接收」大类，按钮只出「接收」，一篇只算一次；徽章颜色仍然区分。\n   · 论文一旦**接收 / 拒稿 / 撤稿**，之前没填交稿时间的返修截止自动算结束（不再\"已经接收了还挂着一条返修截止\"）。\n   · 导出 Markdown 不再漏状态：章节顺序从状态定义推导，不再写死清单。\n\n2. 🔄 老数据自动适应（升级时一次性迁移，幂等、不丢数据）\n   · 「接收」里原来记着 校稿时间 / 校稿完成 / 见刊 / 检索 / DOI → 拆成对应独立状态。\n   · **已见刊**的老数据：它的校稿直接算「已完成」，不会变成永远待办的提醒。\n   · DOI **只搬不删**：优先挂「见刊」，没有见刊就挂「检索」，都没有就补一条见刊。\n\n3. 🛡️ 自检\n   · 内置冒烟测试（`--diag-ppsmoke`）**34 阶段 / 187 条断言全过**，覆盖上面全部状态归属规则。\n\n**下载**：`iKunReminder-setup-v4.7.3.exe`（约 116 MB，Windows x64，双击安装；本页为分卷，供国内直连）\n",
+  "size": 121930267,
+  "sha512": "CAPAUke6dl5/dCDkc8orvXIWqZewb8ixSzw7vHyu7IwWKaGDZ32K03117ECo/U+h0kmy4NfTSdKgIe6nFrHlIQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.2/iKunReminder-setup-v4.7.2.exe.part1",
-      "size": 60963439,
-      "sha512": "keeP9tHvWBF9dDqAidY0QszlKsnfaXAMML+eob+hrWCwXxjDkcRxDxaLd++mOx/59y03u4J3BlmdYtX0Do+vxg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.3/iKunReminder-setup-v4.7.3.exe.part1",
+      "size": 60965134,
+      "sha512": "VEF08zNNZhfKJojQxFBxzpgU/Zo8KKjs+Na3TS8a2qocYlMNRPRy1CWtlaoHNN0Vou5EbZSyUlZR40W5lzzCww==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.2/iKunReminder-setup-v4.7.2.exe.part2",
-      "size": 60963438,
-      "sha512": "OsDPrhGXemYT0QsLxqX6/9HUAszn+xSHtGcyLyoW2XXzLObzHswrB0MTvtYLIRmCEu1VE6uvPPyRzatDvdeNhg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.3/iKunReminder-setup-v4.7.3.exe.part2",
+      "size": 60965133,
+      "sha512": "8g7GlgpXluZE59dlLpKof//WQRlW/dwHrVUHeA1jvkxba8BbKV3kjH16FyXoL4DbUJePUjUGy2gX48anU+r3uA==",
       "index": 2
     }
   ]
