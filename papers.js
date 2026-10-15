@@ -179,7 +179,8 @@
   }
   /* 还在等的返修轮次：返修截止有值、交稿还空着 */
   function waitingRounds(p) {
-    return sortedEvents(p).filter(function (e) { return (evOf(e.type).opinion || e.type === 'proof') && +D(e).dueAt && !+D(e).submitAt; });
+    return sortedEvents(p).filter(function (e) { /* 「还在等」= 有截止、且 resolveDeadline 说它没结束（交稿/接收/拒稿/撤稿都算结束）*/
+    return (evOf(e.type).opinion || e.type === 'proof') && +D(e).dueAt && !resolveDeadline(p, e).done; });
   }
   /* 最早那条活跃截止是谁：投稿 ddl / 返修截止 / 校稿截止（列表卡片上那行小字用它当标签）。
      候选逻辑与 activeDue 完全一致，只是顺带记住标签 —— 刻意不改 activeDue 的返回值，
@@ -200,11 +201,6 @@
       var wd = +D(w[0]).dueAt;
       if (wd && (!best || wd < best)) { best = wd; label = (w[0].type === 'proof' ? '校稿截止' : '返修'); }
     }
-    list.forEach(function (e) {
-      if (e.type !== 'accept') return;
-      var d = D(e);
-    /* 同上：标签不再为 accept 特判。 */
-    });
     return label;
   }
   function activeDue(p) {
@@ -219,12 +215,6 @@
       if (!due) return;
       if (lastSubAt && (+e.createdAt || 0) < lastSubAt) return;   // 这之后的某次已投稿 = 已经投出去了
       cand.push(due);
-    });
-    /* 「接收」里填了校稿时间、又还没见刊：校稿这一环还没过，计入活跃截止（和返修截止一个待遇）。 */
-    list.forEach(function (e) {
-      if (e.type !== 'accept') return;
-      var d2 = D(e);
-    /* 校稿已是独立状态，走上面通用路径；不再特判 accept。 */
     });
     var w = waitingRounds(p);
     if (w.length) cand.push(+D(w[0]).dueAt);
@@ -300,7 +290,6 @@
       /* 「接收」里原来记着校稿/见刊/检索/DOI —— 现在它们各自成为独立状态。
          一次性搬过去（幂等：已有对应条目就不再建），搬完把旧字段删掉，免得两处显示同一件事。 */
       p.events.forEach(function (e) {
-        if (e.type !== 'accept') return;
         var d = e.d || {};
         var hasProof = p.events.some(function (x) { return x.type === 'proof'; });
         if (+d.proofAt && !hasProof) {
@@ -414,21 +403,12 @@
     list.forEach(function (e) {
       var d = D(e);
       if (!evOf(e.type).opinion && e.type !== 'proof') return;
-      if (!(+d.dueAt) || +d.submitAt) return;                  // 没截止、或已经交掉了
+      if (!(+d.dueAt) || resolveDeadline(p, e).done) return;                  // 没截止、或已经交掉了
       var k = kindOf(d.kind);
       out.push({
         evId: e.id, field: 'dueAt', due: +d.dueAt,
         text: '📄 投稿 · ' + (p.title || '（没写标题）') + ' · ' + (e.type === 'proof' ? '校稿截止' : '返修截止') + (k ? '（' + k.name + '）' : '')
       });
-    });
-    /* 「接收」里的校稿时间：填了就生成关联备忘（提前一天提醒、日历可见）；
-       填了「发表/见刊」就表示这一环过去了，备忘会自动完成。没填校稿时间则完全不提醒。 */
-    list.forEach(function (e) {
-      if (e.type !== 'accept') return;
-      var d2 = D(e);
-    /* 同上：accept 不再自己生成校稿备忘。 */
-      out.push({ evId: e.id, field: 'proofAt', due: +d2.proofAt,
-        text: deadlineText(p, e) });
     });
     return out;
   }
@@ -461,6 +441,14 @@
       if (later) return { done: true, doneAt: +D(byCreated(p).filter(function (x) { return x.type === 'index' && (+x.createdAt || 0) > (+e.createdAt || 0); })[0]).at || +evAt(e) };
     }
     if ((evOf(e.type).opinion || e.type === 'proof') && +d.submitAt) return { done: true, doneAt: +d.submitAt };
+    /* 返修截止还有个更常见的情况：用户没填「交稿时间」，但论文后面已经「接收/拒稿/撤稿」了 ——
+       那这轮返修显然早就结束了，不该继续报警（用户实测：接收了还挂着一条返修截止）。 */
+    if (evOf(e.type).opinion && +d.dueAt) {
+      var ended = byCreated(p).filter(function (x) {
+        return (x.type === 'accept' || x.type === 'reject' || x.type === 'withdraw') && (+x.createdAt || 0) > (+e.createdAt || 0);
+      })[0];
+      if (ended) return { done: true, doneAt: evAt(ended) };
+    }
     return { done: false, doneAt: 0 };
   }
   /* 幂等：一切以 paperlinks 里的 memoId 为准，绝不无脑新建 */

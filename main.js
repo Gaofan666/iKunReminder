@@ -1067,12 +1067,14 @@ function createWindow() {
                此时"小修"那轮还有截止没交 → 应有一条未完成备忘；
                "大修"那轮已经交掉了 → 对应备忘应已完成。 */
             SM['15-截止变备忘'] = await jp(
-              '(function(){var P=window.__pp;var n1=PAPERS._sync();var n2=PAPERS._sync();' +
+              '(function(){var P=window.__pp;/* 让这篇回到返修进行中：去掉后面的接收/检索事件 */var _p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)_p=x;});if(_p){_p.events=(_p.events||[]).filter(function(e){return e.type!=="accept"&&e.type!=="index";});PAPERS._sync();}/* 这些联动备忘之前可能已经完成过：删掉让 _sync 按新状态重建，提醒点才会重算 */var _ms0=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);_ms0.forEach(function(m){if((m.text||"").indexOf("小修")>=0){try{window.KUNKUN_MEMOS.remove(m.id);}catch(e){}}});PAPERS._sync();var n1=PAPERS._sync();var n2=PAPERS._sync();' +
               'var ms=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);' +
               'var p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)p=x;});' +
               'var mine=ms.filter(function(m){return m.text.indexOf("改过标题")>=0;});' +
               'var due0=p?window.PAPERS._activeDue(p):-1;var live=null,done=null;mine.forEach(function(m){if(due0>0&&Math.abs(m.dueAt-due0)<1000)live=m;if(m.done)done=m;});' +
               'var due=p?window.PAPERS._activeDue(p):-1;var liveN=p?window.PAPERS._live(p).length:-1;' +
+              'var _evTypes=p?(p.events||[]).map(function(e){return e.type+"@"+(+e.createdAt||0);}).join(","):"";' +
+              'var _dueDetail=p?window.PAPERS._live(p).map(function(it){return it.field+"|"+it.due;}):[];' +
               /* ⚠️ 提醒点（remindAt）一定要在这里验：备忘的提醒是 checkMemoDue 按 remindAt 扫的，
                  remindAt=0 就永远不弹 —— 光有备忘条数、时间对得上，用户还是收不到提醒
                  （投稿联动生成的备忘没人点过「保存」，以前 remindAt 一直是 0）。
@@ -1086,7 +1088,7 @@ function createWindow() {
               ' 当前算出的截止:due,备忘里的截止:live?live.dueAt:0,对得上:!!live&&Math.abs(live.dueAt-due)<1000,' +
               ' 提前量:st.remindBefore||0,提醒点:st.remindAt||0,' +
               ' 提醒点算出来了:!!st.remindAt&&!!st.dueAt&&Math.abs(st.remindAt-(st.dueAt-(st.remindBefore||0)))<1000,' +
-              ' 有已完成那条:!!done,已完成的文本:done?done.text:""};})()');
+              ' 有已完成那条:!!done,已完成的文本:done?done.text:"",事件类型:_evTypes,活跃截止明细:_dueDetail};})()');
 
             /* ⑯ 反向禁止：同步绝不能改动投稿的任何事件（快照前后完全一致） */
             SM['16-不做反向修改'] = await jp(
@@ -1097,7 +1099,7 @@ function createWindow() {
 
             /* ⑰ 投稿这边改了截止 → 备忘跟着改（单向：投稿说了算） */
             SM['17-投稿改期备忘跟随'] = await jp(
-              '(function(){var P=window.__pp;' +
+              '(function(){var P=window.__pp;/* 让这篇回到返修进行中：去掉后面的接收/检索事件 */var _p=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("改过标题")>=0)_p=x;});if(_p){_p.events=(_p.events||[]).filter(function(e){return e.type!=="accept"&&e.type!=="index";});PAPERS._sync();}/* 这些联动备忘之前可能已经完成过：删掉让 _sync 按新状态重建，提醒点才会重算 */var _ms0=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]);_ms0.forEach(function(m){if((m.text||"").indexOf("小修")>=0){try{window.KUNKUN_MEMOS.remove(m.id);}catch(e){}}});PAPERS._sync();var n1=PAPERS._sync();var n2=PAPERS._sync();' +
               'if(!P.ensure("改过标题"))return {没能展开这篇:true};' +
               'if(!P.openRow("收到意见：小修"))return {没找到小修那行:true};' +
               'if(!P.set("ppOpDue",P.day(20)))return {没有返修截止输入框:true};' +
@@ -1452,7 +1454,36 @@ function createWindow() {
               'window.PAPERS._sync();' +
               'out.见刊检索不提醒=(window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).filter(function(m){return (m.text||"").indexOf("见刊")>=0||(m.text||"").indexOf("检索")>=0;}).length===0;' +
               'return out;})()');
-/* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
+            /* ㉝ 已经接收（或拒稿/撤稿）的论文，之前没填交稿的返修截止不该再报警。 */
+            SM['33-接收后旧返修截止不再报警'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】旧返修";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("submitted");P.ok();' +
+              'P.add("opinion");P.set("ppOpKind","major");P.set("ppOpAt",P.day(-20));' +
+              'P.set("ppOpDue",P.day(3));P.ok();' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("旧返修")>=0)q=x;});' +
+              'if(!q)return {没建出:true};' +
+              'var op=null;(q.events||[]).forEach(function(e){if(e.type==="opinion")op=e;});' +
+              'if(!op)return {没有意见条目:true};' +
+              'var memos=function(){return (window.KUNKUN_MEMOS?window.KUNKUN_MEMOS.list():[]).filter(function(m){return (m.text||"").indexOf("旧返修")>=0;});};' +
+              'window.PAPERS._sync();' +
+              'var out={还没接收时是报警的:memos().length===1&&!memos()[0].done};' +
+              'P.add("accept");P.ok();' +
+              'window.PAPERS._sync();' +
+              'var ms=memos();' +
+              'out.接收后备忘变成已完成=ms.length>0&&ms.every(function(m){return !!m.done;});' +
+              'out.接收后不再计入活跃截止=window.PAPERS._activeDue(q)===0;' +
+              'window.PAPERS.open();' +
+              'var allChip=document.querySelector("#paperFilter [data-pf=all]");if(allChip)allChip.click();' +
+              'var txt=String((document.querySelector("#paperList")||{}).textContent||"");' +
+              '/* 只用「活跃截止=0」与「备忘已完成」判定；列表里别篇的报警不算这条的 */' +
+              'out.列表报警元素数=document.querySelectorAll("#paperList .pp-due").length;' +
+              'var _ms2=memos();out.备忘明细=_ms2.map(function(m){return m.text+"|done="+m.done;});' +
+              'return out;})()');
+            /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
                「改回内存」只动了内存对象，存储里还留着测试标题 —— 这里把两边的【冒烟】数据都清掉，
                不然 diag 的临时目录（按进程号命名、进程号会复用）会把残留带进下一次。 */
             await jp('(function(){var raw=JSON.parse(localStorage.getItem("kunkun.papers.v1")||"{}");' +
