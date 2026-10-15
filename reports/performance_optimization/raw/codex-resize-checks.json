@@ -1,0 +1,41 @@
+[
+  {
+    "viewport": [
+      899,
+      650
+    ],
+    "dpr": 2,
+    "maxError": 1.8187177530866575e-05,
+    "canvas": [
+      899,
+      325
+    ],
+    "cached": true
+  },
+  {
+    "viewport": [
+      759,
+      560
+    ],
+    "dpr": 2,
+    "maxError": 0.005330606024895042,
+    "canvas": [
+      759,
+      280
+    ],
+    "cached": true
+  },
+  {
+    "viewport": [
+      1182,
+      842
+    ],
+    "dpr": 1.25,
+    "maxError": 0.01371543213653025,
+    "canvas": [
+      1182,
+      421
+    ],
+    "cached": true
+  }
+]

@@ -1,0 +1,137 @@
+{
+  "rows": [
+    {
+      "label": "verified-after-tabs-1",
+      "elapsed": 10.009327699999998,
+      "bounds": {
+        "x": 130,
+        "y": 10,
+        "width": 1180,
+        "height": 840
+      },
+      "visible": true,
+      "focused": true,
+      "processes": [
+        {
+          "pid": 19024,
+          "type": "Browser",
+          "cpu": 0.1561043905076662,
+          "rssMB": 104.53125
+        },
+        {
+          "pid": 25808,
+          "type": "GPU",
+          "cpu": 22.791241014119265,
+          "rssMB": 533.80859375
+        },
+        {
+          "pid": 26400,
+          "type": "Utility",
+          "cpu": 0.1561043905076662,
+          "rssMB": 49.44140625
+        },
+        {
+          "pid": 27976,
+          "type": "Tab",
+          "cpu": 5.1514448867529845,
+          "rssMB": 137.03125
+        },
+        {
+          "pid": 17528,
+          "type": "Utility",
+          "cpu": 0.1561043905076662,
+          "rssMB": 82.06640625
+        }
+      ],
+      "view": {
+        "tab": "home",
+        "dpr": 2,
+        "w": 1179,
+        "h": 840
+      },
+      "viewEnd": {
+        "tab": "home",
+        "dpr": 2,
+        "w": 1179,
+        "h": 840
+      },
+      "visibleEnd": true,
+      "valid": true,
+      "cpu": 28.410999072395242,
+      "machineCPU": 3.5513748840494053,
+      "gpu3DMedian": 28.5,
+      "dotStates": [
+        "paused"
+      ]
+    },
+    {
+      "label": "verified-after-tabs-2",
+      "elapsed": 10.0060915,
+      "bounds": {
+        "x": 130,
+        "y": 10,
+        "width": 1180,
+        "height": 840
+      },
+      "visible": true,
+      "focused": true,
+      "processes": [
+        {
+          "pid": 19024,
+          "type": "Browser",
+          "cpu": 0.0,
+          "rssMB": 102.5859375
+        },
+        {
+          "pid": 25808,
+          "type": "GPU",
+          "cpu": 25.921709790481128,
+          "rssMB": 575.0390625
+        },
+        {
+          "pid": 26400,
+          "type": "Utility",
+          "cpu": 0.0,
+          "rssMB": 49.4296875
+        },
+        {
+          "pid": 27976,
+          "type": "Tab",
+          "cpu": 9.369292695354625,
+          "rssMB": 130.375
+        },
+        {
+          "pid": 17528,
+          "type": "Utility",
+          "cpu": 0.3123097565118208,
+          "rssMB": 82.05859375
+        }
+      ],
+      "view": {
+        "tab": "home",
+        "dpr": 2,
+        "w": 1179,
+        "h": 840
+      },
+      "viewEnd": {
+        "tab": "home",
+        "dpr": 2,
+        "w": 1179,
+        "h": 840
+      },
+      "visibleEnd": true,
+      "valid": true,
+      "cpu": 35.60331224234758,
+      "machineCPU": 4.450414030293447,
+      "gpu3DMedian": 26.5,
+      "dotStates": [
+        "paused"
+      ]
+    }
+  ],
+  "hashes": {
+    "app.js": "2120996459ed9532c9f12ce5c47492049ee2b3ed50aa03175590b66aa544a84a",
+    "style.css": "44bf28e15113984a7342d3107575881d6f1c425b36c2b61b7b94f2b9044b5658",
+    "main.js": "d5ec30ef3373643dcb3c35284bade0fe006ee5abb16ce57dd643d9c62a452d51"
+  }
+}

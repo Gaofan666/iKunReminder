@@ -1,0 +1,246 @@
+[
+  {
+    "label": "release-before",
+    "elapsed": 10.012740300000003,
+    "bounds": {
+      "x": 130,
+      "y": 10,
+      "width": 1180,
+      "height": 840
+    },
+    "visible": true,
+    "focused": true,
+    "processes": [
+      {
+        "pid": 9896,
+        "type": "Browser",
+        "cpu": 0.0,
+        "rssMB": 102.234375
+      },
+      {
+        "pid": 4132,
+        "type": "GPU",
+        "cpu": 122.96833465260251,
+        "rssMB": 860.47265625
+      },
+      {
+        "pid": 4624,
+        "type": "Utility",
+        "cpu": 0.0,
+        "rssMB": 49.3671875
+      },
+      {
+        "pid": 24392,
+        "type": "Tab",
+        "cpu": 23.5637291022119,
+        "rssMB": 156.45703125
+      },
+      {
+        "pid": 26100,
+        "type": "Utility",
+        "cpu": 3.121023722147272,
+        "rssMB": 81.75390625
+      }
+    ],
+    "view": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "viewEnd": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "visibleEnd": true,
+    "valid": true,
+    "cpu": 149.65308747696167,
+    "machineCPU": 18.70663593462021,
+    "gpu3DMedian": 87.0
+  },
+  {
+    "label": "release-after",
+    "elapsed": 10.0035564,
+    "bounds": {
+      "x": 130,
+      "y": 10,
+      "width": 1180,
+      "height": 840
+    },
+    "visible": true,
+    "focused": true,
+    "processes": [
+      {
+        "pid": 9896,
+        "type": "Browser",
+        "cpu": 0.3123889020108888,
+        "rssMB": 100.57421875
+      },
+      {
+        "pid": 4132,
+        "type": "GPU",
+        "cpu": 25.615889964892883,
+        "rssMB": 562.99609375
+      },
+      {
+        "pid": 4624,
+        "type": "Utility",
+        "cpu": 0.0,
+        "rssMB": 49.43359375
+      },
+      {
+        "pid": 24392,
+        "type": "Tab",
+        "cpu": 4.998222432174221,
+        "rssMB": 133.50390625
+      },
+      {
+        "pid": 26100,
+        "type": "Utility",
+        "cpu": 2.186722314076222,
+        "rssMB": 81.796875
+      }
+    ],
+    "view": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "viewEnd": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "visibleEnd": true,
+    "valid": true,
+    "cpu": 33.11322361315421,
+    "machineCPU": 4.139152951644276,
+    "gpu3DMedian": 28.0
+  },
+  {
+    "label": "release-before-return",
+    "elapsed": 10.008443300000003,
+    "bounds": {
+      "x": 130,
+      "y": 10,
+      "width": 1180,
+      "height": 840
+    },
+    "visible": true,
+    "focused": true,
+    "processes": [
+      {
+        "pid": 9896,
+        "type": "Browser",
+        "cpu": 0.4683545541992528,
+        "rssMB": 99.16015625
+      },
+      {
+        "pid": 4132,
+        "type": "GPU",
+        "cpu": 133.0126933925878,
+        "rssMB": 768.15234375
+      },
+      {
+        "pid": 4624,
+        "type": "Utility",
+        "cpu": 0.0,
+        "rssMB": 49.2578125
+      },
+      {
+        "pid": 24392,
+        "type": "Tab",
+        "cpu": 26.852327774090494,
+        "rssMB": 144.4765625
+      },
+      {
+        "pid": 26100,
+        "type": "Utility",
+        "cpu": 0.0,
+        "rssMB": 81.75390625
+      }
+    ],
+    "view": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "viewEnd": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "visibleEnd": true,
+    "valid": true,
+    "cpu": 160.33337572087757,
+    "machineCPU": 20.041671965109696,
+    "gpu3DMedian": 88.5
+  },
+  {
+    "label": "release-after-return",
+    "elapsed": 10.008921,
+    "bounds": {
+      "x": 130,
+      "y": 10,
+      "width": 1180,
+      "height": 840
+    },
+    "visible": true,
+    "focused": true,
+    "processes": [
+      {
+        "pid": 9896,
+        "type": "Browser",
+        "cpu": 0.15611073361454245,
+        "rssMB": 99.16015625
+      },
+      {
+        "pid": 4132,
+        "type": "GPU",
+        "cpu": 27.787710583388556,
+        "rssMB": 522.22265625
+      },
+      {
+        "pid": 4624,
+        "type": "Utility",
+        "cpu": 0.0,
+        "rssMB": 49.265625
+      },
+      {
+        "pid": 24392,
+        "type": "Tab",
+        "cpu": 7.64942594711258,
+        "rssMB": 130.03125
+      },
+      {
+        "pid": 26100,
+        "type": "Utility",
+        "cpu": 0.15611073361454245,
+        "rssMB": 81.765625
+      }
+    ],
+    "view": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "viewEnd": {
+      "tab": "home",
+      "dpr": 2,
+      "w": 1179,
+      "h": 840
+    },
+    "visibleEnd": true,
+    "valid": true,
+    "cpu": 35.74935799773022,
+    "machineCPU": 4.468669749716278,
+    "gpu3DMedian": 28.0
+  }
+]

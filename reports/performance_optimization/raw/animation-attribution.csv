@@ -1,0 +1,7 @@
+﻿"模式","消融","GPU单核","渲染单核","证据"
+"G_base","","132.8","24","（无）"
+"G_grid","grid-motion","123.2","26.4","消融: grid-motion"
+"G_aurora","aurora-motion","132","23.2","消融: aurora-motion"
+"G_minor","minor-motion","134.4","23.2","消融: minor-motion"
+"G_all","all-motion","119.2","20.8","消融: all-motion"
+"G_nofilter","aurora-nofilter","138.4","24.8","消融: aurora-nofilter"

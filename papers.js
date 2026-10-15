@@ -26,8 +26,11 @@
   var EVENTS = [
     { id: 'preparing', name: '准备中', color: '#8A9AA5', state: 'preparing' },
     { id: 'submitted', name: '已投稿', color: '#4A9BD4', state: 'submitted' },
+    { id: 'editorReview', name: '编辑初审', color: '#88A9C9', state: 'editorReview' },
     { id: 'review', name: '审稿中', color: '#7FA8D9', state: 'review' },
+    { id: 'awaitingDecision', name: '等待编辑决定', color: '#8FB3E0', state: 'awaitingDecision' },
     { id: 'opinion', name: '收到意见', color: '#E8B843', state: null, opinion: true },
+    { id: 'reject', name: '拒稿', color: '#D9534F', state: 'rejected', final: true },
     { id: 'accept', name: '接收', color: '#3F9E6E', state: 'accepted', final: true },
     { id: 'index', name: '检索', color: '#4FB3A8', state: null },
     { id: 'withdraw', name: '撤稿', color: '#9B8EA8', state: 'withdrawn', final: true },
@@ -38,11 +41,10 @@
   var KINDS = [
     { id: 'major', name: '大修', state: 'major' },
     { id: 'minor', name: '小修', state: 'minor' },
-    { id: 'resubOther', name: '重投', state: 'submitted' },
-    { id: 'reject', name: '拒稿', state: 'rejected' }
+    { id: 'resubOther', name: '重投', state: 'submitted' }
   ];
-  var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', second: '二作', other: '其他参与' };
-  var OPEN_STATES = { preparing: 1, submitted: 1, review: 1, major: 1, minor: 1 };
+  var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', cocorresponding: '共同通讯', second: '二作', third: '三作', other: '其他作者' };
+  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1 };
 
   var papers = [];
   var editingId = null;
@@ -70,6 +72,7 @@
   function evName(e) {
     var d = evOf(e.type);
     if (d.opinion) { var k = kindOf(D(e).kind); return '收到意见' + (k ? '：' + k.name : ''); }
+    if (e.type === 'other' && D(e).label) return String(D(e).label).slice(0, 30);
     return d.name;
   }
   function dayTs(v) {
@@ -151,6 +154,8 @@
     if (id === 'rejected') return '#D9534F';
     if (id === 'withdrawn') return '#9B8EA8';
     if (id === 'submitted') return '#4A9BD4';
+    if (id === 'editorReview') return '#88A9C9';
+    if (id === 'awaitingDecision') return '#8FB3E0';
     if (id === 'review') return '#7FA8D9';
     return '#8A9AA5';
   }
@@ -244,7 +249,7 @@
       /* ⚠️ 只转换**旧版的状态类型**（major/minor/reject/rejectResubmit → 收到意见 + kind）。
          绝不能把 accept 也算进来：v6 起「接收」是正经类型、带校稿/见刊/检索/DOI 字段，
          一转换就变成「收到意见：接收」—— 用户填在接收里的内容就"跑到收到意见里"了（实测踩过）。 */
-      var kindMap = { major: 'major', minor: 'minor', rejectResubmit: 'resubOther', reject: 'reject' };
+      var kindMap = { major: 'major', minor: 'minor', rejectResubmit: 'resubOther' };
       p.events.forEach(function (e) {
         if (!e.d) e.d = {};
         if (kindMap[e.type]) {
@@ -258,8 +263,12 @@
       /* 老数据里可能留着「收到意见 · kind=接收」：接收是独立状态，还原成 accept 条目并去掉 kind
          （KINDS 里已经没有 accept 了，留着它会选不中、显示成空白） */
       p.events.forEach(function (e) {
-        if (e.type === 'opinion' && (!e.d || !e.d.kind || e.d.kind === 'accept')) {
-          if (e.d && e.d.kind === 'accept') { e.type = 'accept'; delete e.d.kind; }
+        /* 老数据里把「接收 / 拒稿」记成了收到意见的类型 —— 它们现在是独立状态，还原过去 */
+        if (e.type === 'opinion' && e.d && e.d.kind === 'accept') { e.type = 'accept'; delete e.d.kind; }
+        if (e.type === 'opinion' && e.d && e.d.kind === 'reject') {
+          e.type = 'reject';
+          if (e.d.note && !e.d.reason) e.d.reason = e.d.note;
+          delete e.d.kind;
         }
       });
       var out = [];
@@ -369,6 +378,7 @@
      没写日期的（比如论文直接进终态）才退回用当前时间。 */
   function resolveDeadline(p, e) {
     var d = D(e);
+    /* 这里只回答「这条截止了结了吗、完成时间落在哪天」，返回 {done, doneAt}；不要写显示用的 HTML（曾被批量替换误插过一句拒稿原因）。 */
     if (e.type === 'preparing') {
       var sub = null;
       byCreated(p).forEach(function (x) {
@@ -468,7 +478,7 @@
        这种按钮不会再生成，界面就会「一个都没高亮、列表还空着」。先退回「全部」。 */
     if (filter !== 'all' && filter !== 'open' && !counts[filter]) filter = 'all';
     var items = [{ id: 'open', name: '进行中' }, { id: 'all', name: '全部' }];
-    ['submitted', 'review', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
+    ['submitted', 'editorReview', 'review', 'awaitingDecision', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
       if (counts[st]) items.push({ id: st, name: statusName(st) + ' ' + counts[st] });
     });
     box.innerHTML = items.map(function (it) {
@@ -502,6 +512,7 @@
       if (sub) return '<span class="pp-ev-ok">已于 ' + fmtDay(sub) + ' 提交</span>';
       return '<span class="pp-ev-tip">点「详细信息」填类型和返修时间</span>';
     }
+    if (e.type === 'reject' && d.reason) return '<span class="pp-ev-tip">' + esc(d.reason) + '</span>';
     if (e.type === 'preparing') {
       var t = [];
       if (d.venue) t.push(esc(d.venue));
@@ -509,7 +520,8 @@
       /* 投稿 ddl 要和返修截止一样醒目：同一套变色（临近橙、过期红），不再只是灰色提示 */
       var ddl = '';
       if (+d.due) {
-        ddl = '<span class="' + (isOverdueDay(+d.due) ? 'pp-ev-late' : (isSoonDay(+d.due) ? 'pp-ev-soon' : 'pp-ev-tip')) + '">投稿 ddl ' +
+        /* 投稿 ddl：只要填了就醒目（橙色加粗），不设「临近 7 天」的门槛；只有过期才变红。 */
+      ddl = '<span class="' + (isOverdueDay(+d.due) ? 'pp-ev-late' : 'pp-ev-soon') + '">投稿 ddl ' +
           fmtDay(d.due) + ' · ' + fromNow(d.due) + '</span>';
       }
       return (t.length ? '<span class="pp-ev-tip">' + t.join(' · ') + '</span>' : '') + (ddl ? (t.length ? ' ' : '') + ddl : '');
@@ -532,6 +544,55 @@
     return '';
   }
 
+  /* ---------- 时长 ----------
+     一律用「日期差」（midnight 天差，和 days() 同一套），不受时刻与时区影响。
+     还没走到终态就算到今天；拒稿/接收/撤稿这类终态结算在那一天的日期。
+     首轮审稿 = 已投稿 → 之后第一条「收到意见」，与统计条里的「平均审稿周期」同口径。 */
+  function fmtSpan(n) {
+    if (n <= 0) return '当天';
+    if (n < 60) return n + ' 天';
+    return n + ' 天（约 ' + (Math.round(n / 3) / 10) + ' 个月）';
+  }
+  function paperTimeline(p) {
+    var evs = sortedEvents(p).filter(function (e) { return +evAt(e) > 0; });
+    if (!evs.length) return null;
+    var first = evs[0], last = evs[evs.length - 1];
+    var ended = !!evOf(last.type).final;
+    var total = days(midnight(+evAt(first)), midnight(ended ? +evAt(last) : Date.now()));
+    var sub = null, firstOp = null;
+    evs.forEach(function (e) {
+      if (!sub && e.type === 'submitted') sub = e;
+      if (sub && !firstOp && e.type === 'opinion' && (+evAt(e) > +evAt(sub))) firstOp = e;
+    });
+    var review = (sub && firstOp) ? days(midnight(+evAt(sub)), midnight(+evAt(firstOp))) : null;
+    var rounds = 0, revSum = 0;
+    evs.forEach(function (e) {
+      if (e.type !== 'opinion') return;
+      var s = +D(e).submitAt;
+      if (s > 0) { rounds++; revSum += days(midnight(+evAt(e)), midnight(s)); }
+    });
+    return { first: first, last: last, ended: ended, total: total, review: review, rounds: rounds, revSum: revSum };
+  }
+  function durationHtml(p) {
+    var t = paperTimeline(p);
+    if (!t) return '';
+    var bits = [];
+    bits.push('投出 ' + fmtDay(+evAt(t.first)) + ' · ' + (t.ended ? '共 ' + fmtSpan(t.total) : '已 ' + fmtSpan(t.total) + '（进行中）'));
+    if (t.review != null) bits.push('首轮审稿 ' + fmtSpan(t.review));
+    if (t.rounds) bits.push('返修 ' + t.rounds + ' 轮共 ' + fmtSpan(t.revSum));
+    return '<p class="pp-tl-dur">⏱ ' + bits.join(' ｜ ') + '</p>';
+  }
+  /* 这条状态距上一条多少天（没有上一条、或日期缺失就不显示）*/
+  function gapHtml(p, e) {
+    var evs = sortedEvents(p).filter(function (x) { return +evAt(x) > 0; });
+    for (var i = 0; i < evs.length; i++) {
+      if (evs[i].id === e.id && i > 0) {
+        var g = days(midnight(+evAt(evs[i - 1])), midnight(+evAt(e)));
+        return g > 0 ? '<span class="pp-ev-gap">+' + g + ' 天</span>' : '';
+      }
+    }
+    return '';
+  }
   function evRowHtml(p, e) {
     var d = evOf(e.type);
     /* 「还没了结」的截止整条给点警示：返修截止（没交稿）+ 投稿 ddl（还没投出去）*/
@@ -541,6 +602,7 @@
       '<span class="pp-ev-dot" style="background:' + (d.opinion ? (kindOf(D(e).kind) || { color: '#E8B843' }).color || '#E8B843' : d.color) + '"></span>' +
       '<span class="pp-ev-name">' + esc(evName(e)) + '</span>' +
       evSummary(e) +
+      gapHtml(p, e) +
       '<span class="pp-ev-date">' + esc(tsDay(evAt(e))) + '</span>' +
       '<button class="pp-ev-more" data-role="evdetail">详细信息</button>' +
       '<button class="pp-ev-ico del" data-role="evdel" title="删这条">✕</button>' +
@@ -809,9 +871,12 @@
     } else if (t === 'submitted') {
       body =
         field('作者', input('ppDAuthors', d.authors, '按顺序：张三, 李四')) +
-        field('我的角色', '<select class="skin-sel" id="ppDRole">' + Object.keys(ROLES).map(function (k) {
-          return '<option value="' + k + '"' + (k === (d.role || 'first') ? ' selected' : '') + '>' + esc(ROLES[k]) + '</option>';
-        }).join('') + '</select>') +
+        /* 角色：可以从候选里挑，也可以自己写（写什么就显示什么）*/
+        field('我的角色', '<input type="text" id="ppDRole" list="ppRoleList" maxlength="20" value="' +
+          esc(d.role ? (ROLES[d.role] || d.role) : '一作') + '">' +
+          '<datalist id="ppRoleList">' + Object.keys(ROLES).map(function (k) {
+            return '<option value="' + esc(ROLES[k]) + '"></option>';
+          }).join('') + '</datalist>') +
         field('期刊/会议', venueInput('ppDVenue', venue)) +
         field('类型', '<select class="skin-sel" id="ppDVenueType">' +
           '<option value="journal"' + (vtype === 'journal' ? ' selected' : '') + '>期刊</option>' +
@@ -837,6 +902,12 @@
         field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'index') {
       body = field('DOI', input('ppDDoi', d.doi, '10.1109/…', 200)) + field('备注', input('ppDNote', d.note, '可空'));
+    } else if (t === 'reject') {
+      body = field('拒稿原因（可空）', input('ppDReason', d.reason, '比如：创新性不足 / 版面不符 / 建议改投')) +
+        field('备注', input('ppDNote', d.note, '可空'));
+    } else if (t === 'other') {
+      body = field('状态说明（会显示在时间线上）', input('ppDLabel', d.label, '比如：送外审 / 补材料 / 等待答复')) +
+        field('备注', input('ppDNote', d.note, '可空'));
     } else {
       body = field('备注', input('ppDNote', d.note, '可空'));
     }
@@ -896,7 +967,11 @@
       if (ts('ppDDue')) e.at = e.at || dayTs(tsDay(Date.now()));
     } else if (t === 'submitted') {
       d.authors = val('ppDAuthors').slice(0, 200);
-      d.role = val('ppDRole') || 'first';
+      /* 角色存的是 key（一作→first）或自定义文字原样存 */
+      var roleRaw = val('ppDRole');
+      var roleKey = 'first';
+      Object.keys(ROLES).forEach(function (k) { if (ROLES[k] === roleRaw) roleKey = k; });
+      d.role = (roleKey === 'first' && roleRaw && roleRaw !== ROLES.first) ? roleRaw.slice(0, 20) : roleKey;
       d.venue = val('ppDVenue').slice(0, 120);
       d.venueType = val('ppDVenueType') || 'journal';
       d.level = val('ppDLevel').slice(0, 40);
@@ -917,6 +992,12 @@
       d.note = val('ppDNote').slice(0, 300);
     } else if (t === 'index') {
       d.doi = val('ppDDoi').slice(0, 200);
+      d.note = val('ppDNote').slice(0, 300);
+    } else if (t === 'reject') {
+      d.reason = val('ppDReason').slice(0, 200);
+      d.note = val('ppDNote').slice(0, 300);
+    } else if (t === 'other') {
+      d.label = val('ppDLabel').slice(0, 30);
       d.note = val('ppDNote').slice(0, 300);
     } else {
       d.note = val('ppDNote').slice(0, 300);
@@ -961,6 +1042,7 @@
         '<span class="pp-tl-date">' + esc(tsDay(evAt(e))) + '</span>' +
         '<span class="pp-tl-dot" style="background:' + d.color + '"></span>' +
         '<span class="pp-tl-name">' + esc(evName(e)) + '</span>' +
+        gapHtml(p, e) +
         '<span class="pp-tl-ext">' + esc(extras.join(' · ')) + '</span>' +
       '</div>';
     }).join('');
@@ -990,6 +1072,7 @@
       '</div>' +
       '<p class="col-sub">当前状态：<b style="color:' + statusColor(st.id) + '">' + esc(statusName(st.id)) + '</b>' +
         (st.at ? '（' + fmtDay(st.at) + '）' : '') + (head.length ? ' · ' + head.join(' · ') : '') + '</p>' +
+      durationHtml(p) +
       '<div class="pp-tl">' + (rows || '<div class="pp-empty">还没有状态条目。</div>') + '</div>' +
     '</div>';
     document.body.appendChild(ov);
@@ -1065,7 +1148,7 @@
     var lines = ['# 投稿记录', '', '> 导出时间：' + new Date().toLocaleString('sv-SE').slice(0, 16), ''];
     var groups = {};
     papers.forEach(function (p) { var st = statusOfPaper(p).id; (groups[st] = groups[st] || []).push(p); });
-    ['review', 'submitted', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
+    ['review', 'editorReview', 'awaitingDecision', 'submitted', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
       var arr = groups[st];
       if (!arr || !arr.length) return;
       lines.push('## ' + statusName(st) + '（' + arr.length + '）', '');

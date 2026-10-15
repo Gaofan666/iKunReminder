@@ -39,34 +39,55 @@ body.anim-off *::before,
 body.anim-off *::after{animation-play-state:paused !important}
 
 /* ---------- 背景：透视网格地面 ---------- */
+/* 网格改成「静态图案 + 合成器平移」：视觉等价，但不再每帧重绘整层。
+   外层只管定位、透视倾斜、遮罩（全是静态的；绝不给它加 transform，否则倾斜会被覆盖）；
+   内层 ::before 放同一套 linear-gradient 图案，动画只改 transform: translate3d。
+   - 平移量 = 图案周期 64px，循环回到起点时图案完全重合 → 无接缝、无跳变；
+   - 内层向上多出一格（top:-64px）并由外层 overflow:hidden 裁掉，避免露白；
+   - will-change 只加在内层，外层的 perspective/rotateX 不受影响。 */
 .grid-floor{
   position:fixed;left:50%;bottom:-12vh;width:240vw;height:62vh;z-index:0;
   transform:translateX(-50%) perspective(430px) rotateX(70deg);
+  -webkit-mask-image:linear-gradient(to top, rgba(0,0,0,.95), transparent 88%);
+  mask-image:linear-gradient(to top, rgba(0,0,0,.95), transparent 88%);
+  overflow:hidden;
+  pointer-events:none;
+}
+.grid-floor::before{
+  content:"";position:absolute;left:0;right:0;top:-64px;bottom:0;
   background-image:
     linear-gradient(rgba(74,155,212,.20) 1px, transparent 1px),
     linear-gradient(90deg, rgba(111,181,107,.20) 1px, transparent 1px);
   background-size:64px 64px, 64px 64px;
-  -webkit-mask-image:linear-gradient(to top, rgba(0,0,0,.95), transparent 88%);
-  mask-image:linear-gradient(to top, rgba(0,0,0,.95), transparent 88%);
+  will-change:transform;
   animation:gridmove 2.6s linear infinite;
-  pointer-events:none;
 }
-@keyframes gridmove{ to{ background-position:0 64px, 0 0; } }
+@keyframes gridmove{ from{ transform:translate3d(0,0,0); } to{ transform:translate3d(0,64px,0); } }
+
+/* JS 投影缓存初始化成功后接管网格；保留原 CSS 作为回退。 */
+body.grid-cached .grid-floor{
+  left:0;top:50vh;bottom:0;width:100vw;height:50vh;
+  transform:none;-webkit-mask-image:none;mask-image:none;
+}
+body.grid-cached .grid-floor::before{display:none}
+body.grid-cached .grid-floor canvas{display:block;width:100%;height:100%}
 
 .aurora{
+  animation:auroraFloat 14s ease-in-out infinite alternate;
   position:fixed;inset:-20% -10% auto -10%;height:70vh;z-index:0;pointer-events:none;
   background:
     radial-gradient(520px 300px at 18% 30%, rgba(111,181,107,.18), transparent 70%),
     radial-gradient(560px 320px at 82% 22%, rgba(74,155,212,.18), transparent 70%);
   filter:blur(10px);
-  animation:auroraFloat 14s ease-in-out infinite alternate;
+  will-change:transform; /* 缓存极光纹理，缩放动画复用合成层 */
 }
 @keyframes auroraFloat{ from{transform:translate3d(-2%,0,0) scale(1)} to{transform:translate3d(3%,3%,0) scale(1.08)} }
 
 .scanlines{
   position:fixed;inset:0;z-index:60;pointer-events:none;
-  background:repeating-linear-gradient(180deg, rgba(30,50,100,.025) 0 1px, transparent 1px 3px);
-  mix-blend-mode:overlay;
+  background:repeating-linear-gradient(180deg, rgba(30,50,100,.003) 0 1px, transparent 1px 3px);
+  /* 用浅色透明扫描线保留纹理，避免全屏 overlay 离屏混合。 */
+  mix-blend-mode:normal;
 }
 
 /* ---------- 顶栏 ---------- */
@@ -714,7 +735,7 @@ mark.ax-hit{
   border:1px solid var(--line);
   border-radius:20px;
   box-shadow:var(--shadow);
-  backdrop-filter:blur(9px);
+  /* 面板已是 94% 不透明；实时模糊会在背景移动时反复采样背后的图层。 */
 }
 
 /* ---------- 舞台 ---------- */
@@ -1080,7 +1101,7 @@ kbd{
 
 .panel-body{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 
-.ring-wrap{position:relative;width:132px;height:132px;flex:none}
+.ring-wrap{position:relative;width:132px;height:132px;flex:none;will-change:transform}
 .ring{width:100%;height:100%;transform:rotate(-90deg)}
 .ring-bg{fill:none;stroke:rgba(74,120,150,.12);stroke-width:9}
 .ring-fg{
@@ -1089,7 +1110,8 @@ kbd{
   /* 这里本来有个 drop-shadow 光晕，但 CSS 滤镜的滤镜区域是元素的方形外框
      （SVG 是 132×132 的方框），所以那一圈光看起来是「正方形的荧光」——
      用户报过，去掉。 */
-  transition:stroke-dashoffset .3s linear;
+  /* 250ms 刷新的进度不能再接 300ms 过渡，否则 SVG 永远在逐帧重绘。 */
+  transition:none;
 }
 .ring-text{
   position:absolute;inset:0;display:grid;place-content:center;text-align:center;
@@ -1449,3 +1471,52 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
 /* 提示条整体 pointer-events:none（不挡点击），但里面的「撤销」必须能点到 ——
    父级关掉的点击权，子级要显式开回来，否则按钮看得见摸不着。 */
 .paper-flash.on .paper-undo{pointer-events:auto;cursor:pointer}
+
+/* ─────────────────────────────────────────────────────────────
+   性能消融开关（仅供性能测试，用 --perf-ablate=xxx 启动时才会加上对应类）
+   刻意把三种操作分开，它们回答的是不同问题：
+     motion  = 暂停运动（元素与静态外观都在，只是不动）
+     hidden  = 连元素一起隐藏（同时去掉绘制与合成）
+     nofilter= 保留运动与形状，只去掉模糊/滤镜
+   用 animation-play-state:paused 而不是 animation:none ——
+   后者会让元素回跳到动画第一帧，静态相位就变了，测出来的不只是"运动"的成本。
+   ───────────────────────────────────────────────────────────── */
+body.ablate-grid-motion .grid-floor,`nbody.ablate-grid-motion .grid-floor::before{animation-play-state:paused !important}
+body.ablate-grid-hidden .grid-floor{visibility:hidden !important}
+body.ablate-aurora-motion .aurora{animation-play-state:paused !important}
+body.ablate-aurora-hidden .aurora{visibility:hidden !important}
+body.ablate-aurora-nofilter .aurora{filter:none !important}
+body.ablate-minor-motion .dot,
+body.ablate-minor-motion .logo{animation-play-state:paused !important}
+body.ablate-all-motion .grid-floor,
+body.ablate-all-motion .aurora,
+body.ablate-all-motion .dot,
+body.ablate-all-motion .logo{animation-play-state:paused !important}
+body.ablate-canvas-hidden #stage{visibility:hidden !important}
+body.ablate-minimal .grid-floor,
+body.ablate-minimal .aurora,
+body.ablate-minimal .dot,
+body.ablate-minimal .logo,
+body.ablate-minimal #stage{visibility:hidden !important}
+body.ablate-nothing .grid-floor,
+body.ablate-nothing .aurora,
+body.ablate-nothing .dot,
+body.ablate-nothing .logo{animation-play-state:paused !important}
+body.ablate-nothing #stage{visibility:hidden !important}
+
+/* 消融：C = 关掉卡片的 backdrop-filter（毛玻璃）；D = 关掉扫描线的 mix-blend-mode */
+body.ablate-nobackdrop .card,
+body.ablate-nobackdrop .overlay-card,
+body.ablate-nobackdrop .item-card{backdrop-filter:none !important;-webkit-backdrop-filter:none !important}
+body.ablate-noblend .scanlines{mix-blend-mode:normal !important}
+body.ablate-noscanlines .scanlines{visibility:hidden !important}
+body.ablate-noboth .card,
+body.ablate-noboth .overlay-card,
+body.ablate-noboth .item-card{backdrop-filter:none !important;-webkit-backdrop-filter:none !important}
+body.ablate-noboth .scanlines{mix-blend-mode:normal !important}
+
+/* 时长：完整信息顶部的概览 + 时间线里逐段的 +N 天 */
+.pp-tl-dur{margin:2px 0 9px;font-size:12.5px;color:var(--dim);letter-spacing:.2px}
+.pp-ev-gap{flex:none;font-size:11px;color:var(--dim);opacity:.75;margin-left:2px}
+
+.pp-tl-row .pp-ev-gap{margin-left:0;margin-right:2px}

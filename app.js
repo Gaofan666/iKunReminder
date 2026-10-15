@@ -624,6 +624,135 @@
   /* =========================================================================
      DOM & 交互
      ========================================================================= */
+  /* 透视网格：在屏幕下半部投影并缓存纵线，避免对 240vw 的 3D 遮罩表面逐帧合成。
+     430px 透视、70 度倾角、64px 周期、2.6 秒速度及淡出沿用原 CSS。
+     初始化失败会回退到原 CSS 网格。 */
+  function CachedGrid(host) {
+    this.host = host;
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.cache = document.createElement('canvas');
+    this.cacheCtx = this.cache.getContext('2d');
+    if (!this.ctx || !this.cacheCtx) throw new Error('Canvas unavailable');
+    host.appendChild(this.canvas);
+    this.elapsed = 0; this.lastAt = 0;
+    this.width = 0; this.height = 0;
+  }
+  CachedGrid.prototype.resize = function () {
+    const vw = innerWidth, vh = innerHeight;
+    const layoutWidth = document.documentElement.clientWidth;
+    const dpr = devicePixelRatio;
+    const cached = document.body.classList.contains('grid-cached');
+    if (vw === this.viewportWidth && vh === this.viewportHeight &&
+      layoutWidth === this.layoutWidth && dpr === this.dpr && cached === this.cachedMode) return;
+    this.viewportWidth = vw; this.viewportHeight = vh;
+    this.layoutWidth = layoutWidth; this.dpr = dpr; this.cachedMode = cached;
+    // 非整数 DPI 下 innerWidth/Height 会取整，CSS vw/vh 仍有小数；只在尺寸变化时读取。
+    const css = getComputedStyle(this.host);
+    const w = parseFloat(css.width) / (cached ? 1 : 2.4) || vw;
+    const h = parseFloat(css.height) / (cached ? .5 : .62) || vh;
+    this.width = w; this.height = h;
+    // fixed 的 left:50% 使用扣除滚动条后的实际包含块宽度。
+    this.centerX = document.documentElement.getBoundingClientRect().width / 2;
+    // 柔和的背景最多 1600×800；前景文字、角色的 DPR 不受影响。
+    const scale = Math.min(1, 1600 / w, 1600 / h);
+    this.canvas.width = this.cache.width = Math.max(1, Math.round(w * scale));
+    this.canvas.height = this.cache.height = Math.max(1, Math.round(h / 2 * scale));
+    this.sx = this.canvas.width / w; this.sy = this.canvas.height / (h / 2);
+    this.cacheCtx.setTransform(this.sx, 0, 0, this.sy, 0, 0);
+    this.planeWidth = w * 2.4;
+    this.planeHeight = h * .62;
+    this.originY = h * .81;
+    this.cos = Math.cos(70 * Math.PI / 180);
+    this.sin = Math.sin(70 * Math.PI / 180);
+    const q = h + 2 - this.originY;
+    this.yEnd = Math.min(this.planeHeight / 2, q / (this.cos + q * this.sin / 430));
+    const y0 = -this.planeHeight / 2;
+    const a = this.point(0, y0), b = this.point(0, this.yEnd);
+    const gradient = this.cacheCtx.createLinearGradient(0, a.y, 0, b.y);
+    for (let i = 0; i <= 32; i++) {
+      const y = y0 + (this.yEnd - y0) * i / 32;
+      const stop = (this.point(0, y).y - a.y) / (b.y - a.y);
+      gradient.addColorStop(Math.max(0, Math.min(1, stop)), 'rgba(111,181,107,' + this.alpha(y) * .2 + ')');
+    }
+    this.cacheCtx.fillStyle = gradient;
+    for (let x = -this.planeWidth / 2; x < this.planeWidth / 2; x += 64) {
+      this.quad(this.cacheCtx, x, y0, x + 1, this.yEnd);
+    }
+  };
+  CachedGrid.prototype.point = function (x, y) {
+    const k = 1 / (1 - y * this.sin / 430);
+    return {x: this.centerX + x * k, y: this.originY + y * this.cos * k - this.height / 2};
+  };
+  CachedGrid.prototype.alpha = function (y) {
+    return .95 * Math.max(0, Math.min(1, ((y / this.planeHeight + .5) - .12) / .88));
+  };
+  CachedGrid.prototype.quad = function (ctx, x0, y0, x1, y1) {
+    const a=this.point(x0,y0),b=this.point(x1,y0),c=this.point(x1,y1),d=this.point(x0,y1);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c.x,c.y);ctx.lineTo(d.x,d.y);ctx.closePath();ctx.fill();
+  };
+  CachedGrid.prototype.frame = function (now) {
+    this.resize();
+    const ctx=this.ctx;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+    ctx.drawImage(this.cache,0,0);
+    ctx.setTransform(this.sx,0,0,this.sy,0,0);
+    if (this.lastAt) this.elapsed += Math.max(0, now - this.lastAt);
+    this.lastAt = now;
+    const phase = (this.elapsed / 2600 % 1) * 64;
+    for (let y=phase-this.planeHeight/2-64; y < this.yEnd; y+=64) {
+      if (y < -this.planeHeight/2) continue;
+      ctx.fillStyle='rgba(74,155,212,' + this.alpha(y) * .2 + ')';
+      this.quad(ctx,-this.planeWidth/2,y,this.planeWidth/2,Math.min(y+1,this.yEnd));
+    }
+  };
+
+  let cachedGrid = null;
+  try {
+    const host = document.querySelector('.grid-floor');
+    if (host) {
+      cachedGrid = new CachedGrid(host);
+      cachedGrid.frame(performance.now());
+      document.body.classList.add('grid-cached');
+    }
+  } catch (e) {
+    if (cachedGrid) cachedGrid.canvas.remove();
+    cachedGrid = null;
+  }
+
+  let decorAnimations = null;
+  let decorLastAt = 0;
+  function drawDecor(now) {
+    const body = document.body;
+    const allPaused = body.classList.contains('ablate-all-motion') || body.classList.contains('ablate-nothing');
+    if (cachedGrid && !allPaused && !body.classList.contains('ablate-grid-motion')) {
+      try { cachedGrid.frame(now); }
+      catch (e) {
+        cachedGrid.canvas.remove(); cachedGrid = null;
+        body.classList.remove('grid-cached');
+      }
+    } else if (cachedGrid) { cachedGrid.lastAt = 0; }
+    if (!decorAnimations || decorAnimations.some(function (entry) { return entry.animation.playState === 'idle'; })) {
+      decorAnimations = [];
+      document.querySelectorAll('.aurora,.dot,.logo').forEach(function (node) {
+        node.getAnimations().forEach(function (animation) {
+          animation.pause();
+          decorAnimations.push({ animation: animation, aurora: node.classList.contains('aurora') });
+        });
+      });
+    }
+    const dt = decorLastAt ? Math.max(0, now - decorLastAt) : 0;
+    decorLastAt = now;
+    // 以原动画的 currentTime 推进，保留 CSS 缓动和方向；与角色共用 30fps。
+    decorAnimations.forEach(function (entry) {
+      if (entry.animation.playState === 'idle' || allPaused || (entry.aurora
+        ? body.classList.contains('ablate-aurora-motion')
+        : body.classList.contains('ablate-minor-motion'))) return;
+      entry.animation.currentTime = (entry.animation.currentTime || 0) + dt;
+    });
+  }
+
   const stage = new Kunkun($('#stage'));
   const alertStage = new Kunkun($('#alertStage'), { fit: 300 });
 
@@ -1986,7 +2115,7 @@
     if (ms) moodTimer = setTimeout(function () { if (!rt.alertId) stage.setMood('idle'); }, ms);
   }
 
-  function setCaption(html) { el.caption.innerHTML = html; }
+  function setCaption(html) { if (el.caption.innerHTML !== html) el.caption.innerHTML = html; }
 
   /* ------------------------------------------- 睡眠 / 息屏自动暂停 */
   /* gapPause：不是电源事件、而是靠「两次 tick 间隔异常大」推测出来的暂停，
@@ -2090,11 +2219,10 @@
       if (!t) return;
       if (best === null || t.remaining < best) { best = t.remaining; bestKind = it; }
     });
-    if (bestKind) {
-      document.title = fmt(best) + ' ' + (bestKind.emoji || '') + ' 别感冒';
-    } else {
-      document.title = '别感冒 · 喝水休息提醒器';
-    }
+    const title = bestKind
+      ? fmt(best) + ' ' + (bestKind.emoji || '') + ' 别感冒'
+      : '别感冒 · 喝水休息提醒器';
+    if (document.title !== title) document.title = title;
   }
 
   /* ---------------------------------------------------------- 飘字动画 */
@@ -4119,6 +4247,8 @@
 
   function openTab(name) {
     if (!TAB_PAGES[name]) name = 'home';
+    // display:none 会取消并重建 CSS Animation；切页后重新接管当前对象。
+    decorAnimations = null;
     ui.tab = name;
     Object.keys(TAB_PAGES).forEach(function (key) {
       const node = $(TAB_PAGES[key]);
@@ -5735,27 +5865,32 @@
     requestFit();
   }
 
+  /* 同一秒内的多个 tick 只推进计时，不重复替换相同的文本节点。 */
+  function setTextIfChanged(node, value) {
+    if (node.textContent !== value) node.textContent = value;
+  }
+
   function render() {
     const now = new Date();
     const p = function (n) { return String(n).padStart(2, '0'); };
-    el.clock.textContent = p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds());
+    setTextIfChanged(el.clock, p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds()));
     const wk = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()];
-    el.date.textContent = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 · ' + wk;
+    setTextIfChanged(el.date, now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 · ' + wk);
 
     settings.items.forEach(function (it, i) {
       const art = el.panelList.children[i];
       if (!art) return;
       const t = rt.timers[it.id] || { remaining: 0, total: 1 };
       art.classList.toggle('off', !it.enabled);
-      $('[data-role="countdown"]', art).textContent = it.enabled ? fmt(t.remaining) : '--:--';
+      setTextIfChanged($('[data-role="countdown"]', art), it.enabled ? fmt(t.remaining) : '--:--');
       const ratio = t.total > 0 ? clamp(t.remaining / t.total, 0, 1) : 0;
       $('[data-role="ring"]', art).style.strokeDashoffset = String(RING_C * (1 - ratio));
       const n = (stats.counts && stats.counts[it.id]) || 0;
-      $('[data-role="count"]', art).textContent = String(n);
+      setTextIfChanged($('[data-role="count"]', art), String(n));
       $('[data-role="bar"]', art).style.width = Math.min(100, (n / (it.goal || 8)) * 100) + '%';
     });
 
-    el.btnToggle.textContent = rt.running ? '⏸ 暂停计时' : '▶ 继续计时';
+    setTextIfChanged(el.btnToggle, rt.running ? '⏸ 暂停计时' : '▶ 继续计时');
     el.btnToggle.classList.toggle('primary', rt.running);
 
     if (!rt.alertId) {
@@ -5829,7 +5964,11 @@
     }
     /* 窗口看不见的时候不碰 DOM：倒计时照常算、到点照样弹提醒，
        但没必要每 250ms 去改一堆元素的文本和宽度。 */
-    if (animRunning) render();
+    /* 省电模式（rAF 已停）时，靠这个 1 秒一次的 tick 把画面推进一格：时钟照走、角色慢动作，
+       但没有任何 rAF 排队 —— 真正省下那 150% 的就是这里。 */
+    if (!animRunning) { try { stage.frame(Date.now()); } catch (e) { } }
+    /* 省电时也要刷新「时钟 / 日期 / 倒计时」这几处文本，否则看着像卡死 */
+    render();
   }
 
   function todoViewOpen() {
@@ -5845,18 +5984,16 @@
   let tickTimer = 0;
   let tickMs = 250;
 
-  /* 限帧：rAF 每秒 60 次会让合成器每帧都给这扇（透明、1181×881 的）窗口做一次
-     完整合成 —— 实测 GPU 进程因此长期吃满 140%，而画面本身根本没变。
-     这个角色动画是慢速呼吸/摇摆，30fps 肉眼分辨不出，成本却直接砍半。
-     注意用的是 rAF 的时间戳推进动画，所以动画速度不受限帧影响。 */
-  const FRAME_MS = 1000 / 30;
+  /* 角色和背景统一按 30fps 更新；仍用 rAF 对齐显示器，动画时间按真实经过时间推进。 */
+  let FRAME_MS = 1000 / 30;   // 前台 30fps（与原来一致，rAF 对齐垂直同步所以顺滑），省电模式 1fps
   let lastFrameAt = 0;
 
   function loop(now) {
     if (!animRunning) return;
     rafId = requestAnimationFrame(loop);
-    if (now - lastFrameAt < FRAME_MS - 1) return;   // 这一帧跳过
+    if (now - lastFrameAt < FRAME_MS - 1) return;
     lastFrameAt = now;
+    drawDecor(now);
     stage.frame(now);
     if (!el.overlay.hidden) alertStage.frame(now);
   }
@@ -5864,6 +6001,8 @@
   function startAnim() {
     if (animRunning) return;
     animRunning = true;
+    decorLastAt = 0;
+    if (cachedGrid) cachedGrid.lastAt = 0;
     lastFrameAt = 0;
     rafId = requestAnimationFrame(loop);
   }
@@ -5880,15 +6019,23 @@
     tickTimer = setInterval(tick, ms);
   }
 
+  /* 人切走去用别的程序（失焦 1.5 秒）就进省电模式 —— 画面没人在看时不该持续合成。
+     延迟 1.5 秒是为了点一下再切回来时不闪。倒计时按 Date.now 算，降频不影响准点。 */
   function applyVisibility(visible) {
     document.body.classList.toggle('anim-off', !visible);
     if (visible === animRunning) return;
     if (visible) {
+      FRAME_MS = 1000 / 30;
       last = Date.now();
       setTickRate(250);
       startAnim();
       render();
     } else {
+      /* 省电模式：**降帧**而不是停循环。
+         以前这里 stopAnim() 把 rAF 整个停了 —— 时钟和画面正是靠它推进的，
+         结果用户切去别的程序再回来看，界面像冻住、连时间都不动。
+         现在：1 帧/秒 + 计时器 1 秒 + 关掉 CSS 动画，照样能把占用压到个位数。 */
+      FRAME_MS = 1000;
       setTickRate(1000);
       stopAnim();
     }

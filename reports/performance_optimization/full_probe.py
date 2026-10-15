@@ -1,0 +1,16 @@
+from probe import *
+p=Probe(full=True)
+try:
+    p.measure('full-baseline')
+    print('DOM',p.js("JSON.stringify({dpr:devicePixelRatio,size:[innerWidth,innerHeight],animations:document.getAnimations().map(a=>({name:a.animationName,target:a.effect.target.className})),canvases:[...document.querySelectorAll('canvas')].map(c=>({id:c.id,size:[c.width,c.height],rect:c.getBoundingClientRect().toJSON()}))})"),flush=True)
+    p.call('/shot',path=str(OUT.parent/'screenshots/codex-before.png'))
+    p.call('/trace-start');time.sleep(5);p.call('/trace-stop',path=str(OUT/'codex-baseline-trace.json'))
+    p.js("window._probeStyle=document.head.appendChild(document.createElement('style'));_probeStyle.textContent='*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;filter:none!important;mix-blend-mode:normal!important;mask-image:none!important;-webkit-mask-image:none!important}'")
+    p.measure('full-no-effects')
+    p.js("_probeStyle.textContent=''")
+    p.measure('full-baseline-return')
+    p.js("_probeStyle.textContent='.grid-floor,.aurora,.scanlines{display:none!important}'")
+    p.measure('full-no-decor')
+    p.js("_probeStyle.textContent=''")
+    p.measure('full-baseline-return2')
+finally:p.close()
