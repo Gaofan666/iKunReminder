@@ -1,20 +1,20 @@
 {
-  "version": "4.7.4",
-  "releaseDate": "2026-10-22T08:35:28.981Z",
-  "notes": "## iKunReminder v4.7.4\n\n### 修复：自动更新缓存无限堆积、吃掉 C 盘\n- **问题**：应用内自动更新（Gitee 源分卷下载）会把安装包下载到用户目录\n  `C:\\Users\\<你>\\AppData\\Roaming\\iKunReminder\\pending-<版本>.exe`，但安装成功后从不删除，\n  导致**每升级一次就残留一个约 110MB 的文件**。长期跨多个版本升级后，这些 `pending-*.exe`\n  会堆积到数 GB（有用户反映堆积到 3GB+，把 C 盘吃满）。\n- **修复**：在**应用启动**和**每次下载更新前**清理这些历史 `pending-*.exe`\n  （仅保留当前正在使用 / 刚下载完的那一个）。\n  - 以后每次升级**不再堆积**；\n  - **历史已堆积的文件会在本次升级并重启后自动清掉**。\n- **说明**：`AppData\\Roaming\\iKunReminder` 是 Electron 标准的用户数据目录，论文库（`arxiv.db`）、\n  窗口位置、设置、缓存都在这里，**位置是正常的**；异常的是其中的 `pending-*.exe` 缓存。\n- 想立刻释放空间，也可手动删除该目录下所有 `pending-*.exe`（纯更新缓存，删除不影响已装软件，\n  下次更新会重新下载）。\n\n### 校验\n- 分卷下载合并后照常做 SHA512 整包校验，防止下到坏包。\n\n**下载**：`iKunReminder-setup-v4.7.4.exe`（约 116 MB，Windows x64，双击安装；本页为分卷，供国内直连）\n",
-  "size": 121930869,
-  "sha512": "RXcOWqL/7UHGm70Bzrp+JSNPxjjbnYBj10JY26kcR60T4ZQ8GVGT7THhWlg45x6dRjVoVASf4O+tWzyj0XQdAA==",
+  "version": "4.7.5",
+  "releaseDate": "2026-10-22T09:25:17.035Z",
+  "notes": "## iKunReminder v4.7.5\n\n### 修复：弹窗里打到一半的字，不会因为误点弹窗外就丢了\n- **问题**：新增/编辑待办、备忘时，在弹窗里输入内容，不小心点到弹窗外面，弹窗直接关闭，\n  辛辛苦苦敲的内容全部丢失，只能重新输入。\n- **修复**：\n  - 弹窗里**有未保存的输入**（要做的事 / 备忘正文 / 新分类名）时，点击弹窗外面**不再关闭**；\n  - 弹窗里**什么都没填**时，点外面仍按老习惯直接关闭（不改变空白时的快捷操作）；\n  - 点弹窗内的 ✕ 或「取消」按钮照常关闭，不受影响。\n- 备忘弹窗（正文是多行输入框）与待办弹窗一并修复。\n\n### 其他\n- 按 Esc 收起「＋ 新建分类」输入行时，现在会清空残留文字（原先只隐藏不清空）。\n",
+  "size": 121931071,
+  "sha512": "8Jod+vuwivycS8zj4fequoCM0xTtwVcMZUrbQDvbLTnRKPGuj2kn1eHsvmEc6Awubg0OvTb1SE2HVSuZg/haLA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.4/iKunReminder-setup-v4.7.4.exe.part1",
-      "size": 60965435,
-      "sha512": "90swRRqbup0ARBFuqW+82sHkWQrqLspasbXthMmn80zdMp42VmqrvnCS4muauCQ4lvcygoSSBbPy2DgV6/AskA==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.5/iKunReminder-setup-v4.7.5.exe.part1",
+      "size": 60965536,
+      "sha512": "FSj/K05lYzUuffeX1zsQG86hRREVXKt+OeQS6hpVDxGZN/M+/N1rknURWdM1hoE0foLlmZHvggXqIRZcLBVeQQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.4/iKunReminder-setup-v4.7.4.exe.part2",
-      "size": 60965434,
-      "sha512": "iblFyWAenxiOJSKYArvyuRKgQk6YWOc7W0EBSNBPGNxv3hCrd+2hOrvzRXVaMaOZah6BPnQCXgx36KMCTBRxTg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.5/iKunReminder-setup-v4.7.5.exe.part2",
+      "size": 60965535,
+      "sha512": "EKXtqE2pdfSRhH/VSY7yl/rEVcTBAyJ1On6N7d+/eLUTuk5GHIipFTsgDLlQV/c+QGQk7Tjjhig5ord5A+9jPw==",
       "index": 2
     }
   ]
