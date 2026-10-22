@@ -9236,8 +9236,17 @@ async function downloadViaMirror() {
   const total = m.parts.reduce(function (a, p) { return a + (p.size || 0); }, 0) || m.size || 1;
   const out = path.join(app.getPath('userData'), 'pending-' + m.version + '.exe');
 
-  /* 每次重新下，避免上次的残缺文件被当成续传基准 */
-  try { fs.unlinkSync(out); } catch (e) { }
+  /* 下载前清掉 userData 下所有历史 pending-*.exe（含本次 out）：
+     这些安装包缓存安装成功后从不删除，跨版本升级会无限堆积（曾见过几十个、数 GB 占用 C 盘）。
+     全部删掉重新下最干净，避免上次残缺/旧版本被当成续传基准或残留占用空间。 */
+  try {
+    const ud = app.getPath('userData');
+    fs.readdirSync(ud).forEach(function (n) {
+      if (/^pending-.*\.exe$/i.test(n)) {
+        try { fs.unlinkSync(path.join(ud, n)); } catch (e) { }
+      }
+    });
+  } catch (e) { }
 
   let base = 0;
   for (let i = 0; i < m.parts.length; i++) {
@@ -9300,6 +9309,31 @@ function setUpdateError(err) {
   updateState = 'error';
   updateError = String((err && err.message) || err || '未知错误').slice(0, 300);
   pushUpdate();
+}
+
+/* 清理历史自动更新缓存：应用内更新把安装包下载到 userData/pending-<版本>.exe，
+   但安装成功后从不删除，导致跨版本升级时无限堆积（最多见过几十个、数 GB 占用 C 盘）。
+   启动和下载前都会清：删掉除「当前正在用/刚下载完」的 updateMergedExe 之外的所有 pending-*.exe。
+   占用中（安装包正在自解压）的文件删不掉就跳过，留到下次启动再清。 */
+function prunePendingUpdates() {
+  let dir;
+  try { dir = app.getPath('userData'); } catch (e) { return; }
+  let list;
+  try { list = fs.readdirSync(dir); } catch (e) { return; }
+  const keep = updateMergedExe ? path.resolve(updateMergedExe) : '';
+  let removed = 0, freed = 0;
+  for (const name of list) {
+    if (!/^pending-.*\.exe$/i.test(name)) continue;
+    const full = path.join(dir, name);
+    if (keep && path.resolve(full) === keep) continue;   // 正在用的别动
+    try {
+      const st = fs.statSync(full);
+      fs.unlinkSync(full);
+      removed++; freed += st.size || 0;
+    } catch (e) { /* 占用中就跳过 */ }
+  }
+  if (removed) diagLog('prune-pending', { removed: removed, freedBytes: freed });
+  return { removed: removed, freedBytes: freed };
 }
 
 function initUpdater() {
@@ -11286,6 +11320,7 @@ if (!gotLock) {
        放在 buildTray 之后，后台查到新版时托盘气泡才有得用。 */
     loadUpdatePref();
     initUpdater();
+    prunePendingUpdates();   // 启动即清历史 pending 缓存，别让旧安装包越堆越多
     scheduleUpdateCheck();
 
     /* 一键摸鱼：读偏好 → 注册全局快捷键。
