@@ -57,6 +57,17 @@
     if (!a.length) return '作者未知';
     return a.slice(0, 3).join('、') + (a.length > 3 ? ' 等 ' + a.length + ' 人' : '');
   }
+  /* 列表里那条短 ID：arXiv 显示 arXiv:2401.12345；其他源显示各自的键
+     （doi:… → DOI:…、openalex:W… → OpenAlex:W…、epmc:… / pmid:… / s2:…） */
+  function shortId(p) {
+    const id = String(p.arxivId || '');
+    if (/^doi:/i.test(id)) return clip('DOI:' + id.slice(4), 34);
+    if (/^openalex:/i.test(id)) return id.replace(/^openalex:/i, 'OpenAlex:');
+    if (/^epmc:pmid:/i.test(id)) return 'PMID:' + id.slice(9);
+    if (/^epmc:/i.test(id)) return id.replace(/^epmc:/i, 'EPMC:');
+    if (/^s2:/i.test(id)) return 'Semantic Scholar';
+    return 'arXiv:' + id;
+  }
   function clip(s, n) {
     var t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
     return t.length > n ? (t.slice(0, n) + '…') : t;
@@ -146,6 +157,46 @@
   }
 
   /* ------------------------------------------------------ 右侧：条件表单 */
+  /* 来源 id → 显示名（列表徽标和按钮文案用）。arXiv 之外的新源来自 st.sources。 */
+  var srcLabel = { arxiv: 'arXiv' };
+  function sourceLabel(id) {
+    return srcLabel[id] || 'arXiv';
+  }
+  function rebuildSrcMap() {
+    srcLabel = { arxiv: 'arXiv' };
+    ((st && st.sources) || []).forEach(function (s) { srcLabel[s.id] = s.label; });
+  }
+
+  function renderSources() {
+    if (!el.sources) return;
+    if (!el.sources.childNodes.length && st && st.sources && st.sources.length) {
+      st.sources.forEach(function (s) {
+        var lab = document.createElement('label');
+        lab.className = 'ax-field';
+        lab.title = s.hint || '';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = s.id;
+        cb.addEventListener('change', function () {
+          var picked = [];
+          el.sources.querySelectorAll('input').forEach(function (x) { if (x.checked) picked.push(x.value); });
+          if (!picked.length) { cb.checked = true; note('至少要留一个检索来源', 'bad'); return; }
+          save({ sources: picked }, '检索来源已更新');
+        });
+        var name = document.createElement('span');
+        name.textContent = s.label;
+        lab.appendChild(cb);
+        lab.appendChild(name);
+        el.sources.appendChild(lab);
+      });
+    }
+    var cfg = (st && st.config) || {};
+    var cur = cfg.sources || ['arxiv'];
+    if (el.sources) {
+      el.sources.querySelectorAll('input').forEach(function (x) { x.checked = cur.indexOf(x.value) >= 0; });
+    }
+  }
+
   function renderFields() {
     if (!el.fields) return;
     if (!el.fields.childNodes.length && st && st.fields) {
@@ -284,11 +335,24 @@
 
   function renderQuery() {
     if (!el.query) return;
-    el.query.textContent = (st && st.query) ? st.query : '（先把关键词加上，这里会显示拼好的查询串）';
+    var c = (st && st.config) || {};
+    var others = (c.sources || []).filter(function (x) { return x !== 'arxiv'; });
+    var q = (st && st.query) || '';
+    if (others.length && others.length < (c.sources || []).length) {
+      el.query.textContent = (q ? q + '　' : '') +
+        '（同时去 ' + others.map(sourceLabel).join(' / ') + ' 用同一批关键词做相关性搜索）';
+    } else if (others.length) {
+      el.query.textContent = '正在检索：' + others.map(sourceLabel).join(' / ') +
+        '（用同一批关键词做相关性搜索，本地按日期与匹配模式过滤）';
+    } else {
+      el.query.textContent = q ? q : '（先把关键词加上，这里会显示拼好的查询串）';
+    }
   }
 
   function render() {
+    rebuildSrcMap();
     renderChips();
+    renderSources();
     renderFields();
     renderMatch();
     renderWidthHint();
@@ -359,7 +423,13 @@
     add(fmtWhen(p.published) || '时间未知');
     add(fmtAgo(p.published));
     if (p.primary) add(p.primary, 'ax-cat');
-    add('arXiv:' + p.arxivId);
+    if ((p.source || 'arxiv') === 'arxiv') {
+      add('arXiv:' + p.arxivId);
+    } else {
+      /* 非 arXiv 来源：来源名做成醒目徽标（ax-cat 同款样式），后面跟短 ID */
+      add(sourceLabel(p.source), 'ax-cat ax-src-badge');
+      add(shortId(p));
+    }
     it.appendChild(meta);
 
     var au = document.createElement('div');
@@ -390,7 +460,7 @@
 
     var btns = document.createElement('div');
     btns.className = 'arxiv-btns';
-    /* 顺序：评论 / arXiv 页面 / 收藏 / 删除，评分放最右边（撑开的）
+    /* 顺序：评论 / 原文页面 / 收藏 / 删除，评分放最右边（撑开的）
        打开 PDF 改成点标题了，所以这里不再重复一个 PDF 按钮 */
     var cmBtn = mkBtn(cmtLabel(p), '', function () {
       if (openComments[p.arxivId]) delete openComments[p.arxivId];
@@ -399,7 +469,8 @@
     });
     cmBtn.classList.add('ax-cm-btn');
     btns.appendChild(cmBtn);
-    btns.appendChild(mkBtn('🔗 arXiv 页面', '', function () { openUrl(p.absUrl); }));
+    var srcName = sourceLabel(p.source || 'arxiv');
+    btns.appendChild(mkBtn('🔗 ' + srcName + ' 页面', '', function () { openUrl(p.absUrl); }));
     btns.appendChild(mkBtn(p.star ? '★ 已收藏' : '☆ 收藏', '', function () {
       if (native.arxivStar) native.arxivStar(p.arxivId, !p.star).then(function () { p.star = !p.star; refresh(); });
     }));
@@ -577,7 +648,7 @@
       var cfg = (st && st.config) || {};
       if (!cfg.keywords || !cfg.keywords.length) {
         d.textContent = '还没设置关键词。\n\n右边加几个英文关键词（比如 graph neural network），' +
-          '程序就会按你设的频率自己去 arXiv 找，找到了让宠物来告诉你。';
+          '程序就会按你设的频率自己去 arXiv / OpenAlex / Crossref 等文献库找，找到了让宠物来告诉你。';
       } else if (filter === 'unread') {
         d.textContent = '没有未读的论文了。';
       } else if (filter === 'star') {
@@ -652,10 +723,21 @@
         native.arxivFetchNow().then(function (r) {
           busyLocal = false;
           if (r && r.ok) {
-            lastMsg = '抓取完成：这个条件 arXiv 上共 ' + r.total + ' 篇，这次取回 ' + r.got +
-              ' 篇（翻了 ' + (r.pages || 1) + ' 页），其中新的 ' + r.added + ' 篇' +
-              (r.pushed ? '，已推送 ' + r.pushed + ' 篇' : '') +
-              '（用了 ' + Math.round((r.ms || 0) / 100) / 10 + ' 秒）';
+            if (r.perSource && r.perSource.length) {
+              /* 多来源：逐个源报账，谁挂了一眼就能看到 */
+              var parts = r.perSource.map(function (s) {
+                return s.ok
+                  ? (sourceLabel(s.id) + ' 取回 ' + s.got + ' 篇')
+                  : (sourceLabel(s.id) + ' 没成功（' + clip(s.error || '', 46) + '）');
+              });
+              lastMsg = '抓取完成：新增 ' + r.added + ' 篇（' + parts.join('；') + '），用时 ' +
+                Math.round((r.ms || 0) / 100) / 10 + ' 秒';
+            } else {
+              lastMsg = '抓取完成：这个条件 arXiv 上共 ' + r.total + ' 篇，这次取回 ' + r.got +
+                ' 篇（翻了 ' + (r.pages || 1) + ' 页），其中新的 ' + r.added + ' 篇' +
+                (r.pushed ? '，已推送 ' + r.pushed + ' 篇' : '') +
+                '（用了 ' + Math.round((r.ms || 0) / 100) / 10 + ' 秒）';
+            }
           } else {
             lastMsg = '⚠ ' + ((r && (r.error || r.skipped)) || '抓取没成功');
           }
@@ -762,6 +844,7 @@
       kwInput: $('axKwInput'),
       kwAdd: $('axKwAdd'),
       kwHint: $('axKwHint'),
+      sources: $('axSources'),
       fields: $('axFields'),
       widthHint: $('axWidthHint'),
       match: $('axMatch'),

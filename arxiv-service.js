@@ -13,6 +13,7 @@
 
 const ARXIV = require('./arxiv');
 const DB = require('./arxiv-db');
+const SRC = require('./schol-sources');
 
 /* 手动抓取的冷却：刚抓过就别再打 arXiv 了（官方建议间隔 ≥3 秒，这里更保守）。
    自动抓取正在跑的时候点「立即抓取」不算冷却 —— 那一下会等这一轮跑完并把结果给界面。 */
@@ -60,6 +61,7 @@ function createArxivService(opts) {
       nextAt: nextRunAt(c),
       maxKeywords: DB.MAX_KEYWORDS,
       fields: ARXIV.FIELDS,
+      sources: SRC.uiList(),
       query: ARXIV.buildArxivQuery(c)
     };
   }
@@ -77,7 +79,8 @@ function createArxivService(opts) {
   /* 把「会影响查询结果的那几项」拼成一个签名：关键词 / 字段 / 匹配模式 / 天数。
      换过条件之后再点手动抓取，就不该再吃「刚抓过」的冷却了。 */
   function querySig(c) {
-    return JSON.stringify([c.keywords || [], c.fields || [], !!c.matchAny, c.days || 0]);
+    return JSON.stringify([c.keywords || [], c.fields || [], !!c.matchAny, c.days || 0,
+      (c.sources || []).slice().sort()]);
   }
 
   /* ------------------------------------------------------------- 跑一轮抓取
@@ -142,29 +145,71 @@ function createArxivService(opts) {
       const want = Math.max(1, Math.round(Number(c.maxResults) || 30));
       const PAGE = 100;
       const MAX_PAGES = 10;
-      let got = [];
-      let start = 0;
+
+      /* ------------------------------------------- 多来源抓取
+         一轮抓取会跑「来源设置里勾上的每一个站」：
+           · arXiv 走原来的翻页逻辑（官方限速 3 秒/请求）
+           · 其他源各自单页拿一批（各自的上限内），失败只记日志、不拖垮整轮
+         条目统一成 arXiv 的形状（schol-sources.js 里归一），合成 ID 去重：
+           同一篇论文两个源都给了 DOI → 同一个 doi: 键 → 库里只留一条。 */
+      const enabled = (c.sources && c.sources.length ? c.sources : ['arxiv'])
+        .filter(function (id) { return SRC.SOURCE_IDS.indexOf(id) >= 0; });
+
+      let entries = [];
       let pages = 0;
-      let total = 0;
-      let lastQuery = '';
       let tries = 0;
-      while (got.length < want && pages < MAX_PAGES) {
-        const size = Math.min(PAGE, want - got.length);
-        const res = await ARXIV.arxivFetch(c, {
-          fetchImpl: fetchImpl, maxResults: size, start: start, retries: 2
-        });
-        pages++;
-        tries += res.tries || 1;
-        total = res.parsed.total || total;
-        lastQuery = res.query;
-        const batch = res.parsed.entries || [];
-        got = got.concat(batch);
-        start += batch.length;
-        /* 这一页没给满 = 后面没有了，别再翻 */
-        if (batch.length < size) break;
-        if (total && start >= total) break;
+      let lastQuery = '';
+      let total = 0;
+      const perSource = [];
+
+      /* --- arXiv（原来的逻辑原样保留：按每页 100 条翻到够数为止） --- */
+      if (enabled.indexOf('arxiv') >= 0) {
+        let got = [];
+        let start = 0;
+        let arxivTotal = 0;
+        while (got.length < want && pages < MAX_PAGES) {
+          const size = Math.min(PAGE, want - got.length);
+          const res = await ARXIV.arxivFetch(c, {
+            fetchImpl: fetchImpl, maxResults: size, start: start, retries: 2
+          });
+          pages++;
+          tries += res.tries || 1;
+          arxivTotal = res.parsed.total || arxivTotal;
+          lastQuery = res.query;
+          const batch = res.parsed.entries || [];
+          got = got.concat(batch);
+          start += batch.length;
+          /* 这一页没给满 = 后面没有了，别再翻 */
+          if (batch.length < size) break;
+          if (arxivTotal && start >= arxivTotal) break;
+        }
+        entries = entries.concat(got.map(function (p) {
+          return Object.assign({ source: 'arxiv' }, p);
+        }));
+        total += arxivTotal;
+        perSource.push({ id: 'arxiv', ok: true, got: got.length, total: arxivTotal });
       }
-      const entries = got;
+
+      /* --- 其他来源：OpenAlex / Crossref / Europe PMC / Semantic Scholar --- */
+      for (const sid of enabled) {
+        if (sid === 'arxiv') continue;
+        const src = SRC.byId(sid);
+        if (!src || typeof src.fetch !== 'function') continue;
+        try {
+          const res = await src.fetch(c, { fetchImpl: fetchImpl, maxResults: want });
+          entries = entries.concat(res.entries || []);
+          total += res.total || 0;
+          perSource.push({
+            id: sid, ok: true, got: (res.entries || []).length, total: res.total || 0
+          });
+          log('arxiv-src-ok', { 来源: sid, 拿到: (res.entries || []).length, 命中: res.total || 0 });
+        } catch (e) {
+          const msg = String((e && e.message) || e);
+          perSource.push({ id: sid, ok: false, error: msg });
+          log('arxiv-src-fail', { 来源: sid, error: msg });
+        }
+      }
+
       const ins = db.addPapers(entries, { matchedFor: function (p) { return matchedFor(p, c.keywords); } });
       const fresh = entries.filter(function (p) { return ins.ids.indexOf(p.arxivId) >= 0; });
 
@@ -198,10 +243,12 @@ function createArxivService(opts) {
         lastFetchAt: now(), lastOkAt: now(), lastCount: ins.added, lastError: '',
         lastQuerySig: querySig(c)          // 记下「这一批是用什么条件抓的」
       });
+      const anyOk = perSource.some(function (s) { return s.ok; });
       lastResult = {
-        ok: true, at: now(), reason: r, ms: now() - t0,
+        ok: anyOk, at: now(), reason: r, ms: now() - t0,
         total: total, got: entries.length, added: ins.added,
-        pushed: pushed.length, query: lastQuery, tries: tries, pages: pages
+        pushed: pushed.length, query: lastQuery, tries: tries, pages: pages,
+        perSource: perSource              // 每个源各抓了多少 / 谁失败了（界面展示用）
       };
       log('arxiv-fetch-ok', {
         reason: r, 用时ms: now() - t0, 命中总数: total, 翻了几页: pages,
@@ -261,6 +308,7 @@ function createArxivService(opts) {
     const after = db.setConfig(patch || {});
     const kwChanged = JSON.stringify(before.keywords) !== JSON.stringify(after.keywords) ||
       JSON.stringify(before.fields) !== JSON.stringify(after.fields) ||
+      JSON.stringify(before.sources) !== JSON.stringify(after.sources) ||
       before.matchAny !== after.matchAny || before.days !== after.days;
     if (!after.enabled || !after.keywords.length) {
       if (timer) { clearTimeout(timer); timer = null; }

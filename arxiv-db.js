@@ -15,6 +15,7 @@
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const ARXIV = require('./arxiv');
+const SRC = require('./schol-sources');
 
 const MAX_KEYWORDS = 10;           // 用户要的上限（原来按需求文档是 5，放宽到 10）
 const WIDE_ATOMS = 40;             // 关键词 × 字段 超过这个数就在界面上提醒「条件太宽」
@@ -26,6 +27,10 @@ const DEFAULT_CONFIG = {
   enabled: true,
   keywords: [],
   fields: ['ti', 'abs'],
+  /* 检索来源（多选）：arxiv 之外新增 OpenAlex / Crossref 等开放学术库。
+     老配置里没这个字段 → normalize 时自动补成默认（arXiv + OpenAlex + Crossref），
+     等于老用户升级后自动多两个源。 */
+  sources: SRC.DEFAULT_SOURCES.slice(),
   matchAny: true,          // 任一条件
   days: 7,                 // 只要最近 7 天提交的
   intervalH: 24,           // 每 24 小时抓一次
@@ -69,6 +74,10 @@ function normalizeConfig(patch, base) {
   if (Array.isArray(p.fields)) {
     const f = p.fields.filter(function (x) { return ARXIV.FIELD_IDS.indexOf(x) >= 0; });
     out.fields = f.length ? f : ['all'];
+  }
+  if (Array.isArray(p.sources)) {
+    const s = p.sources.filter(function (x) { return SRC.SOURCE_IDS.indexOf(x) >= 0; });
+    out.sources = s.length ? s : ['arxiv'];
   }
   if (p.days != null) out.days = clampInt(p.days, 0, 365, cur.days);          // 0 = 不限日期
   if (p.intervalH != null) out.intervalH = clampInt(p.intervalH, 1, 24 * 30, cur.intervalH);
@@ -119,14 +128,18 @@ function openArxivDb(file) {
      属于预料之中，吞掉就行。 */
   try { db.exec('ALTER TABLE papers ADD COLUMN score INTEGER DEFAULT 0'); } catch (e) { }
 
+  /* 多来源检索：source 列记这篇论文来自哪个站（arxiv / openalex / crossref / …）。
+     老库补列；老数据全是 arXiv 抓的，默认值就是 'arxiv'，不用回填。 */
+  try { db.exec("ALTER TABLE papers ADD COLUMN source TEXT NOT NULL DEFAULT 'arxiv'"); } catch (e) { }
+
   const q = {
     getCfg: db.prepare('SELECT v FROM config WHERE k = ?'),
     setCfg: db.prepare('INSERT INTO config(k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v'),
     insPaper: db.prepare([
       'INSERT OR IGNORE INTO papers(',
       ' arxiv_id, title, summary, authors, categories, primary_cat, published, updated,',
-      ' comment, journal_ref, pdf_url, abs_url, matched, fetched_at, pushed, pushed_at, read',
-      ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0)'
+      ' comment, journal_ref, pdf_url, abs_url, matched, fetched_at, pushed, pushed_at, read, source',
+      ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)'
     ].join('')),
     hasPaper: db.prepare('SELECT 1 AS x FROM papers WHERE arxiv_id = ?'),
     markPushed: db.prepare('UPDATE papers SET pushed = 1, pushed_at = ? WHERE arxiv_id = ?'),
@@ -181,8 +194,11 @@ function openArxivDb(file) {
 
   function rowToPaper(r) {
     if (!r) return null;
+    /* 老库迁移过来的行没有 source 值 → 都是当年 arXiv 抓的，按默认算 */
+    const src = r.source || 'arxiv';
     return {
       arxivId: r.arxiv_id,
+      source: src,
       /* 标题/摘要在这里再过一遍公式清洗：清洗是入库时做的，但库里可能存着
          「清洗之前抓进来的」老数据（用户升级后才发现摘要里还是一堆 $ 和反斜杠）——
          读的时候再洗一次，老数据也就跟着正常了。重复洗是无害的（已经是纯文本时不变）。 */
@@ -195,8 +211,8 @@ function openArxivDb(file) {
       updated: r.updated || '',
       comment: r.comment || '',
       journalRef: r.journal_ref || '',
-      pdfUrl: r.pdf_url || ('https://arxiv.org/pdf/' + r.arxiv_id),
-      absUrl: r.abs_url || ('https://arxiv.org/abs/' + r.arxiv_id),
+      pdfUrl: r.pdf_url || (src === 'arxiv' ? ('https://arxiv.org/pdf/' + r.arxiv_id) : ''),
+      absUrl: r.abs_url || (src === 'arxiv' ? ('https://arxiv.org/abs/' + r.arxiv_id) : ''),
       matched: safeArr(r.matched),
       fetchedAt: r.fetched_at || 0,
       pushed: !!r.pushed,
@@ -232,7 +248,8 @@ function likeEscape(s) {
         p.arxivId, p.title, p.summary || '', JSON.stringify(p.authors || []),
         JSON.stringify(p.categories || []), p.primary || '', p.published || '', p.updated || '',
         p.comment || '', p.journalRef || '', p.pdfUrl || '', p.absUrl || '',
-        JSON.stringify(o.matchedFor ? o.matchedFor(p) : (p.matched || [])), now);
+        JSON.stringify(o.matchedFor ? o.matchedFor(p) : (p.matched || [])), now,
+        p.source || 'arxiv');
       if (info && info.changes > 0) added.push(p.arxivId);
     });
     return { added: added.length, ids: added };
