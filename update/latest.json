@@ -1,20 +1,20 @@
 {
-  "version": "4.7.6",
-  "releaseDate": "2026-10-22T13:31:30.340Z",
-  "notes": "## iKunReminder v4.7.6\n\n### 新功能：科研动态不再只盯 arXiv —— 一键接入 OpenAlex / Crossref 等多大学术库\n- **背景**：原来「科研动态」只抓 arXiv（预印本库），期刊、会议正式版的论文搜不到。\n  大家熟悉的 Google Scholar 没有官方 API、反爬极凶（验证码/封 IP），没法直连 ——\n  所以这次接入的是**覆盖面与之等效**的开放学术 API（全部免费、无需注册）。\n- **新增来源**（「抓取条件 → 检索来源」里自由勾选）：\n  - **OpenAlex**（默认开）：2.5 亿条学术记录，Google Scholar 的最佳开放替代，\n    带开放获取（OA）PDF 直链和被引次数\n  - **Crossref**（默认开）：1.8 亿条 DOI 记录，IEEE / Elsevier / Springer 等\n    期刊、会议的正式版元数据最全\n  - **Europe PMC**（可选）：生物医学文献\n  - **Semantic Scholar**（可选）：无密钥经常被限流，抓不到会自动跳过，不影响其他源\n- **好用不乱**：\n  - 同一篇论文（同一个 DOI）多个源都搜到时**自动合并成一条**，不会重复刷屏；\n  - 每个来源在抓取结果里单独报账（谁取回几篇、谁没成功一目了然）；\n  - 任一来源失败只跳过它，绝不拖垮整轮抓取；\n  - 列表里每篇论文带来源徽标（arXiv / OpenAlex / Crossref…），打开的就是对应原文页面。\n- **说明**：搜索字段（标题/摘要/作者…）是 arXiv 专有的元数据前缀，只对 arXiv 生效；\n  其他源用同一批关键词做全文相关性搜索，「任一/全部条件」的语义照常生效。\n",
-  "size": 121932799,
-  "sha512": "zHpZOWywOhiQp3ex7ocmYQ7DvICMRj1crlEiFT5qqxsfw1O2QaG/DMQciixIz0RVmVHlmaarBVElv3E3JiUQSg==",
+  "version": "4.7.7",
+  "releaseDate": "2026-10-22T13:55:13.241Z",
+  "notes": "## iKunReminder v4.7.7\n\n### 🐛 紧急修复：v4.7.6 安装版科研动态页面失效（关键词空白 / 保存无反应）\n- **现象**：升级 4.7.6 后，「科研动态 → 抓取条件」里关键词列表显示为空、\n  输入后点「添加」没反应、「全部条件」按钮点不中。\n- **原因**：4.7.6 新增的多来源检索模块文件（schol-sources.js）漏加进了\n  安装包的打包清单 —— 开发环境有源文件所以测试全过，但安装版里这个\n  文件不存在，整个科研模块一启动就报错瘫痪。\n- **影响范围**：只影响「科研动态」页面；论文数据**没有任何丢失**\n  （数据库里关键词、论文、评论、评分都完好），升级到 4.7.7 打开后\n  一切自动恢复。\n- **修复**：\n  1. 打包清单补上缺失文件；\n  2. 加了防呆检查：今后构建时若发现打包清单里的文件没进安装包，\n     构建直接失败，不再可能发出这种坏包；\n  3. 加了降级保护：就算极端情况下文件再缺失，科研模块也会退化成\n     纯 arXiv 模式继续工作，而不是整个瘫掉。\n\n### 升级说明\n- 从 4.7.6 直接覆盖安装即可，无需任何手动操作。\n- 4.7.6 的多来源检索功能（OpenAlex / Crossref / Europe PMC / Semantic Scholar）\n  在本版本完整可用。\n",
+  "size": 121937660,
+  "sha512": "d3YRYa7TkwrJkmnGR4G7AoR9C3g6uMUqNx/XmfZqgVwZldZ+67Mj9/JNSC0x6YA1RquVv0+N9ctLad0fCkxkGQ==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.6/iKunReminder-setup-v4.7.6.exe.part1",
-      "size": 60966400,
-      "sha512": "4vRpnoQ8fJCqXevgt8ytdqvZjyrz+tL2v+UJ4B5k5FOza7sJdwq/rqA9+iBjuhpkctj5q3XS44e3R4a399hH5w==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.7/iKunReminder-setup-v4.7.7.exe.part1",
+      "size": 60968830,
+      "sha512": "VJVVuiPm6163W+nMAo5HqbzacFbvhrcr3a4JnXQlbFgawc2Dxppy1nF+CaWi28OH5/6tpmYLnTlpYIsGlld7ew==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.6/iKunReminder-setup-v4.7.6.exe.part2",
-      "size": 60966399,
-      "sha512": "o4avr2488AM3RW23DT1IfpUUBqN/IFyDM9c+PyFFvmSiv25dNozboqxBxuFKwMPipMjjoo0HWb1tyjz4ZKspxg==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.7/iKunReminder-setup-v4.7.7.exe.part2",
+      "size": 60968830,
+      "sha512": "P88tQDXiZxW7Yt5Or4s2zZ7e4xlqEjr3s2jjvRPjKo7npITKem/ITvTg5qLZSdriAYhnu65Zx+Pni6A2f/6+Jw==",
       "index": 2
     }
   ]
