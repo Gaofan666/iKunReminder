@@ -5128,7 +5128,7 @@
       if (ok) ok.addEventListener('click', submit);
       if (inp) inp.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); submit(); }
-        else if (e.key === 'Escape') { e.preventDefault(); if (row) row.hidden = true; }
+        else if (e.key === 'Escape') { e.preventDefault(); if (inp) inp.value = ''; if (row) row.hidden = true; }
       });
     };
     bindCatNew(el.memoCat, 'memoCatNewRow', 'memoCatNew', 'memoCatNewOk', function () {
@@ -5149,8 +5149,20 @@
     if (el.memoCancel) el.memoCancel.addEventListener('click', closeMemoModal);
     if (el.memoClose) el.memoClose.addEventListener('click', closeMemoModal);
     if (el.memoDueOn) el.memoDueOn.addEventListener('change', function () { paintMemoDueUI(el.memoDueOn.checked); });
+    /* 点遮罩关弹窗前先看一眼：弹窗里有没写完的文字（正文/新分类名）就别关，
+       免得手滑点到弹窗外面，辛辛苦苦敲的字全没了。全空着才按老习惯关。
+       只看看得见的输入框：藏起来的「新建分类」框若残留旧文字，不该拦着关弹窗。 */
+    function overlayHasTyping(overlay) {
+      if (!overlay) return false;
+      const list = overlay.querySelectorAll('input[type="text"], textarea');
+      for (let i = 0; i < list.length; i++) {
+        if (!list[i].offsetParent) continue;
+        if ((list[i].value || '').trim() !== '') return true;
+      }
+      return false;
+    }
     if (el.memoOverlay) el.memoOverlay.addEventListener('click', function (e) {
-      if (e.target === el.memoOverlay) closeMemoModal();
+      if (e.target === el.memoOverlay && !overlayHasTyping(el.memoOverlay)) closeMemoModal();
     });
     /* 「补填延期原因」弹窗：保存=写原因（正在完成的话顺带完成），第二个按钮按来源变
        （跳过直接完成 / 保存并完成 / 取消）；✕、点遮罩、Esc 都只是关掉，不改任何状态。 */
@@ -5188,7 +5200,7 @@
     if (el.tdCancel) el.tdCancel.addEventListener('click', closeTodoModal);
     if (el.tdClose) el.tdClose.addEventListener('click', closeTodoModal);
     if (el.todoOverlay) el.todoOverlay.addEventListener('click', function (e) {
-      if (e.target === el.todoOverlay) closeTodoModal();
+      if (e.target === el.todoOverlay && !overlayHasTyping(el.todoOverlay)) closeTodoModal();
     });
     if (el.tdQuick) {
       el.tdQuick.addEventListener('click', function (e) {
