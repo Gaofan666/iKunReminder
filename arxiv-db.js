@@ -15,7 +15,21 @@
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const ARXIV = require('./arxiv');
-const SRC = require('./schol-sources');
+/* schol-sources 加载失败（典型：打包白名单漏文件）时降级成纯 arXiv 模式，
+   别让整个科研模块跟着瘫掉 —— v4.7.6 踩过：新文件没进 build.files，
+   安装版 require 直接抛 MODULE_NOT_FOUND，界面表现就是关键词空白、
+   所有配置保存都失败。 */
+let SRC;
+try {
+  SRC = require('./schol-sources');
+} catch (e) {
+  SRC = {
+    SOURCE_IDS: ['arxiv'],
+    DEFAULT_SOURCES: ['arxiv'],
+    uiList: function () { return []; },
+    byId: function () { return null; }
+  };
+}
 
 const MAX_KEYWORDS = 10;           // 用户要的上限（原来按需求文档是 5，放宽到 10）
 const WIDE_ATOMS = 40;             // 关键词 × 字段 超过这个数就在界面上提醒「条件太宽」

@@ -13,7 +13,18 @@
 
 const ARXIV = require('./arxiv');
 const DB = require('./arxiv-db');
-const SRC = require('./schol-sources');
+/* 同 arxiv-db.js：加载失败时降级成纯 arXiv，别让科研模块整个瘫掉 */
+let SRC;
+try {
+  SRC = require('./schol-sources');
+} catch (e) {
+  SRC = {
+    SOURCE_IDS: ['arxiv'],
+    DEFAULT_SOURCES: ['arxiv'],
+    uiList: function () { return []; },
+    byId: function () { return null; }
+  };
+}
 
 /* 手动抓取的冷却：刚抓过就别再打 arXiv 了（官方建议间隔 ≥3 秒，这里更保守）。
    自动抓取正在跑的时候点「立即抓取」不算冷却 —— 那一下会等这一轮跑完并把结果给界面。 */
