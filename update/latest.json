@@ -1,20 +1,20 @@
 {
-  "version": "4.7.5",
-  "releaseDate": "2026-10-22T09:25:17.035Z",
-  "notes": "## iKunReminder v4.7.5\n\n### 修复：弹窗里打到一半的字，不会因为误点弹窗外就丢了\n- **问题**：新增/编辑待办、备忘时，在弹窗里输入内容，不小心点到弹窗外面，弹窗直接关闭，\n  辛辛苦苦敲的内容全部丢失，只能重新输入。\n- **修复**：\n  - 弹窗里**有未保存的输入**（要做的事 / 备忘正文 / 新分类名）时，点击弹窗外面**不再关闭**；\n  - 弹窗里**什么都没填**时，点外面仍按老习惯直接关闭（不改变空白时的快捷操作）；\n  - 点弹窗内的 ✕ 或「取消」按钮照常关闭，不受影响。\n- 备忘弹窗（正文是多行输入框）与待办弹窗一并修复。\n\n### 其他\n- 按 Esc 收起「＋ 新建分类」输入行时，现在会清空残留文字（原先只隐藏不清空）。\n",
-  "size": 121931071,
-  "sha512": "8Jod+vuwivycS8zj4fequoCM0xTtwVcMZUrbQDvbLTnRKPGuj2kn1eHsvmEc6Awubg0OvTb1SE2HVSuZg/haLA==",
+  "version": "4.7.6",
+  "releaseDate": "2026-10-22T13:31:30.340Z",
+  "notes": "## iKunReminder v4.7.6\n\n### 新功能：科研动态不再只盯 arXiv —— 一键接入 OpenAlex / Crossref 等多大学术库\n- **背景**：原来「科研动态」只抓 arXiv（预印本库），期刊、会议正式版的论文搜不到。\n  大家熟悉的 Google Scholar 没有官方 API、反爬极凶（验证码/封 IP），没法直连 ——\n  所以这次接入的是**覆盖面与之等效**的开放学术 API（全部免费、无需注册）。\n- **新增来源**（「抓取条件 → 检索来源」里自由勾选）：\n  - **OpenAlex**（默认开）：2.5 亿条学术记录，Google Scholar 的最佳开放替代，\n    带开放获取（OA）PDF 直链和被引次数\n  - **Crossref**（默认开）：1.8 亿条 DOI 记录，IEEE / Elsevier / Springer 等\n    期刊、会议的正式版元数据最全\n  - **Europe PMC**（可选）：生物医学文献\n  - **Semantic Scholar**（可选）：无密钥经常被限流，抓不到会自动跳过，不影响其他源\n- **好用不乱**：\n  - 同一篇论文（同一个 DOI）多个源都搜到时**自动合并成一条**，不会重复刷屏；\n  - 每个来源在抓取结果里单独报账（谁取回几篇、谁没成功一目了然）；\n  - 任一来源失败只跳过它，绝不拖垮整轮抓取；\n  - 列表里每篇论文带来源徽标（arXiv / OpenAlex / Crossref…），打开的就是对应原文页面。\n- **说明**：搜索字段（标题/摘要/作者…）是 arXiv 专有的元数据前缀，只对 arXiv 生效；\n  其他源用同一批关键词做全文相关性搜索，「任一/全部条件」的语义照常生效。\n",
+  "size": 121932799,
+  "sha512": "zHpZOWywOhiQp3ex7ocmYQ7DvICMRj1crlEiFT5qqxsfw1O2QaG/DMQciixIz0RVmVHlmaarBVElv3E3JiUQSg==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.5/iKunReminder-setup-v4.7.5.exe.part1",
-      "size": 60965536,
-      "sha512": "FSj/K05lYzUuffeX1zsQG86hRREVXKt+OeQS6hpVDxGZN/M+/N1rknURWdM1hoE0foLlmZHvggXqIRZcLBVeQQ==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.6/iKunReminder-setup-v4.7.6.exe.part1",
+      "size": 60966400,
+      "sha512": "4vRpnoQ8fJCqXevgt8ytdqvZjyrz+tL2v+UJ4B5k5FOza7sJdwq/rqA9+iBjuhpkctj5q3XS44e3R4a399hH5w==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.5/iKunReminder-setup-v4.7.5.exe.part2",
-      "size": 60965535,
-      "sha512": "EKXtqE2pdfSRhH/VSY7yl/rEVcTBAyJ1On6N7d+/eLUTuk5GHIipFTsgDLlQV/c+QGQk7Tjjhig5ord5A+9jPw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.6/iKunReminder-setup-v4.7.6.exe.part2",
+      "size": 60966399,
+      "sha512": "o4avr2488AM3RW23DT1IfpUUBqN/IFyDM9c+PyFFvmSiv25dNozboqxBxuFKwMPipMjjoo0HWb1tyjz4ZKspxg==",
       "index": 2
     }
   ]
