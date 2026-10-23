@@ -81,6 +81,12 @@ const DIAG = (function () {
     if (a === '--diag-paper') out.paper = true;
     /* --diag-ppsmoke：我的投稿冒烟测试（多轮返修的各种状态/时间/截稿 + 接收各字段；不测删除） */
     if (a === '--diag-ppsmoke') out.ppsmoke = true;
+    /* --diag-ppshot=路径：配合 --diag-ppsmoke，在「检索证明」那张图显示出来时截一张图（只为人工核对排版） */
+    if (a.indexOf('--diag-ppshot=') === 0) out.ppshot = a.slice('--diag-ppshot='.length);
+    /* 同上：在「新增论文」弹窗（我的角色那一行）截一张 */
+    if (a.indexOf('--diag-ppshot2=') === 0) out.ppshot2 = a.slice('--diag-ppshot2='.length);
+    /* 同上：在「论文完整信息」弹窗（附件缩略图）截一张 */
+    if (a.indexOf('--diag-ppshot3=') === 0) out.ppshot3 = a.slice('--diag-ppshot3='.length);
     /* 性能测试专用（正式运行不带这些参数，零影响） */
     if (a === '--perf-sample') out.perfSample = true;
     /* --diag-arxiv-hold：自检时把程序留着不退出（配合外面用真鼠标点气泡） */
@@ -1568,6 +1574,178 @@ function createWindow() {
               'P.add("index");P.ok();' +
               'out.加了检索_主状态是检索=(st()==="indexed");' +
               'return out;})()');
+
+            /* ㉟ 「我的角色」：新增论文弹窗必须和「已投稿」详情**同一套定义**
+               （7 个候选 + 能自己写）。以前这里写死成 5 项下拉，少了「共同通讯」「三作」，
+               「其他」的写法也不一致。 */
+            SM['35-角色选项与投稿一致'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'var sel=document.getElementById("ppRole"),dl=document.getElementById("ppRoleListAdd");' +
+              'var cnt=function(d){return d?d.querySelectorAll("option").length:0;};' +
+              'var has=function(d,v){return !!d&&Array.prototype.some.call(d.querySelectorAll("option"),function(o){return o.value===v;});};' +
+              'var out={是输入框:!!sel&&sel.tagName==="INPUT",候选数:cnt(dl),' +
+              ' 候选有共同通讯:has(dl,"共同通讯"),候选有三作:has(dl,"三作"),候选有其他作者:has(dl,"其他作者"),' +
+              ' 默认是一作:!!sel&&sel.value==="一作"};' +
+              'document.getElementById("ppTitle").value="【冒烟】角色一致";' +
+              'var sub=document.getElementById("ppModeSub");if(sub)sub.click();' +
+              'if(sel)sel.value="共同通讯";' +
+              'return out;})()');
+            /* 人工核对排版用：此刻「新增论文」弹窗开着、角色框里写着「共同通讯」。
+               ⚠️ 必须等一下再截：capturePage 拿的是"已经画出来"的那一帧，
+               紧跟 executeJavaScript 立刻截会截到上一帧（弹窗还没画）。 */
+            if (DIAG.ppshot2) {
+              await new Promise(function (r) { setTimeout(r, 450); });
+              try { fs.writeFileSync(DIAG.ppshot2, (await win.capturePage()).toPNG()); } catch (e) { }
+            }
+            SM['35b-角色存库与详情同源'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'var sel=document.getElementById("ppRole"),dl=document.getElementById("ppRoleListAdd");' +
+              'var cnt=function(d){return d?d.querySelectorAll("option").length:0;};' +
+              'var out={};' +
+              'document.getElementById("paperSave").click();' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("角色一致")>=0)q=x;});' +
+              'if(!q){out.没建出=true;return out;}' +
+              'var e0=(q.events||[])[0];' +
+              'out.选共同通讯存成key=!!e0&&!!e0.d&&e0.d.role==="cocorresponding";' +
+              /* 保存后自动打开的「已投稿」详情：候选必须和新增弹窗同源 */
+              'var dl2=document.getElementById("ppRoleList"),roleIn=document.getElementById("ppDRole");' +
+              'out.详情候选数一样=cnt(dl2)===cnt(dl);' +
+              'out.详情输入框是同一套=!!roleIn&&roleIn.getAttribute("list")==="ppRoleList";' +
+              'out.详情里显示共同通讯=!!roleIn&&roleIn.value==="共同通讯";' +
+              'var cancel=document.getElementById("ppOpCancel");if(cancel)cancel.click();' +
+              /* 自定义：候选里没有的写法要原样存、原样显示 */
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】角色自定义";' +
+              'var s2=document.getElementById("ppRole");if(s2)s2.value="最后作者";' +
+              'document.getElementById("paperSave").click();' +
+              'var q2=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("角色自定义")>=0)q2=x;});' +
+              'var e1=q2&&(q2.events||[])[0];' +
+              'var c2=document.getElementById("ppOpCancel");if(c2)c2.click();' +
+              'out.自定义原样存=!!e1&&!!e1.d&&e1.d.role==="最后作者";' +
+              'window.PAPERS.open();' +
+              'out.自定义显示在列表里=String((document.querySelector("#paperList")||{}).textContent||"").indexOf("最后作者")>=0;' +
+              'return out;})()');
+
+            /* ㊱ 「检索」的检索证明图片：上传 → 复制进数据目录 → 读回显示 → 看大图 → 删掉。
+               （自检模式下主进程自己造一张小 BMP，替代点系统对话框） */
+            SM['36-检索证明可上传'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'document.getElementById("btnPaperAdd").click();' +
+              'document.getElementById("ppTitle").value="【冒烟】检索证明";' +
+              'var mp=document.getElementById("ppModePrep");if(mp)mp.click();' +
+              'document.getElementById("paperSave").click();' +
+              'P.add("index");' +
+              'var out={有上传按钮:!!document.getElementById("ppDImgPick"),' +
+              ' 有列表容器:!!document.getElementById("ppDImgList"),' +
+              ' 一开始没有附件:document.querySelectorAll("#ppDImgList .pp-att-item").length===0};' +
+              'var b=document.getElementById("ppDImgPick");if(b)b.click();' +
+              'return out;})()');
+            await new Promise(function (r) { setTimeout(r, 1400); });   /* 等主进程复制 + 读回 */
+            /* 人工核对排版用：此刻「检索」详情弹窗还开着、缩略图已读回，截一张 */
+            if (DIAG.ppshot) {
+              try { fs.writeFileSync(DIAG.ppshot, (await win.capturePage()).toPNG()); } catch (e) { }
+            }
+            SM['37-检索证明落库并显示'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("检索证明")>=0)q=x;});' +
+              'var ie=null;if(q)(q.events||[]).forEach(function(e){if(e.type==="index")ie=e;});' +
+              'var atts=(ie&&ie.d&&ie.d.images)||[];' +
+              'var thumb=document.querySelector("#ppDImgList .pp-att-thumb:not(.pp-att-pdfthumb)");' +
+              'var pfile=document.querySelector("#ppDImgList .pp-att-pdfthumb");' +
+              'var out={存了两个附件:atts.length===2,认出了PDF:!!pfile,' +
+              ' 图片有缩略图:!!thumb,缩略图读回来了:!!thumb&&String(thumb.src||"").indexOf("data:image/")===0,' +
+              ' 卡片上有文件名:document.querySelectorAll("#ppDImgList .pp-att-name").length===2,' +
+              ' 两张卡片各有另存:document.querySelectorAll("#ppDImgList .pp-att-op[data-op=save]").length===2,' +
+              ' 两张卡片各有删除:document.querySelectorAll("#ppDImgList .pp-att-op.del").length===2,' +
+              ' 没把文件内容塞进存档:JSON.stringify(atts).length<400,' +
+              ' 计数写着已存:((document.getElementById("ppDImgCount")||{}).textContent||"").indexOf("已存 2 个")>=0,' +
+              ' 列表行上标了附件:String((P.row("检索")||{}).textContent||"").indexOf("📎 2 个证明")>=0};' +
+              'window.__imgName=(atts[0]||{}).n||"";window.__pdfName=(atts[1]||{}).n||"";' +
+              /* 图片：点开看大图，点一下关掉 */
+              'if(thumb)thumb.click();' +
+              'out.能看大图=!!document.getElementById("ppImgView");' +
+              'var v=document.getElementById("ppImgView");if(v)v.click();' +
+              'out.点一下能关掉=!document.getElementById("ppImgView");' +
+              /* 完整论文信息：默认只有个按钮，点开才看得到（用户要求别一进来就摊图） */
+              'var tl=document.querySelector("#paperList .pp-detail [data-role=timeline]");if(tl)tl.click();' +
+              'var tlOv=document.getElementById("ppTimelineOverlay");' +
+              'var ab=document.getElementById("ppTlAttBtn"),ap=document.getElementById("ppTlAttPanel");' +
+              'out.完整信息里有检索证明按钮=!!ab;' +
+              'out.按钮上写着数量=!!ab&&ab.textContent.indexOf("2")>=0;' +
+              'out.默认是收起的=!!ap&&ap.hidden===true;' +
+              'out.默认看不到图=!!tlOv&&tlOv.querySelectorAll(".pp-att-item").length===0;' +
+              'if(ab)ab.click();' +
+              'out.点开后能看到两个附件=!!ap&&ap.hidden===false&&ap.querySelectorAll(".pp-att-item").length===2;' +
+              'out.面板里也有PDF块=!!ap&&!!ap.querySelector(".pp-att-pdfthumb");' +
+              'out.面板里不能删=!!ap&&ap.querySelectorAll(".pp-att-op.del").length===0;' +
+              'return out;})()');
+            /* 面板里的图也是异步读回来的：等一会儿再看 src、再验"再点一下收起" */
+            await new Promise(function (r) { setTimeout(r, 500); });
+            /* 人工核对排版用：「论文完整信息」→ 检索证明 展开后的样子 */
+            if (DIAG.ppshot3) {
+              try { fs.writeFileSync(DIAG.ppshot3, (await win.capturePage()).toPNG()); } catch (e) { }
+            }
+            SM['37c-完整信息里图片读回'] = await jp(
+              '(function(){var ap=document.getElementById("ppTlAttPanel");' +
+              'var im=ap?ap.querySelector("img.pp-att-thumb"):null;' +
+              'var out={图片读回来了:!!im&&String(im.src||"").indexOf("data:image/")===0};' +
+              'var ab=document.getElementById("ppTlAttBtn");' +
+              /* 再点一下按钮会收起；点别处也会自动收起 */
+              'if(ab)ab.click();' +
+              'out.再点一下收起=!!ap&&ap.hidden===true;' +
+              'if(ab)ab.click();' +
+              'var fired=0;var probe=function(){fired++;};document.addEventListener("click",probe);' +
+              'var tt=document.getElementById("ppTlTitleText");if(tt)tt.click();' +
+              'document.removeEventListener("click",probe);' +
+              'out.点击确实到达document=fired>0;' +
+              'out.点别处会收起=!!ap&&ap.hidden===true;' +
+              'var tc=document.getElementById("ppTlClose");if(tc)tc.click();' +
+              'out.关掉弹窗=!document.getElementById("ppTimelineOverlay");' +
+              'return out;})()');
+            /* 另存为 + 用系统阅读器打开（自检里主进程不真弹对话框、不真拉起外部程序，只看返回值） */
+            SM['37b-另存与打开'] = await jp(
+              '(function(){var nat=window.kunkunNative;' +
+              'return Promise.all([' +
+              ' nat.paperFileSaveAs(window.__pdfName||"","检索通知.pdf"),' +
+              ' nat.paperFileOpen(window.__pdfName||""),' +
+              ' nat.paperFileSaveAs(window.__imgName||"","检索证明.bmp")' +
+              ']).then(function(a){' +
+              ' return {PDF另存有路径:!!a[0],PDF能打开:a[1]===true,图片另存有路径:!!a[2],' +
+              '  另存路径1:a[0]||"",另存路径2:a[2]||""};});})()');
+            /* 路径真的写到盘上了吗（主进程这边直接查文件系统） */
+            try {
+              var sm37b = SM['37b-另存与打开'];
+              if (sm37b && sm37b.另存路径1) sm37b.另存的文件真的存在 = fs.existsSync(sm37b.另存路径1);
+              if (sm37b && sm37b.另存路径2) sm37b.另存的文件真的存在2 = fs.existsSync(sm37b.另存路径2);
+            } catch (e) { }
+            /* 删：先弹站内确认框（取消不删、确定才删），删完数据和文件都要清掉 */
+            SM['38-删除附件要确认'] = await jp(
+              '(function(){var P=window.__pp;' +
+              'var q=null;window.PAPERS._data().forEach(function(x){if((x.title||"").indexOf("检索证明")>=0)q=x;});' +
+              'var ie=null;if(q)(q.events||[]).forEach(function(e){if(e.type==="index")ie=e;});' +
+              'var n=function(){return ((ie&&ie.d&&ie.d.images)||[]).length;};' +
+              'var out={删除前两个:n()===2};' +
+              'var d1=document.querySelector("#ppDImgList .pp-att-pdf .pp-att-op.del");if(d1)d1.click();' +
+              'var cf=document.getElementById("ppConfirmOverlay");' +
+              'out.点了删除先问一句=!!cf;' +
+              'if(cf){var no=document.getElementById("ppCfNo");if(no)no.click();}' +
+              'out.取消后一个没少=n()===2;' +
+              'var d2=document.querySelector("#ppDImgList .pp-att-pdf .pp-att-op.del");if(d2)d2.click();' +
+              'var cf2=document.getElementById("ppConfirmOverlay");' +
+              'if(cf2){var yes=document.getElementById("ppCfYes");if(yes)yes.click();}' +
+              'out.确认后少一个=n()===1;' +
+              'var d3=document.querySelector("#ppDImgList .pp-att-op.del");if(d3)d3.click();' +
+              'var cf3=document.getElementById("ppConfirmOverlay");' +
+              'if(cf3){var yes2=document.getElementById("ppCfYes");if(yes2)yes2.click();}' +
+              'out.全删完=n()===0;' +
+              'P.ok();' +
+              'return out;})()');
+            await new Promise(function (r) { setTimeout(r, 400); });
+            SM['38b-附件文件已删'] = await jp(
+              '(function(){return window.kunkunNative.paperImgRead(window.__imgName||"").then(function(a){' +
+              ' return window.kunkunNative.paperImgRead("../../evil.png").then(function(b){' +
+              '  return {图片文件也删掉了:a==="",不认非法路径:b===""};});});})()');
             /* 收尾：上面第 21 步是走真实 UI 把标题存进 localStorage 的，
                「改回内存」只动了内存对象，存储里还留着测试标题 —— 这里把两边的【冒烟】数据都清掉，
                不然 diag 的临时目录（按进程号命名、进程号会复用）会把残留带进下一次。 */
@@ -8871,6 +9049,160 @@ ipcMain.handle('pick-music', async () => {
     diagLog('pick-music-error', { message: String((e && e.message) || e) });
   }
   return '';
+});
+
+/* ---------------------------------------------------------- 检索证明附件
+   「检索」这条状态可以存检索证明：截图/照片，或者 PDF 通知函。
+   文件本身**不塞进 localStorage**（base64 会把存档撑到几 MB、每次保存都要整份写盘），
+   而是复制进 userData/paper-images/，页面只记文件名：
+     - 图片：主进程读成 dataURL，页面显示缩略图、点开看大图
+     - PDF：应用里不内嵌阅读器，点开交给系统默认阅读器
+     - 两种都能「另存为」到用户挑的位置
+   文件名一律当不可信：只收纯文件名，不许路径分隔符、不许 .. */
+function paperImgDir() {
+  const dir = path.join(app.getPath('userData'), 'paper-images');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { }
+  return dir;
+}
+const PAPER_IMG_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp', pdf: 'application/pdf' };
+const PAPER_ATTACH_EXT = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'pdf'];
+const PAPER_ATTACH_DESC = '图片或 PDF';
+function paperImgFile(n) {
+  const s = String(n || '');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(s)) return '';
+  if (s.indexOf('..') >= 0) return '';
+  return path.join(paperImgDir(), s);
+}
+/* 自检没法点系统对话框：造一张 2×2 的 BMP（不依赖任何图片库），把
+   「选图 → 复制进数据目录 → 读回 → 页面显示出 <img>」整条链跑通。 */
+function diagTinyBmp() {
+  const w = 2, h = 2, rowSize = Math.ceil((w * 3) / 4) * 4, pixelSize = rowSize * h;
+  const buf = Buffer.alloc(54 + pixelSize);
+  buf.write('BM', 0, 'ascii');
+  buf.writeUInt32LE(54 + pixelSize, 2);
+  buf.writeUInt32LE(54, 10);
+  buf.writeUInt32LE(40, 14);
+  buf.writeInt32LE(w, 18);
+  buf.writeInt32LE(h, 22);
+  buf.writeUInt16LE(1, 26);
+  buf.writeUInt16LE(24, 28);
+  buf.writeUInt32LE(0, 30);
+  buf.writeUInt32LE(pixelSize, 34);
+  const colors = [[0x5a, 0x8a, 0xc8], [0xb8, 0xa8, 0x6f]];   // BGR
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = colors[(x + y) % 2];
+      const off = 54 + y * rowSize + x * 3;
+      buf[off] = c[0]; buf[off + 1] = c[1]; buf[off + 2] = c[2];
+    }
+  }
+  return buf;
+}
+/* 自检用的极小 PDF（不依赖任何库）：只为把「PDF 也能存/另存」这条链跑通，
+   真正打开会走系统阅读器（自检里不真拉起）。 */
+function diagTinyPdf() {
+  const s = '%PDF-1.4\n' +
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]/Contents 4 0 R>>endobj\n' +
+    '4 0 obj<</Length 42>>stream\nBT /F1 16 Tf 12 50 Td (Indexing proof) Tj ET\nendstream\nendobj\n' +
+    'trailer<</Root 1 0 R>>\n%%EOF\n';
+  return Buffer.from(s, 'latin1');
+}
+ipcMain.handle('paper-img-pick', async () => {
+  try {
+    if (DIAG && DIAG.ppsmoke) {
+      /* 自检：一张图 + 一个 PDF，两条路一起验 */
+      const stamp = Date.now().toString(36);
+      const n1 = 'pk-diag-' + stamp + '.bmp';
+      const n2 = 'pk-diag-' + stamp + '.pdf';
+      fs.writeFileSync(path.join(paperImgDir(), n1), diagTinyBmp());
+      fs.writeFileSync(path.join(paperImgDir(), n2), diagTinyPdf());
+      return [{ n: n1, name: '检索证明（自检）.bmp' }, { n: n2, name: '检索通知（自检）.pdf' }];
+    }
+    const r = await dialog.showOpenDialog(win && !win.isDestroyed() ? win : null, {
+      title: '选检索证明（图片或 PDF，可多选）',
+      buttonLabel: '就这些',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: PAPER_ATTACH_DESC, extensions: PAPER_ATTACH_EXT },
+        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] },
+        { name: 'PDF', extensions: ['pdf'] }
+      ]
+    });
+    if (!r || r.canceled || !r.filePaths || !r.filePaths.length) return [];
+    const out = [];
+    r.filePaths.slice(0, 6).forEach((src) => {
+      try {
+        const ext0 = String(path.extname(src) || '').toLowerCase().replace('.', '');
+        if (PAPER_ATTACH_EXT.indexOf(ext0) < 0) return;   /* 只认支持的格式 */
+        const n = 'pk-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex') + '.' + ext0;
+        fs.copyFileSync(src, path.join(paperImgDir(), n));
+        out.push({ n: n, name: String(path.basename(src)).slice(0, 120) });
+      } catch (e) { diagLog('paper-img-pick-error', { message: String((e && e.message) || e) }); }
+    });
+    return out;
+  } catch (e) {
+    diagLog('paper-img-pick-error', { message: String((e && e.message) || e) });
+    return [];
+  }
+});
+ipcMain.handle('paper-img-read', (e, n) => {
+  try {
+    const p = paperImgFile(n);
+    if (!p) return '';
+    /* 只把**图片**读成 dataURL；PDF 不读（几十 MB 的 base64 塞进 DOM 没意义，打开走系统阅读器） */
+    const ext = String(p.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') return '';
+    const st = fs.statSync(p);
+    if (!st.isFile() || !st.size || st.size > 24 * 1024 * 1024) return '';
+    return 'data:' + (PAPER_IMG_MIME[ext] || 'image/png') + ';base64,' + fs.readFileSync(p).toString('base64');
+  } catch (e) { return ''; }
+});
+ipcMain.handle('paper-img-del', (e, n) => {
+  try {
+    const p = paperImgFile(n);
+    if (!p) return false;
+    fs.rmSync(p, { force: true });
+    return true;
+  } catch (e) { return false; }
+});
+/* 用系统默认阅读器打开（PDF 主要靠它；自检里不真拉起外部程序） */
+ipcMain.handle('paper-file-open', async (e, n) => {
+  try {
+    const p = paperImgFile(n);
+    if (!p || !fs.existsSync(p)) return false;
+    if (DIAG) return true;
+    await require('electron').shell.openPath(p);
+    return true;
+  } catch (e) { diagLog('paper-file-open-error', { message: String((e && e.message) || e) }); return false; }
+});
+/* 另存为：弹「保存到…」，复制一份出去。返回存到哪了（取消 = 空串）。
+   自检没法点系统对话框 → 复制到 .diag 下固定名字，返回那个路径。 */
+ipcMain.handle('paper-file-save-as', async (e, n, suggestName) => {
+  try {
+    const src = paperImgFile(n);
+    if (!src || !fs.existsSync(src)) return '';
+    if (DIAG) {
+      const dst = diagFilePath('saved-' + path.basename(src));
+      fs.copyFileSync(src, dst);
+      return dst;
+    }
+    const defName = String(suggestName || '').trim() || path.basename(src);
+    let defDir = '';
+    try { defDir = app.getPath('downloads'); } catch (e2) { defDir = ''; }
+    const r = await dialog.showSaveDialog(win && !win.isDestroyed() ? win : null, {
+      title: '把检索证明另存为',
+      buttonLabel: '保存',
+      defaultPath: defDir ? path.join(defDir, defName) : defName
+    });
+    if (!r || r.canceled || !r.filePath) return '';
+    fs.copyFileSync(src, r.filePath);
+    return r.filePath;
+  } catch (e) {
+    diagLog('paper-file-save-as-error', { message: String((e && e.message) || e) });
+    return '';
+  }
 });
 
 /* 导出日记：弹一个「另存为」，把页面拼好的纯文本写进去。

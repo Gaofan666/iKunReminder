@@ -46,6 +46,30 @@
     { id: 'resubOther', name: '重投', state: 'submitted' }
   ];
   var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', cocorresponding: '共同通讯', second: '二作', third: '三作', other: '其他作者' };
+  /* 「我的角色」全项目只有一个口径（新增论文 / 已投稿详情 / 列表 / 导出都用它）：
+     存的可以是 ROLES 的 key（老数据与自检就是这么存的），也可以是一段自己写的文字。
+     认得出标签就归一成 key，认不出就原样当自定义 —— 写什么就显示什么。 */
+  function roleKeyOf(raw) {
+    var s = String(raw == null ? '' : raw).trim().slice(0, 20);
+    if (!s) return '';
+    if (ROLES[s]) return s;
+    var hit = '';
+    Object.keys(ROLES).forEach(function (k) { if (!hit && ROLES[k] === s) hit = k; });
+    return hit || s;
+  }
+  function roleLabel(v) { return v ? (ROLES[v] || v) : ''; }
+  function roleOptionsHtml() {
+    return Object.keys(ROLES).map(function (k) {
+      return '<option value="' + esc(ROLES[k]) + '"></option>';
+    }).join('');
+  }
+  /* 候选列表：新增论文弹窗(ppRoleListAdd) 与已投稿详情(ppRoleList) 共用同一份 */
+  function fillRoleLists() {
+    ['ppRoleListAdd', 'ppRoleList'].forEach(function (id) {
+      var dl = document.getElementById(id);
+      if (dl) dl.innerHTML = roleOptionsHtml();
+    });
+  }
   /* 拒稿原因：给几个常见的候选，也可以自己写（写什么就显示什么）*/
   var REASONS = ['创新性不足', '与期刊范围不符', '工作量 / 实验不够充分', '方法或分析有缺陷',
     '结果不够显著', '英文表达问题', '编辑直接拒（未送外审）', '建议改投其他期刊'];
@@ -679,7 +703,15 @@
       return '<span class="' + (pend ? (isOverdueDay(+d.proofAt) ? 'pp-ev-late' : 'pp-ev-soon') : 'pp-ev-tip') + '">' + a.join(' · ') + '</span>';
     }
     /* 「接收」的校稿时间：还没见刊就按同一套规则提醒（填了就醒目、临近橙、过期红）。 */
-    if (e.type === 'index' && d.doi) return '<span class="pp-ev-tip">' + esc(d.doi) + '</span>';
+    if (e.type === 'index') {
+      var iz = [];
+      if (d.doi) iz.push(esc(d.doi));
+      if (d.images && d.images.length) {
+        var hasPdf0 = d.images.some(function (x) { return isPdfName(x.n); });
+        iz.push((hasPdf0 ? '📎 ' : '📷 ') + d.images.length + (hasPdf0 ? ' 个证明' : ' 张证明'));
+      }
+      return iz.length ? '<span class="pp-ev-tip">' + iz.join(' · ') + '</span>' : '';
+    }
     return '';
   }
 
@@ -855,7 +887,8 @@
       /* 新增：把三个框清干净，别留着上一次的值让人以为已经填好了 */
       if ($('ppSubmitDue')) $('ppSubmitDue').value = '';
       if ($('ppSubmitted')) $('ppSubmitted').value = '';
-      if ($('ppRole')) $('ppRole').value = 'first';
+      if ($('ppRole')) $('ppRole').value = ROLES.first;   /* 输入框里放标签「一作」 */
+      fillRoleLists();
     }
     var ov = $('paperOverlay');
     if (ov) ov.hidden = false;
@@ -875,8 +908,10 @@
     var isPrep = $('ppModePrep') ? $('ppModePrep').classList.contains('on') : true;
     var np = { id: newId('pp'), title: title, createdAt: Date.now(), updatedAt: Date.now(), events: [] };
     var ev = { id: newId('ev'), type: isPrep ? 'preparing' : 'submitted', at: dayTs(tsDay(Date.now())), createdAt: Date.now(), d: {} };
-    /* 弹窗里填的「我的角色」和日期要真的存下来（以前这三个框没有任何代码读取） */
-    var role = $('ppRole') ? String($('ppRole').value || '') : '';
+    /* 弹窗里填的「我的角色」和日期要真的存下来（以前这三个框没有任何代码读取）。
+       ⚠️ 角色和「已投稿」详情里那处**同一套定义**：候选可挑、也能自己写，
+       统一由 roleKeyOf 归一（标签→key，自定义原样存），两边存出来的东西一模一样。 */
+    var role = roleKeyOf($('ppRole') ? $('ppRole').value : '');
     if (role) ev.d.role = role;
     if (isPrep) {
       var ddl = dayTs($('ppSubmitDue') ? $('ppSubmitDue').value : '');
@@ -1019,6 +1054,189 @@
     return '日期';
   }
 
+  /* ---------- 检索证明附件（图片 / PDF） ----------
+     文件**不进 localStorage**：选的时候主进程复制到 userData/paper-images/，
+     这里只记 { n: 文件名, name: 原文件名 }（PDF 靠扩展名认）。
+     图片：读回 dataURL 显示缩略图、点开看大图；PDF：点开交给系统阅读器；
+     两者都能「⤓ 另存为」；只有详情弹窗里能删（✕），时间线是只读视图。 */
+  function isPdfName(n) { return /\.pdf$/i.test(String(n || '')); }
+  function attachKind(it) { return (it && (it.kind === 'pdf' || isPdfName(it.n))) ? 'pdf' : 'img'; }
+  function attachFieldHtml(list) {
+    var n = Array.isArray(list) ? list.length : 0;
+    return '<div class="pp-img-wrap">' +
+      '<button type="button" class="btn sm" id="ppDImgPick" ' +
+        'title="图片点开看大图；PDF 用系统阅读器打开；两种都能另存">📎 上传图片 / PDF</button>' +
+      '<span class="col-sub" id="ppDImgCount">' +
+        (n ? '已存 ' + n + ' 个' : '可空；截图、照片或 PDF 通知函，只存在本机') + '</span>' +
+      '<div class="pp-img-list" id="ppDImgList"></div>' +
+      '</div>';
+  }
+  function showImgViewer(src) {
+    var old = $('ppImgView');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var ov = document.createElement('div');
+    ov.className = 'overlay modal';
+    ov.id = 'ppImgView';
+    ov.innerHTML = '<div class="pp-img-view-card">' +
+      '<button class="close" id="ppImgViewClose" title="关闭（点任意处也行）">✕</button>' +
+      '<img alt="检索证明"></div>';
+    document.body.appendChild(ov);
+    var im = ov.querySelector('img');
+    if (im) im.src = src;
+    ov.addEventListener('click', function () { if (ov.parentNode) ov.parentNode.removeChild(ov); });
+  }
+  /* 把附件渲染成「小卡片」：上面缩略图（PDF 是文件块），下面文件名 + 「另存 / 删」。
+     editable=false 时没有「删」—— 时间线里只看不改。 */
+  function renderAttachList(box, list, editable, onDelete) {
+    if (!box) return;
+    var nat = window.kunkunNative || {};
+    var items = Array.isArray(list) ? list : [];
+    box.className = 'pp-att-list';
+    box.innerHTML = '';
+    if (!items.length) {
+      box.innerHTML = '<span class="col-sub">还没有附件</span>';
+      return;
+    }
+    items.forEach(function (it) {
+      var kind = attachKind(it);
+      var full = String(it.name || it.n || '');
+      var cell = document.createElement('span');
+      cell.className = 'pp-att-item' + (kind === 'pdf' ? ' pp-att-pdf' : '');
+      cell.setAttribute('data-n', it.n);
+      var thumb;
+      if (kind === 'pdf') {
+        thumb = document.createElement('button');
+        thumb.type = 'button';
+        thumb.className = 'pp-att-thumb pp-att-pdfthumb';
+        thumb.innerHTML = '<span class="pp-att-pdfbadge">PDF</span>';
+        thumb.title = full + '（用系统阅读器打开）';
+      } else {
+        thumb = document.createElement('img');
+        thumb.className = 'pp-att-thumb';
+        thumb.alt = full || '检索证明';
+        thumb.title = (full || '检索证明') + '（点击看大图）';
+      }
+      thumb.setAttribute('data-n', it.n);
+      cell.appendChild(thumb);
+
+      var cap = document.createElement('span');
+      cap.className = 'pp-att-cap';
+      var nm = document.createElement('span');
+      nm.className = 'pp-att-name';
+      nm.textContent = full;
+      nm.title = full;
+      cap.appendChild(nm);
+      var ops = document.createElement('span');
+      ops.className = 'pp-att-ops';
+      var sv = document.createElement('button');
+      sv.type = 'button';
+      sv.className = 'pp-att-op';
+      sv.textContent = '另存';
+      sv.title = '把这份证明另存到别的位置';
+      sv.setAttribute('data-op', 'save');
+      sv.setAttribute('data-n', it.n);
+      ops.appendChild(sv);
+      if (editable) {
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'pp-att-op del';
+        del.textContent = '删';
+        del.title = '删掉这个附件';
+        del.setAttribute('data-op', 'del');
+        del.setAttribute('data-n', it.n);
+        ops.appendChild(del);
+      }
+      cap.appendChild(ops);
+      cell.appendChild(cap);
+      box.appendChild(cell);
+      if (kind !== 'pdf' && nat.paperImgRead) {
+        nat.paperImgRead(it.n).then(function (url) {
+          if (url) thumb.src = url;
+          else { cell.className += ' pp-att-missing'; thumb.alt = '文件找不到了'; }
+        }).catch(function () { });
+      }
+    });
+    /* 点击：缩略图→看大图/系统打开；另存→保存到…；删→删掉（仅可编辑时） */
+    box.onclick = function (ev) {
+      var t2 = ev.target;
+      var op = t2 && t2.closest ? t2.closest('[data-op]') : null;
+      if (op) {
+        var n0 = op.getAttribute('data-n');
+        var act = op.getAttribute('data-op');
+        if (act === 'save') {
+          var hit = items.filter(function (x) { return x.n === n0; })[0] || {};
+          if (!nat.paperFileSaveAs) { flash('这个版本不支持另存'); return; }
+          nat.paperFileSaveAs(n0, hit.name || '').then(function (dest) {
+            flash(dest ? ('已另存到：' + dest) : '取消另存');
+          }).catch(function () { flash('另存失败'); });
+          return;
+        }
+        if (act === 'del' && editable) { if (onDelete) onDelete(n0); return; }
+        return;
+      }
+      var tile = t2 && t2.closest ? t2.closest('.pp-att-thumb') : null;
+      if (!tile) return;
+      var n2 = tile.getAttribute('data-n');
+      if (isPdfName(n2)) {
+        if (nat.paperFileOpen) nat.paperFileOpen(n2).then(function (ok) { if (!ok) flash('打不开这个文件'); });
+        return;
+      }
+      if (tile.tagName === 'IMG' && tile.src) showImgViewer(tile.src);
+    };
+  }
+  /* 「论文完整信息」里的检索证明面板：按状态分组列出来（只读，不在这里删） */
+  function renderAttachGroups(box, groups) {
+    if (!box) return;
+    box.innerHTML = '';
+    groups.forEach(function (g) {
+      var head = document.createElement('div');
+      head.className = 'pp-att-group-head';
+      head.textContent = g.name + (g.at ? ' · ' + tsDay(g.at) : '');
+      box.appendChild(head);
+      var list = document.createElement('div');
+      box.appendChild(list);
+      renderAttachList(list, g.items, false);
+    });
+  }
+  /* 详情弹窗里的接线：上传 / 渲染 / 删除（只有「检索」那条有） */
+  function wireAttachments(p, e) {
+    var list = $('ppDImgList'), pick = $('ppDImgPick');
+    if (!list && !pick) return;
+    var nat = window.kunkunNative || {};
+    function items() {
+      if (!e.d) e.d = {};
+      if (!Array.isArray(e.d.images)) e.d.images = [];
+      return e.d.images;
+    }
+    function paint() {
+      renderAttachList(list, items(), true, function (n) {
+        /* 删附件也先问一句（和删状态/删论文一致），免得手滑把证明删了 */
+        var hit = items().filter(function (x) { return x.n === n; })[0] || {};
+        askConfirm('删掉这个检索证明？\n' + (hit.name || n) + '\n文件也会一起删掉，删了就找不回来了。', function () {
+          e.d.images = items().filter(function (x) { return x.n !== n; });
+          if (nat.paperImgDel) nat.paperImgDel(n);
+          touch(p); save(); render(); paint();
+          flash('已删掉这个附件');
+        });
+      });
+      var cnt = $('ppDImgCount');
+      if (cnt) cnt.textContent = items().length
+        ? '已存 ' + items().length + ' 个'
+        : '可空；截图、照片或 PDF 通知函，只存在本机';
+    }
+    paint();
+    if (pick) pick.addEventListener('click', function () {
+      if (!nat.paperImgPick) { flash('这个版本不支持附件'); return; }
+      nat.paperImgPick().then(function (arr) {
+        if (!arr || !arr.length) return;
+        var cur = items();
+        arr.forEach(function (it) { if (it && it.n) cur.push({ n: it.n, name: it.name || '' }); });
+        touch(p); save(); render(); paint();
+        flash('已存 ' + arr.length + ' 个检索证明');
+      }).catch(function () { flash('选文件失败'); });
+    });
+  }
+
   function openDetail(pid, eid, isNew) {
     var p = byId(pid);
     var e = evById(p, eid);
@@ -1039,12 +1257,10 @@
     } else if (t === 'submitted') {
       body =
         field('作者', input('ppDAuthors', d.authors, '按顺序：张三, 李四')) +
-        /* 角色：可以从候选里挑，也可以自己写（写什么就显示什么）*/
+        /* 角色：可以从候选里挑，也可以自己写（写什么就显示什么）—— 和新增论文弹窗同一套 */
         field('我的角色', '<input type="text" id="ppDRole" list="ppRoleList" maxlength="20" value="' +
-          esc(d.role ? (ROLES[d.role] || d.role) : '一作') + '">' +
-          '<datalist id="ppRoleList">' + Object.keys(ROLES).map(function (k) {
-            return '<option value="' + esc(ROLES[k]) + '"></option>';
-          }).join('') + '</datalist>') +
+          esc(roleLabel(d.role) || ROLES.first) + '">' +
+          '<datalist id="ppRoleList">' + roleOptionsHtml() + '</datalist>') +
         field('期刊/会议', venueInput('ppDVenue', venue)) +
         field('类型', '<select class="skin-sel" id="ppDVenueType">' +
           '<option value="journal"' + (vtype === 'journal' ? ' selected' : '') + '>期刊</option>' +
@@ -1076,7 +1292,11 @@
         field('DOI', input('ppDDoi', d.doi, '10.1109/…', 200)) +
         field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'index') {
-      body = field('备注', input('ppDNote', d.note, '可空'));   /* 检索只记日期与备注，DOI 归「见刊」 */
+      /* 检索：只记日期与备注（DOI 归「见刊」），外加「检索证明」图片 ——
+         截图/照片复制进数据目录，这里只记文件名（不塞 base64，免得撑爆存档）。 */
+      body =
+        field('检索证明', attachFieldHtml(d.images)) +
+        field('备注', input('ppDNote', d.note, '可空'));
     } else if (t === 'reject') {
       body = field('拒稿原因（可空）', '<input type="text" id="ppDReason" list="ppReasonList" maxlength="200" value="' +
         esc(d.reason || '') + '">' +
@@ -1120,6 +1340,8 @@
     if ($('ppOpCancel')) $('ppOpCancel').addEventListener('click', closeDetail);
     if ($('ppOpClose')) $('ppOpClose').addEventListener('click', closeDetail);
     ov.addEventListener('click', function (ev) { if (ev.target === ov) closeDetail(); });
+    /* 「检索」那条才有检索证明附件：上传 / 看 / 另存 / 删 */
+    if (t === 'index') wireAttachments(p, e);
   }
   function closeDetail() {
     var ov = $('ppOpinionOverlay');
@@ -1156,11 +1378,8 @@
       if (ts('ppDDue')) e.at = e.at || dayTs(tsDay(Date.now()));
     } else if (t === 'submitted') {
       d.authors = val('ppDAuthors').slice(0, 200);
-      /* 角色存的是 key（一作→first）或自定义文字原样存 */
-      var roleRaw = val('ppDRole');
-      var roleKey = 'first';
-      Object.keys(ROLES).forEach(function (k) { if (ROLES[k] === roleRaw) roleKey = k; });
-      d.role = (roleKey === 'first' && roleRaw && roleRaw !== ROLES.first) ? roleRaw.slice(0, 20) : roleKey;
+      /* 角色：和新增论文弹窗同一个口径（标签→key、自定义原样存、空着算一作）*/
+      d.role = roleKeyOf(val('ppDRole')) || 'first';
       d.venue = val('ppDVenue').slice(0, 120);
       d.venueType = val('ppDVenueType') || 'journal';
       d.level = val('ppDLevel').slice(0, 40);
@@ -1185,10 +1404,10 @@
       d.doi = val('ppDDoi').slice(0, 200);
       d.note = val('ppDNote').slice(0, 300);
     } else if (t === 'index') {
-      /* 检索界面上已没有 DOI 框：只有它真的在页面上时才写，免得把老数据清掉 */
+      /* 检索界面上已没有 DOI 框：只有它真的在页面上时才写，免得把老数据清掉。
+         检索证明图片（d.images）是在「上传/删掉」时当场落库的，这里不动它。 */
       if (document.getElementById('ppDDoi')) d.doi = val('ppDDoi').slice(0, 200);
       d.note = val('ppDNote').slice(0, 300);
-    } else if (t === 'index') {
     } else if (t === 'reject') {
       d.reason = val('ppDReason').slice(0, 200);
       d.note = val('ppDNote').slice(0, 300);
@@ -1237,8 +1456,14 @@
         if (+dd.indexAt) extras.push('检索 ' + tsDay(dd.indexAt));
         if (dd.doi) extras.push('DOI ' + dd.doi);
       } else if ((e.type === 'index' || e.type === 'publish') && dd.doi) extras.push('DOI ' + dd.doi);
+      /* 检索证明附件：时间线里直接显示出来（下面会渲染成缩略图 / PDF 块） */
+      if (dd.images && dd.images.length) {
+        var hasPdf = dd.images.some(function (x) { return isPdfName(x.n); });
+        extras.push((hasPdf ? '📎 ' : '📷 ') + dd.images.length + (hasPdf ? ' 个证明' : ' 张证明'));
+      }
       if (dd.note && extras.indexOf(dd.note) < 0) extras.push(dd.note);
-      tlRows.push({ sort: +evAt(e) || 0, name: evName(e), color: d.color, extras: extras.join(' · ') });
+      tlRows.push({ sort: +evAt(e) || 0, name: evName(e), color: d.color, extras: extras.join(' · '),
+        att: (dd.images || []).slice() });
       /* 收到意见里填了「提交返修稿」→ 单独再出一条，日期就是交稿那天 */
       if (e.type === 'opinion' && +dd.submitAt > 0) {
         tlRows.push({ sort: +dd.submitAt, name: '提交返修稿', color: '#3F9E6E', extras: '' });
@@ -1259,6 +1484,13 @@
         '<span class="pp-tl-ext">' + esc(r.extras) + '</span>' +
       '</div>';
     }).join('');
+    /* 检索证明：把附件按状态收起来 —— 默认不展开，点顶部那个按钮才看 */
+    var attGroups = [];
+    sortedEvents(p).forEach(function (e) {
+      var arr = (D(e).images || []);
+      if (arr.length) attGroups.push({ name: evName(e), at: evAt(e), items: arr.slice() });
+    });
+    var attCount = attGroups.reduce(function (s2, g) { return s2 + g.items.length; }, 0);
     var m = paperMeta(p);
     var head = [];
     if (m.venue) head.push(esc(m.venue) + (m.level ? '（' + esc(m.level) + '）' : ''));
@@ -1275,7 +1507,15 @@
          不要一进来就是个输入框。 */
       '<div class="pp-tl-title" id="ppTlTitleView">' +
         '<span class="pp-tl-title-text" id="ppTlTitleText">' + esc(p.title || '（没写标题）') + '</span>' +
-        '<button class="btn sm" id="ppTlEditTitle">✎ 修改标题</button>' +
+        /* 右边两个按钮**上下排**（修改标题 / 检索证明）—— 横着排会占掉标题的横向空间 */
+        '<span class="pp-tl-acts">' +
+          '<button class="btn sm" id="ppTlEditTitle">✎ 修改标题</button>' +
+          /* 检索证明：默认只是一个按钮；点开的小窗就浮在它正下方，不挤标题 */
+          (attCount ? '<span class="pp-att-anchor">' +
+            '<button class="btn sm" id="ppTlAttBtn">📎 检索证明 ' + attCount + '</button>' +
+            '<div class="pp-tl-att-panel" id="ppTlAttPanel" hidden></div>' +
+          '</span>' : '') +
+        '</span>' +
       '</div>' +
       '<div class="pp-tl-edit" id="ppTlEditBox" hidden>' +
         '<label>标题</label>' +
@@ -1289,6 +1529,28 @@
       '<div class="pp-tl">' + (rows || '<div class="pp-empty">还没有状态条目。</div>') + '</div>' +
     '</div>';
     document.body.appendChild(ov);
+    /* 「检索证明」按钮：默认收起；点开的小窗**浮在按钮正下方**（绝对定位，不挤占标题），
+       点别处就关掉。这里只读（能看、能另存）；要删回「检索」那条的详细信息里删。 */
+    var attBtn = $('ppTlAttBtn'), attPanel = $('ppTlAttPanel');
+    if (attBtn && attPanel) {
+      attBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        attPanel.hidden = !attPanel.hidden;
+        attBtn.classList.toggle('on', !attPanel.hidden);
+        if (!attPanel.hidden && !attPanel.getAttribute('data-filled')) {
+          attPanel.setAttribute('data-filled', '1');
+          renderAttachGroups(attPanel, attGroups);
+        }
+      });
+      /* 点「弹窗里的其它地方」就收起。挂在 ov 上而不是 document 上：
+         ov 铺满整屏，任意位置点击都算"别处"，而且不依赖 document 的冒泡阶段。 */
+      ov.addEventListener('click', function (ev) {
+        if (attPanel.hidden) return;
+        if (attPanel.contains(ev.target)) return;
+        attPanel.hidden = true;
+        attBtn.classList.remove('on');
+      });
+    }
     if ($('ppTlEditTitle')) {
       $('ppTlEditTitle').addEventListener('click', function () {
         if ($('ppTlTitleView')) $('ppTlTitleView').hidden = true;
@@ -1389,6 +1651,7 @@
           if (e.type === 'submitted' && dd.venue) extra.push(dd.venue);
           if (e.type === 'accept' && +dd.publishAt) extra.push('见刊 ' + tsDay(dd.publishAt));
           if (dd.doi) extra.push('DOI ' + dd.doi);
+          if (dd.images && dd.images.length) extra.push('检索证明 ' + dd.images.length + ' 个附件（存在本机数据目录）');
           lines.push('- ' + tsDay(evAt(e)) + ' ' + evName(e) + (extra.length ? '（' + extra.join('，') + '）' : ''));
         });
         lines.push('');
@@ -1528,6 +1791,7 @@
   function boot() {
     if (!$('paperPane')) return;
     load();
+    fillRoleLists();   /* 角色候选：和「已投稿」详情共用 ROLES 这一份定义 */
     bind();
     render();
   }

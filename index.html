@@ -682,13 +682,9 @@
         <input type="text" id="ppTitle" maxlength="300" placeholder="论文题目">
       </div>      <div class="it-row col">
         <span class="it-label">我的角色</span>
-        <select class="skin-sel" id="ppRole">
-          <option value="first">一作</option>
-          <option value="cofirst">共同一作</option>
-          <option value="corresponding">通讯作者</option>
-          <option value="second">二作</option>
-          <option value="other">其他参与</option>
-        </select>
+        <!-- 和「已投稿」详情里那处同一套：候选由 papers.js 的 ROLES 填进来，也能自己写 -->
+        <input type="text" id="ppRole" list="ppRoleListAdd" maxlength="20" placeholder="一作 / 共同一作 / 通讯作者 …">
+        <datalist id="ppRoleListAdd"></datalist>
       </div>
       <div class="it-row col span2" id="paperModeRow">
         <span class="it-label">现在</span>
