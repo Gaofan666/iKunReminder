@@ -974,6 +974,65 @@ mark.ax-hit{
   background:#fff;font-family:inherit;font-size:13px;line-height:1.5;color:var(--text);
   box-sizing:border-box;min-height:32px;
 }
+/* 「检索」这条的检索证明：按钮 + 附件卡片（缩略图/PDF 块 + 文件名 + 另存/删） */
+.pp-img-wrap{display:flex;flex-wrap:wrap;gap:10px;align-items:center;align-self:start;padding-top:2px}
+/* 附件区比普通一行高：标签要对齐到顶部，否则会被网格垂直居中（实测截图里「检索证明」跑到中间） */
+.pp-op-grid > label:has(+ .pp-img-wrap){align-self:start;padding-top:8px}
+.pp-img-wrap .col-sub{margin:0;flex:1 1 auto;min-width:0}
+.pp-att-list{display:flex;flex-wrap:wrap;gap:10px;width:100%}
+.pp-att-item{
+  width:104px;display:flex;flex-direction:column;gap:5px;
+  padding:6px;border-radius:12px;border:1px solid var(--line);background:#fbfcfd;
+}
+.pp-att-thumb{
+  width:100%;height:68px;object-fit:cover;border-radius:8px;
+  border:1px solid var(--line);background:#eef2f6;cursor:zoom-in;display:block;
+}
+/* PDF 不能当缩略图：弄成一张"文件卡"，点开交给系统阅读器 */
+.pp-att-pdfthumb{
+  width:100%;height:68px;padding:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  background:#fdf6f4;border-color:#e9d3c9;
+}
+.pp-att-pdfbadge{
+  font-size:13px;font-weight:700;letter-spacing:.6px;color:#c0504d;
+  padding:3px 8px;border-radius:6px;background:#fff;border:1px solid #e9d3c9;
+}
+.pp-att-item.pp-att-missing .pp-att-thumb{
+  border-style:dashed;background:repeating-linear-gradient(45deg,#f6f8fa 0 6px,#eef2f6 6px 12px);
+}
+.pp-att-cap{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pp-att-name{
+  font-size:10.5px;color:var(--dim);line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pp-att-ops{display:flex;gap:6px}
+.pp-att-op{
+  flex:1;padding:2px 0;border-radius:7px;cursor:pointer;
+  border:1px solid #cfe0ec;background:#f4fafd;color:#2f7ea8;
+  font-family:inherit;font-size:11px;line-height:1.5;
+}
+.pp-att-op:hover{background:#e6f3fb;border-color:#b6d5e8}
+.pp-att-op.del{border-color:#efd2cf;background:#fdf6f5;color:#bb5b53}
+.pp-att-op.del:hover{background:#fbebe9;border-color:#e6bcb7}
+/* 「论文完整信息」里的检索证明：按钮下面浮一个小窗（点开才看，不占标题位置） */
+.pp-att-anchor{position:relative;display:block}
+.pp-tl-att-panel{
+  position:absolute;top:calc(100% + 6px);right:0;width:248px;max-height:44vh;overflow:auto;
+  padding:10px;border-radius:12px;border:1px solid var(--line);background:#fff;
+  box-shadow:0 12px 30px rgba(20,40,60,.18);z-index:6;
+}
+.pp-tl-att-panel .pp-att-item{width:100px}
+.pp-att-group-head{font-size:11.5px;color:var(--dim);margin:0 0 8px}
+.pp-att-group-head + .pp-att-list{margin-bottom:10px}
+/* 看大图：铺满、点任意处关掉 */
+.pp-img-view-card{
+  position:relative;max-width:min(92vw,1000px);max-height:88vh;
+  display:flex;align-items:center;justify-content:center;
+  background:#0d1117;border-radius:14px;padding:10px;
+}
+.pp-img-view-card img{max-width:100%;max-height:84vh;border-radius:8px;object-fit:contain}
+.pp-img-view-card .close{color:#e6edf3;background:transparent;border:0;font-size:18px}
 /* 「完整时间线」弹窗：一行一天，左边日期、中间状态、右边细节 */
 /* 「论文完整信息」弹窗里的标题编辑行（只有标题在这儿改，别的跟着状态走） */
 .pp-tl-edit{display:flex;gap:8px;align-items:center;margin:8px 0 4px}
@@ -1463,10 +1522,12 @@ body.pet .alert-stage-wrap{width:210px;height:198px}
    否则一条"已完成的投稿备忘"里 ✓ 和小锁会一起画出来（19px 的盒子塞两个）。 */
 .item-chk.locked::after,
 .memo-item.done .item-chk.locked::after{content:''}
-/* 「论文完整信息」里的标题：完整展示（长标题自动换行），要改点右侧的修改按钮 */
+/* 「论文完整信息」里的标题：完整展示（长标题自动换行），要改点右侧的修改按钮。
+   右侧两个按钮（修改标题 / 检索证明）**上下排**，横着排会吃掉标题的横向空间。 */
 .pp-tl-title{display:flex;gap:10px;align-items:flex-start;margin:8px 0 4px}
 .pp-tl-title-text{flex:1;min-width:0;font-size:15px;font-weight:600;line-height:1.5;color:var(--text);word-break:break-word;white-space:normal}
-.pp-tl-title .btn{flex:none}
+.pp-tl-acts{flex:none;display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.pp-tl-acts .btn{flex:none;width:100%;white-space:nowrap}
 .pp-tl-edit[hidden]{display:none}
 /* 提示条整体 pointer-events:none（不挡点击），但里面的「撤销」必须能点到 ——
    父级关掉的点击权，子级要显式开回来，否则按钮看得见摸不着。 */
