@@ -87,6 +87,8 @@ const DIAG = (function () {
     if (a.indexOf('--diag-ppshot2=') === 0) out.ppshot2 = a.slice('--diag-ppshot2='.length);
     /* 同上：在「论文完整信息」弹窗（附件缩略图）截一张 */
     if (a.indexOf('--diag-ppshot3=') === 0) out.ppshot3 = a.slice('--diag-ppshot3='.length);
+    /* 同上：在「收到意见：重投」之后的卡片（徽章/元信息）截一张 */
+    if (a.indexOf('--diag-ppshot4=') === 0) out.ppshot4 = a.slice('--diag-ppshot4='.length);
     /* 性能测试专用（正式运行不带这些参数，零影响） */
     if (a === '--perf-sample') out.perfSample = true;
     /* --diag-arxiv-hold：自检时把程序留着不退出（配合外面用真鼠标点气泡） */
@@ -1030,11 +1032,33 @@ function createWindow() {
               ' 过期标红:!!(r&&r.className.indexOf("urgent")>=0),' +
               ' 摘要说过期:!!r&&r.textContent.indexOf("已过期")>=0};})()');
 
-            /* ⑦ 重投（不填返修截止）→ 状态回到已投稿，且不计入"待返修" */
+            /* ⑦ 重投（不填返修截止）→ 状态是「重投」，**不是**「已投稿」；也不计入"待返修"
+               ⚠️ 以前把「重投」映射成 submitted：刚收到重投意见就把论文标成「已投稿」，
+               卡片元信息还会写成「已投稿 <收到意见那天>」，和「投 <真正投稿日>」自相矛盾。 */
             SM['7-重投无截止'] = await jp(
-              '(function(){var P=window.__pp;P.add("opinion");' +
+              '(function(){var P=window.__pp;var w0=P.waiting();P.add("opinion");' +
               'P.set("ppOpKind","resubOther");P.set("ppOpAt",P.day(0));P.ok();' +
-              'return {状态:P.st(),徽章:P.badge(),待返修:P.waiting()};})()');
+              'var out={状态:P.st(),徽章:P.badge(),待返修:P.waiting()};' +
+              'out.状态是重投=(out.状态==="resubmit");' +
+              'out.徽章是重投=(out.徽章==="重投");' +
+              /* 没填截止 → 不该多出一轮"待返修"（和加之前比） */
+              'out.没填截止不多算待返修=(out.待返修===w0);' +
+              /* 卡片那行小字也要写成「重投 <那天>」，不能再冒充「已投稿」 */
+              'var meta=document.querySelector("#paperList .pp-meta");' +
+              'var mt=meta?(meta.textContent||""):"";' +
+              'out.元信息是重投=(mt.indexOf("重投")>=0&&mt.indexOf("已投稿")<0);' +
+              /* 重投还没再投出去 → 仍算「进行中」 */
+              'out.算进行中=(window.PAPERS._open(P.p())===true);' +
+              'return out;})()');
+            /* 人工核对用：此刻卡片应该显示「重投」徽章 + 「重投 <那天>」 */
+            if (DIAG.ppshot4) {
+              await new Promise(function (r) { setTimeout(r, 450); });
+              try { fs.writeFileSync(DIAG.ppshot4, (await win.capturePage()).toPNG()); } catch (e) { }
+            }
+            /* ⑦b 之后真的再投一次 → 状态自然回到「已投稿」 */
+            SM['7b-重投后再投'] = await jp(
+              '(function(){var P=window.__pp;P.add("submitted");P.ok();' +
+              'return {再投后是已投稿:(P.st()==="submitted"),徽章是已投稿:(P.badge()==="已投稿")};})()');
 
             /* ⑧ 拒稿 */
             SM['8-拒稿'] = await jp(

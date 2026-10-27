@@ -43,7 +43,12 @@
   var KINDS = [
     { id: 'major', name: '大修', state: 'major' },
     { id: 'minor', name: '小修', state: 'minor' },
-    { id: 'resubOther', name: '重投', state: 'submitted' }
+    /* ⚠️ 重投有自己的状态（resubmit），**不要**映射成 submitted：
+       「收到意见：重投」只说明期刊让你（改完）重投，你还没投出去 ——
+       映射成 submitted 会让卡片立刻变成「已投稿」，元信息还会写成
+       「已投稿 <收到意见那天>」（用户截图：投 10月10日 / 已投稿 10月23日，自相矛盾）。
+       真正再投一次时用户会加一条「已投稿」，状态自然回到已投稿。 */
+    { id: 'resubOther', name: '重投', state: 'resubmit' }
   ];
   var ROLES = { first: '一作', cofirst: '共同一作', corresponding: '通讯作者', cocorresponding: '共同通讯', second: '二作', third: '三作', other: '其他作者' };
   /* 「我的角色」全项目只有一个口径（新增论文 / 已投稿详情 / 列表 / 导出都用它）：
@@ -73,7 +78,7 @@
   /* 拒稿原因：给几个常见的候选，也可以自己写（写什么就显示什么）*/
   var REASONS = ['创新性不足', '与期刊范围不符', '工作量 / 实验不够充分', '方法或分析有缺陷',
     '结果不够显著', '英文表达问题', '编辑直接拒（未送外审）', '建议改投其他期刊'];
-  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1 };
+  var OPEN_STATES = { preparing: 1, submitted: 1, editorReview: 1, review: 1, awaitingDecision: 1, major: 1, minor: 1, resubmit: 1 };
   /* 接收之后的那几个状态都算「已接收」这个大类：接收 / 校稿 / 见刊 / 检索 ——
      这样筛选「接收」时，已经走到校稿或已见刊的论文也能一起看到（用户要求）。 */
   var ACCEPTED_STATES = { accepted: 1, proof: 1, published: 1, indexed: 1 };
@@ -187,6 +192,7 @@
   function statusColor(id) {
     if (id === 'major') return '#E8B843';
     if (id === 'minor') return '#6FB56B';
+    if (id === 'resubmit') return '#C98A3A';
     if (id === 'accepted') return '#3F9E6E';
     if (id === 'rejected') return '#D9534F';
     if (id === 'withdrawn') return '#9B8EA8';
@@ -627,7 +633,7 @@
     var items = [{ id: 'open', name: '进行中' }, { id: 'all', name: '全部' }];
     /* ⚠️ 这里**只出这几个按钮**：校稿/见刊/检索不单独成按钮（它们属于「接收」大类，
        单独出按钮会让总数重复计算；状态本身照旧——卡片徽章的颜色是区分的）。 */
-    ['submitted', 'editorReview', 'review', 'awaitingDecision', 'major', 'minor', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
+    ['submitted', 'editorReview', 'review', 'awaitingDecision', 'major', 'minor', 'resubmit', 'preparing', 'accepted', 'rejected', 'withdrawn'].forEach(function (st) {
       var n = (st === 'accepted') ? accN : (counts[st] || 0);
       if (n) items.push({ id: st, name: statusName(st) + ' ' + n });
     });
@@ -662,7 +668,8 @@
       if (due && sub) return '<span class="pp-ev-ok">截止 ' + fmtDay(due) + ' · 已于 ' + fmtDay(sub) + ' 提交' + revTxt + '</span>';
       if (due) return '<span class="' + (isOverdueDay(due) ? 'pp-ev-late' : (isSoonDay(due) ? 'pp-ev-soon' : 'pp-ev-tip')) + '">' + (e.type === 'proof' ? '校稿截止 ' : '返修截止 ') + fmtDay(due) + ' · ' + fromNow(due) + '</span>';
       if (sub) return '<span class="pp-ev-ok">已于 ' + fmtDay(sub) + ' 提交' + revTxt + '</span>';
-      return '<span class="pp-ev-tip">点「详细信息」填类型和返修时间</span>';
+      /* 类型在上面那个下拉里已经选了（不会为空），这里只提示还差哪个日期 */
+      return '<span class="pp-ev-tip">点「详细信息」填返修截止（可空）</span>';
     }
     if (e.type === 'reject' && d.reason) return '<span class="pp-ev-tip">' + esc(d.reason) + '</span>';
     if (e.type === 'preparing') {
