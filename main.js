@@ -7226,7 +7226,7 @@ function createPetWindow() {
     minimizable: false,
     fullscreenable: false,
     skipTaskbar: true,             // 不进任务栏，只在托盘留一个图标
-    alwaysOnTop: true,
+    alwaysOnTop: false,            // 置顶与否完全由「始终最前」开关决定（见 setPetTop）
     focusable: true,               // 要能拖、能右键
     show: false,
     title: '桌面宠物',
@@ -7239,7 +7239,10 @@ function createPetWindow() {
       spellcheck: false
     }
   });
-  petWin.setAlwaysOnTop(true, 'floating');
+  /* 用户报过「不管勾不勾『始终最前』宠物都在最前面」：原来这里无条件
+     floating 档置顶，开关只控制看门狗，关掉等于没关。现在创建时就按
+     开关的真实状态来 —— 默认关，宠物跟普通窗口一样可以被别的窗盖住。 */
+  if (petTop) petWin.setAlwaysOnTop(true, 'screen-saver');
   /* 桌宠窗整个矩形比小鸡本体大（四周是透明的留白）——默认让鼠标穿透过去，
      只在「鼠标真的压在小鸡身上」时才由 pet.js 的 alpha 命中测试把它打开
      （见下面的 pet-hit）。forward:true 保证穿透状态下页面照样收到 mousemove，
@@ -7377,12 +7380,19 @@ function stopPetTopWatch() {
   petTopTimer = null;
 }
 
-/* 开/关「始终最前」。关掉时不做任何还原动作：petRaise 不再跑，
-   桌宠就回到「只置顶一次、之后听系统的」原来的规则。 */
+/* 开/关「始终最前」。
+   勾上：立刻提到置顶顶级带最上面 + 启动看门狗（每 3 秒补一次）。
+   关掉：停看门狗，并且把窗口的置顶状态真正撤掉 —— 以前只停看门狗、
+   窗口还挂着 floating 置顶，用户看到的就是「关了开关宠物还是在最前面」。 */
 function setPetTop(on) {
   petTop = !!on;
   if (petTop) { petRaise(); startPetTopWatch(); }
-  else stopPetTopWatch();
+  else {
+    stopPetTopWatch();
+    try {
+      if (petWin && !petWin.isDestroyed()) petWin.setAlwaysOnTop(false);
+    } catch (e) { /* 窗口刚销毁等边界情况，忽略 */ }
+  }
   if (win && !win.isDestroyed()) win.webContents.send('pet-top-changed', petTop);
   return petTop;
 }
@@ -9274,6 +9284,169 @@ async function downloadViaMirror() {
   pushUpdate();
 }
 
+/* ---------- 增量更新（asar 热替换）----------
+   全量安装包 116MB 里，其实每次更新【变的只有 resources/app.asar】（约 5MB）——
+   Electron 运行时、DLL 这些大头从来不动。Gitee 下载不支持 HTTP Range（实测），
+   业界标准的 blockmap 差分在 Gitee 源上做不了；所以走自己的增量路：
+     下载新版 app.asar（几 MB）→ sha256 校验 → 放 pending → 重启时替换。
+   什么时候【不能】走增量（自动回退全量安装包）：
+     · 清单里没有 asar 字段（该版本没生成增量包）
+     · runtime（Electron 版本）对不上 —— 运行时变了，只换 asar 会不配套
+     · 安装目录有 app.asar.unpacked —— 里面有 asar 之外的文件，替换 asar 会漏
+   替换时机：退出时（will-quit）或下次启动开头，两处都试；失败保留 pending
+   下次再试，任何时候失败都不影响当前版本正常使用。 */
+function targetAsarPath() {
+  return path.join(path.dirname(process.execPath), 'resources', 'app.asar');
+}
+
+function pendingAsarDir() {
+  return path.join(app.getPath('userData'), 'pending-asar-update');
+}
+
+function sha256FileSync(file) {
+  const h = crypto.createHash('sha256');
+  h.update(fs.readFileSync(file));
+  return h.digest('hex');
+}
+
+/* 这个版本能不能走增量（下载前判定） */
+function asarIncrementEligible(m) {
+  if (!app.isPackaged) return false;                       // 开发环境没有安装目录，别替
+  if (!m || !m.asar || !m.asar.url || !m.asar.sha256) return false;
+  if (String(m.asar.runtime || '') !== String(process.versions.electron)) return false;
+  try {
+    if (fs.existsSync(path.join(path.dirname(targetAsarPath()), 'app.asar.unpacked'))) return false;
+  } catch (e) { return false; }
+  return true;
+}
+
+/* 还有没有「已下载、待重启替换」的增量包 */
+function pendingAsarMeta() {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(pendingAsarDir(), 'meta.json'), 'utf8'));
+    if (m && m.version && m.sha256) return m;
+  } catch (e) { }
+  return null;
+}
+
+/* 清掉 pending 目录（校验失败/已过期/装完都走这里） */
+function clearPendingAsar() {
+  try { fs.rmSync(pendingAsarDir(), { recursive: true, force: true }); } catch (e) { }
+}
+
+async function downloadAsarIncrement() {
+  const m = updateMirror;
+  if (!m || !m.asar || !m.asar.url) throw new Error('清单里没有增量包信息');
+
+  const dir = pendingAsarDir();
+  clearPendingAsar();                       // 上次的残货全清，重新下最干净
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { }
+  const out = path.join(dir, 'app.asar');
+
+  updateState = 'downloading';
+  const got = await fetchToFile(m.asar.url, out, 0, m.asar.size || 0, function (done, tot) {
+    if (!tot) return;
+    const pc = Math.floor(done / tot * 100);
+    if (pc !== updatePercent) { updatePercent = Math.min(99, pc); pushUpdate(); }
+  });
+  if (m.asar.size && got !== m.asar.size) throw new Error('增量包大小不对（可能没下全）');
+  if (sha256FileSync(out) !== m.asar.sha256) {
+    clearPendingAsar();
+    throw new Error('增量包校验不通过（可能没下全），请重试');
+  }
+  try {
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({
+      version: m.version, sha256: m.asar.sha256, at: Date.now()
+    }), 'utf8');
+  } catch (e) {
+    throw new Error('增量包元数据写不进去：' + String((e && e.message) || e));
+  }
+  updateMergedExe = '';                     // 走的是增量，没有合并出来的 exe
+  updateState = 'downloaded';
+  updatePercent = 100;
+  pushUpdate();
+}
+
+/* 把 pending 里的新 asar 换进安装目录。
+   ⚠️ 不能在 Electron 进程里自己换 —— 实测运行中的 asar 被进程锁死，
+   rename 直接 Device or resource busy。所以借一个【脱离本进程】的
+   PowerShell 脚本：先轮询等 asar 解锁（= 本程序退出），然后备份旧文件、
+   放入新文件、把新版拉起来；放失败就把备份挪回去，旧版完好如初。
+   spawn 用 detached —— 全量更新的 NSIS 安装器就是这么活过主进程退出的，
+   同一条已验证的路。 */
+function maybeSpawnAsarSwap(reason) {
+  if (!app.isPackaged) return false;
+  const meta = pendingAsarMeta();
+  if (!meta || cmpVersion(meta.version, app.getVersion()) <= 0) return false;
+  const dir = pendingAsarDir();
+  const newAsar = path.join(dir, 'app.asar');
+  if (!fs.existsSync(newAsar)) return false;
+
+  /* 已有一个年轻的替换进程在跑（10 分钟内的 lock）就不重复拉 */
+  const lock = path.join(dir, 'swap.lock');
+  try {
+    const st = fs.statSync(lock);
+    if (Date.now() - st.mtime.getTime() < 10 * 60 * 1000) return false;
+  } catch (e) { }
+
+  const exePath = process.execPath;
+  const target = targetAsarPath();
+  const bak = target + '.bak';
+  const ps1 = path.join(app.getPath('temp'), 'ikun-asar-swap.ps1');
+  /* q() 把路径转成 PowerShell 单引号字面量（路径里出现单引号的概率≈0，仍防御一下） */
+  const q = function (p) { return "'" + String(p).replace(/'/g, "''") + "'"; };
+  const script = [
+    "$ErrorActionPreference = 'SilentlyContinue'",
+    '$T = ' + q(target),
+    '$N = ' + q(newAsar),
+    '$B = ' + q(bak),
+    '$E = ' + q(exePath),
+    '$L = ' + q(lock),
+    'if (Test-Path $L) { exit 0 }',
+    "Set-Content -Path $L -Value 'running'",
+    '$tries = 0',
+    'while ($true) {',
+    '  Move-Item -Force $T $B',
+    '  if (Test-Path $B) { break }',
+    '  $tries++',
+    '  if ($tries -ge 90) { Remove-Item $L -Force; exit 1 }',
+    '  Start-Sleep -Seconds 1',
+    '}',
+    'Copy-Item -Force $N $T',
+    'if ((-not (Test-Path $T)) -or ((Get-Item $T).Length -ne (Get-Item $N).Length)) {',
+    '  Move-Item -Force $B $T',
+    '  Remove-Item $L -Force',
+    '  exit 1',
+    '}',
+    'Remove-Item $L -Force',
+    'Start-Process -FilePath $E -WorkingDirectory (Split-Path $E)',
+    'exit 0'
+  ].join('\r\n') + '\r\n';
+  /* 带 BOM 写，防 PowerShell 对无 BOM 文件按 ANSI 误读（安装协议乱码同款坑） */
+  try {
+    fs.writeFileSync(ps1, Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), Buffer.from(script, 'utf8')]));
+  } catch (e) { return false; }
+  try {
+    spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps1], {
+      detached: true, stdio: 'ignore', windowsHide: true,
+      cwd: path.dirname(exePath)
+    }).unref();
+  } catch (e) { return false; }
+  diagLog('asar-swap-spawn', { reason: reason, version: meta.version });
+  return true;
+}
+
+/* 清理过期/无效的增量 pending（启动时调用）：
+   · meta 都没了或读不出 → 删
+   · 版本不比当前新（上次已装完）→ 删
+   · 下载超过 7 天还没装 → 删（省得一直占着 C 盘） */
+function prunePendingAsar() {
+  const meta = pendingAsarMeta();
+  if (!meta) { clearPendingAsar(); return; }
+  if (cmpVersion(meta.version, app.getVersion()) <= 0) { clearPendingAsar(); return; }
+  if (meta.at && Date.now() - meta.at > 7 * 24 * 3600 * 1000) { clearPendingAsar(); return; }
+}
+
 /* GitHub 的 releaseNotes 可能是字符串，也可能是 [{version, note}] 数组 */
 function notesText(notes) {
   if (!notes) return '';
@@ -9549,8 +9722,20 @@ function downloadUpdate() {
 
   const src = UPDATE_SOURCES.filter(function (s) { return s.id === updateSourceId; })[0];
   if (src && src.kind === 'mirror') {
-    /* Gitee 源：自己按分卷下 → 合并 → 校验整包 sha512 */
-    downloadViaMirror().catch(function (err) { setUpdateError(err); });
+    /* Gitee 源：优先增量（只下 5MB 的 app.asar）；不满足条件或增量失败 → 全量分卷 */
+    if (asarIncrementEligible(updateMirror)) {
+      downloadAsarIncrement().catch(function (err) {
+        diagLog('asar-increment-fallback', { error: String((err && err.message) || err) });
+        updateState = 'downloading';
+        updatePercent = 0;
+        updateError = '';
+        pushUpdate();
+        downloadViaMirror().catch(function (err2) { setUpdateError(err2); });
+      });
+    } else {
+      /* 自己按分卷下 → 合并 → 校验整包 sha512 */
+      downloadViaMirror().catch(function (err) { setUpdateError(err); });
+    }
   } else {
     /* GitHub 源：electron-updater 原生，能走 blockmap 差分 */
     autoUpdater.downloadUpdate().catch(function (err) { setUpdateError(err); });
@@ -9564,6 +9749,13 @@ function installUpdate() {
   send('update-installing');
 
   const src = UPDATE_SOURCES.filter(function (s) { return s.id === updateSourceId; })[0];
+  /* 增量更新：新 asar 已经校验好躺在 pending 里了。不能在本进程里换
+     （asar 被自己锁着），拉一个 detached cmd 在退出后完成替换并拉起新版；
+     就算 cmd 出意外，也顶多还是旧版，重新检查更新再下即可（才 5MB）。 */
+  if (maybeSpawnAsarSwap('install')) {
+    setTimeout(function () { app.quit(); }, 700);
+    return true;
+  }
   setImmediate(function () {
     try {
       if (src && src.kind === 'mirror') {
@@ -11321,6 +11513,7 @@ if (!gotLock) {
     loadUpdatePref();
     initUpdater();
     prunePendingUpdates();   // 启动即清历史 pending 缓存，别让旧安装包越堆越多
+    try { prunePendingAsar(); } catch (e) { }   // 增量包 pending 同理（过期/已装完的清掉）
     scheduleUpdateCheck();
 
     /* 一键摸鱼：读偏好 → 注册全局快捷键。
