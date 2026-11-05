@@ -1,20 +1,20 @@
 {
-  "version": "4.7.7",
-  "releaseDate": "2026-10-22T13:55:13.241Z",
-  "notes": "## iKunReminder v4.7.7\n\n### 🐛 紧急修复：v4.7.6 安装版科研动态页面失效（关键词空白 / 保存无反应）\n- **现象**：升级 4.7.6 后，「科研动态 → 抓取条件」里关键词列表显示为空、\n  输入后点「添加」没反应、「全部条件」按钮点不中。\n- **原因**：4.7.6 新增的多来源检索模块文件（schol-sources.js）漏加进了\n  安装包的打包清单 —— 开发环境有源文件所以测试全过，但安装版里这个\n  文件不存在，整个科研模块一启动就报错瘫痪。\n- **影响范围**：只影响「科研动态」页面；论文数据**没有任何丢失**\n  （数据库里关键词、论文、评论、评分都完好），升级到 4.7.7 打开后\n  一切自动恢复。\n- **修复**：\n  1. 打包清单补上缺失文件；\n  2. 加了防呆检查：今后构建时若发现打包清单里的文件没进安装包，\n     构建直接失败，不再可能发出这种坏包；\n  3. 加了降级保护：就算极端情况下文件再缺失，科研模块也会退化成\n     纯 arXiv 模式继续工作，而不是整个瘫掉。\n\n### 升级说明\n- 从 4.7.6 直接覆盖安装即可，无需任何手动操作。\n- 4.7.6 的多来源检索功能（OpenAlex / Crossref / Europe PMC / Semantic Scholar）\n  在本版本完整可用。\n",
-  "size": 121937660,
-  "sha512": "d3YRYa7TkwrJkmnGR4G7AoR9C3g6uMUqNx/XmfZqgVwZldZ+67Mj9/JNSC0x6YA1RquVv0+N9ctLad0fCkxkGQ==",
+  "version": "4.7.8",
+  "releaseDate": "2026-11-05T06:42:56.692Z",
+  "notes": "## iKunReminder v4.7.8\n\n### 🐛 修复：安装向导「许可协议」页显示乱码\n- **现象**：安装软件时，许可协议页面的中文全部显示为乱码（如「鍬协€?貃嗅…」）。\n- **原因**：协议文本文件保存成了「UTF-8 无 BOM」编码，Windows 安装器按\n  ANSI（简体中文系统即 GBK）去解读，就花了。\n- **修复**：协议文件重新保存为带 BOM 的 UTF-8，任何语言的 Windows 上都能正常显示。\n\n### 其他\n- 无功能变化，仅为安装体验修复；已安装用户不受影响，可自主选择是否更新。\n",
+  "size": 121937443,
+  "sha512": "AAX7pK8xofSvJGfAkuwwlU6IfGv8Zs5rTIH8tws7a0uDQ1SfX5TGL57vqXmX2jVvhh0Ttg+Yz8VdauOzH2SpbA==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.7/iKunReminder-setup-v4.7.7.exe.part1",
-      "size": 60968830,
-      "sha512": "VJVVuiPm6163W+nMAo5HqbzacFbvhrcr3a4JnXQlbFgawc2Dxppy1nF+CaWi28OH5/6tpmYLnTlpYIsGlld7ew==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.8/iKunReminder-setup-v4.7.8.exe.part1",
+      "size": 60968722,
+      "sha512": "VnKiSFqJ7+hP4S5SXkfBjQWimw16kj6bryE81Tj/90iEr2s09EPWxNK8pLWJiavBGHtxsB5czoWpRU4KjbezdQ==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.7/iKunReminder-setup-v4.7.7.exe.part2",
-      "size": 60968830,
-      "sha512": "P88tQDXiZxW7Yt5Or4s2zZ7e4xlqEjr3s2jjvRPjKo7npITKem/ITvTg5qLZSdriAYhnu65Zx+Pni6A2f/6+Jw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.8/iKunReminder-setup-v4.7.8.exe.part2",
+      "size": 60968721,
+      "sha512": "EWeEmLIvofqy4SnfY3sMYPTGj710Sq5HfxgjtFgz7DnVzpyqqei+UfmfxLy6qr+rvtwBXGfF+Tq/eV7gaR9kHQ==",
       "index": 2
     }
   ]
