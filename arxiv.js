@@ -342,6 +342,38 @@ async function arxivFetch(cfg, opts) {
     String((lastErr && lastErr.message) || lastErr));
 }
 
+/* ---------------------------------------------------------------- 垃圾标题
+   OpenAlex / Crossref 会把书的目录、前言、版权页、索引这类「非论文条目」
+   也索引进检索结果，标题就是 Introduction / Index / References 这种 ——
+   用户报过列表里一堆这种条目。这里把它们认出来（精确匹配 + 去掉编号后
+   再匹配），抓取侧直接丢弃，库里已有的在打开库时顺手清一遍。 */
+const JUNK_TITLES = [
+  'introduction', 'conclusion', 'conclusions', 'abstract', 'references',
+  'reference', 'bibliography', 'contents', 'table of contents', 'list of contents',
+  'preface', 'foreword', 'acknowledgments', 'acknowledgements', 'acknowledgment',
+  'acknowledgement', 'appendix', 'appendices', 'glossary', 'index',
+  'author index', 'subject index', 'keyword index', 'name index',
+  'front matter', 'back matter', 'cover', 'cover page', 'title page',
+  'copyright', 'copyright page', 'erratum', 'errata', 'corrigendum',
+  'editorial', 'editorial board', 'reviewers', 'list of reviewers',
+  'list of contributors', 'contributors', 'abbreviations', 'nomenclature',
+  'dedication', 'summary', 'supplementary material', 'supplementary materials',
+  'supplementary information', 'declaration', 'declarations',
+  'list of figures', 'list of tables', 'about this book', 'about this journal',
+  'announcement', 'withdrawn', 'retracted', 'blank page', 'colophon',
+  'backcover', 'back cover', 'cover sheet', 'contents of this issue',
+  'issue front matter', 'frontmatter', 'backmatter'
+];
+function isJunkTitle(t) {
+  let s = plainText(String(t == null ? '' : t))
+    .replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!s) return true;
+  /* 去掉结尾标点（"Introduction."）和开头的编号（"1. Introduction"）再比 */
+  s = s.replace(/[.,;:!?。，；：！？]+$/, '').replace(/^\d+[.．、\s-]+/, '');
+  if (s.length > 40) return false;            // 长标题不可能是目录条目，免得误杀
+  return JUNK_TITLES.indexOf(s) >= 0;
+}
+
 module.exports = {
   API: API,
   FIELDS: FIELDS,
@@ -355,6 +387,7 @@ module.exports = {
   buildArxivQuery: buildArxivQuery,
   parseAtom: parseAtom,
   plainText: plainText,
+  isJunkTitle: isJunkTitle,
   texToPlain: texToPlain,
   arxivIdFromUrl: arxivIdFromUrl,
   arxivFetch: arxivFetch

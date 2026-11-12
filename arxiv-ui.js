@@ -392,7 +392,12 @@
   }
   function openPaper(p) {
     if (native && native.arxivMarkRead && !p.read) native.arxivMarkRead(p.arxivId);
-    openUrl(p.pdfUrl || p.absUrl);
+    /* arXiv 点标题开 PDF；Crossref 给的 pdf 链接常是出版商的 TDM 接口
+       （打开就 403/404 —— 用户报过「很多链接点不开」），所以它优先开原文页 */
+    var url = (p.source === 'crossref')
+      ? (p.absUrl || p.pdfUrl)
+      : (p.pdfUrl || p.absUrl);
+    openUrl(url);
     p.read = true;
     setTimeout(refresh, 400);
   }
@@ -408,7 +413,7 @@
     var t = document.createElement('div');
     t.className = 'arxiv-title';
     fillHighlighted(t, p.title || '(无标题)', kws);
-    t.title = '点一下用浏览器打开 PDF 原文';
+    t.title = '点一下用浏览器打开原文';
     t.addEventListener('click', function () { openPaper(p); });
     it.appendChild(t);
 

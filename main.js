@@ -11471,10 +11471,25 @@ ipcMain.handle('arxiv-hidden-clear', () => {
   arxivPushState();
   return n;
 });
-/* 打开原文 / PDF：只放行 arxiv.org（用户点的是论文，不是任意网址） */
+/* 打开原文 / PDF：放行三类链接 ——
+     1) arXiv / 聚合站白名单（arxiv.org、doi.org、OpenAlex、EPMC、Semantic Scholar…）
+     2) 这篇论文在库里登记过的原文/PDF 链接（出版商域名千奇百怪，逐个白名单不现实，
+        用「库里登记过的链接」放行，用户点的始终是论文的链接）
+   多来源上线后用户报过「很多链接点不开」—— 之前只放行 arxiv.org，
+   doi.org / OpenAlex / 出版商页面全被拦了。 */
 ipcMain.handle('arxiv-open', (e, url) => {
   const u = String(url || '');
-  if (!/^https?:\/\/(www\.)?arxiv\.org\//i.test(u)) return false;
+  if (!/^https?:\/\//i.test(u)) return false;
+  let host = '';
+  try { host = new URL(u).hostname.toLowerCase(); } catch (err) { return false; }
+  let ok = /^(www\.)?(arxiv\.org|doi\.org|dx\.doi\.org|openalex\.org|europepmc\.org|semanticscholar\.org|ncbi\.nlm\.nih\.gov|pubmed\.ncbi\.nlm\.nih\.gov|biorxiv\.org|medrxiv\.org)$/.test(host);
+  if (!ok) {
+    try { ok = arxivDb.isKnownPaperUrl(u); } catch (err) { ok = false; }
+  }
+  if (!ok) {
+    try { diagLog('arxiv-open-block', { url: u.slice(0, 160) }); } catch (err) { }
+    return false;
+  }
   try { require('electron').shell.openExternal(u); return true; } catch (err) { return false; }
 });
 

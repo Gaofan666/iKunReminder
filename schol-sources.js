@@ -116,10 +116,19 @@ function oaIdToKey(openalexId) {
   return m ? m[1] : '';
 }
 
+/* 非论文条目：OpenAlex 会把书的版权页、目录（paratext）、勘误、审稿记录
+   之类也索引进来，搜出来全是「Introduction / Index」这种 —— 用户报过 */
+const OA_BAD_TYPES = {
+  paratext: 1, 'book-part': 1, book: 1, monograph: 1, editorial: 1,
+  erratum: 1, 'peer-review': 1, dataset: 1, standard: 1,
+  'report-component': 1, component: 1, 'book-series': 1, 'book-set': 1
+};
+
 function oaNormalize(w) {
   if (!w) return null;
+  if (w.type && OA_BAD_TYPES[w.type]) return null;
   const title = ARXIV.plainText(w.display_name || w.title || '');
-  if (!title) return null;
+  if (!title || ARXIV.isJunkTitle(title)) return null;
   const doi = String(w.doi || '').replace(/^https?:\/\/doi\.org\//i, '').trim();
   const wkey = oaIdToKey(w.id);
   if (!doi && !wkey) return null;
@@ -200,11 +209,22 @@ function crDate(item) {
   return [y, m, d].filter(Boolean).join('-');
 }
 
+/* Crossref 里的非论文条目：书的章节组件（component）、目录（book-part）、
+   全卷 proceedings、勘误声明之类 —— 搜出来标题就是 "Introduction" / "Index" */
+const CR_BAD_TYPES = {
+  component: 1, 'book-part': 1, 'book-section': 1, book: 1, 'book-track': 1,
+  'edited-book': 1, monograph: 1, paratext: 1, abstract: 1,
+  'proceedings-abstract': 1, 'report-component': 1, 'reference-entry': 1,
+  dataset: 1, standard: 1, 'peer-review': 1, 'journal-issue': 1,
+  'journal-volume': 1, proceedings: 1, 'proceedings-series': 1, other: 1
+};
+
 function crNormalize(it) {
   if (!it) return null;
+  if (it.type && CR_BAD_TYPES[it.type]) return null;
   const title = ARXIV.plainText((it.title && it.title[0]) || '');
   const doi = String(it.DOI || '').trim();
-  if (!title || !doi) return null;
+  if (!title || ARXIV.isJunkTitle(title) || !doi) return null;
 
   const authors = (it.author || [])
     .map(function (a) { return [a.given, a.family].filter(Boolean).join(' ').trim(); })
@@ -266,7 +286,7 @@ const EPMC_API = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
 function epmcNormalize(r) {
   if (!r) return null;
   const title = ARXIV.plainText(r.title || '');
-  if (!title) return null;
+  if (!title || ARXIV.isJunkTitle(title)) return null;
   const doi = String(r.doi || '').replace(/^https?:\/\/doi\.org\//i, '').trim();
   const pmid = String(r.pmid || '').trim();
   const pmcid = String(r.pmcid || '').trim();
@@ -339,7 +359,7 @@ const S2_API = 'https://api.semanticscholar.org/graph/v1/paper/search';
 function s2Normalize(p) {
   if (!p) return null;
   const title = ARXIV.plainText(p.title || '');
-  if (!title) return null;
+  if (!title || ARXIV.isJunkTitle(title)) return null;
   const ext = p.externalIds || {};
   const doi = String(ext.DOI || '').trim();
   const axv = String(ext.ArXiv || '').trim();

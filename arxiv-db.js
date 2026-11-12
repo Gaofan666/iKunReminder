@@ -394,6 +394,33 @@ function likeEscape(s) {
 
   function close() { try { db.close(); } catch (e) { } }
 
+  /* 主进程 arxiv-open 校验用：这个 URL 是不是某篇论文登记过的原文/PDF 链接。
+     OpenAlex/Crossref 抓来的出版商页面域名千奇百怪，没法逐个白名单 ——
+     就用「库里登记过的链接」来放行，用户点的始终是论文的链接。 */
+  function isKnownPaperUrl(url) {
+    const u = String(url || '');
+    if (!u) return false;
+    try {
+      const r = db.prepare('SELECT 1 AS x FROM papers WHERE pdf_url = ? OR abs_url = ? LIMIT 1').get(u, u);
+      return !!(r && r.x);
+    } catch (e) { return false; }
+  }
+
+  /* 一次性清理：多来源刚上线时抓进来的「非论文条目」（标题是 Introduction /
+     Index 这种前言、目录、版权页），打开库时顺手删掉 —— 用户报过列表里
+     一堆这种条目且点不开。 */
+  function purgeJunkPapers() {
+    let n = 0;
+    try {
+      const rows = db.prepare("SELECT arxiv_id, title FROM papers WHERE source != 'arxiv'").all();
+      rows.forEach(function (r) {
+        if (ARXIV.isJunkTitle(r.title)) { q.delPaper.run(r.arxiv_id); n++; }
+      });
+    } catch (e) { }
+    return n;
+  }
+  purgeJunkPapers();
+
   return {
     file: file,
     getConfig: getConfig,
@@ -419,6 +446,8 @@ function likeEscape(s) {
     logPush: logPush,
     lastPush: lastPush,
     prune: prune,
+    isKnownPaperUrl: isKnownPaperUrl,
+    purgeJunkPapers: purgeJunkPapers,
     close: close
   };
 }
