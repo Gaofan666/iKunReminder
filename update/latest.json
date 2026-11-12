@@ -1,27 +1,27 @@
 {
-  "version": "4.7.9",
-  "releaseDate": "2026-11-05T07:21:49.431Z",
-  "notes": "## iKunReminder v4.7.9\n\n### 🐛 修复：桌面宠物「始终在前」开关关不掉\n- **现象**：不管勾不勾「始终最前」，宠物都一直在最前面。\n- **原因**：宠物窗口创建时无条件挂了一层低档置顶，开关实际只控制\n  「每 3 秒把它抬到最高档」的保活逻辑——关掉只是不抬了，那层置顶还在。\n- **修复**：不勾选 = 彻底不置顶（宠物跟普通窗口一样可以被别的窗口盖住）；\n  勾选 = 置顶并保持最前（原行为）。\n\n### ⚡ 新机制：增量更新 —— 升级只下 5MB，不再每次下 116MB 全量包\n- 全量安装包 116MB 里，每次更新真正变的只有程序本体（app.asar，约 5MB），\n  Electron 运行时这些大头从来不动。现在 Gitee 更新源默认只下载变化的部分，\n  **流量省 98%**，升级从「一分钟」变成「几秒钟」。\n- 安全保障：\n  - 只在 Electron 版本完全一致时才走增量（运行时变了自动回退全量安装包）；\n  - 下载后 sha256 校验，替换由独立脚本在你退出应用后进行；\n  - 替换前自动备份旧文件，任何失败自动还原 —— 不会把软件更坏；\n  - 增量包 7 天内没装会自动清理。\n- 本次更新本身仍走全量（4.7.9 是增量机制的起点），从下一版开始享受增量。\n\n### 其他\n- 「始终最前」相关代码顺带清理，行为与选项描述完全一致。\n",
-  "size": 121939570,
-  "sha512": "AEfvOtjLdtr2KHgTzKvpqXLDdXqtDU7Q+yrufwVxmmAaWIuR8PWF95U6lCaDlOZ3SgCbzzTpGF72KMH6lS9bsQ==",
+  "version": "4.7.10",
+  "releaseDate": "2026-11-12T12:01:51.480Z",
+  "notes": "## iKunReminder v4.7.10\n\n### 🐛 修复：科研论文抓取的两大问题\n\n**1. 很多论文链接点不开**\n- **原因**：之前「打开原文」只放行 arxiv.org 链接。多来源检索上线后，\n  OpenAlex / Crossref / Europe PMC 抓来的论文走的是 doi.org、出版商官网等\n  其他域名，全被拦截了——点了没反应。\n- **修复**：放行两类链接——\n  - 学术聚合站白名单：arxiv.org / doi.org / OpenAlex / Europe PMC /\n    Semantic Scholar / PubMed / bioRxiv / medRxiv；\n  - 这篇论文在库里登记过的原文页面和 PDF 链接（出版商域名千奇百怪，\n    用「论文自己带的链接」放行，既能打开又不会变成任意网址直通车）。\n- 另外 Crossref 给的 PDF 链接常是出版商的机器接口（打开就 403），\n  现在点标题优先打开原文页面。\n\n**2. 一堆论文标题是「Introduction」「Index」这种**\n- **原因**：OpenAlex / Crossref 会把书的目录、前言、版权页、索引这些\n  「非论文条目」也索引进检索结果，标题就是 Introduction / Index / References。\n- **修复**：抓取时直接过滤掉这类条目（按标题精确识别 + 按记录类型拦截）；\n  已经抓进列表里的老垃圾条目，升级后启动时自动清理。\n\n### 其他\n- 升级后首次启动会自动清一遍旧列表里的非论文条目，无需手动删除。\n\n> 升级提示：从 v4.7.9 起，Gitee 源的更新默认走**增量更新**（只下约 5MB\n> 程序本体，不再下 116MB 全量包）。本次 v4.7.9 → v4.7.10 就是第一次增量升级，\n> 试试「检查更新」的速度吧。\n",
+  "size": 121941552,
+  "sha512": "OSssNCSbAZ1EtkfsDN+Tg6lTh52sUQUSoioOsqz3K003ZzTdecA6MbkcyB2socs4V7692oGA494z++Lxz7o6Kg==",
   "parts": [
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.9/iKunReminder-setup-v4.7.9.exe.part1",
-      "size": 60969785,
-      "sha512": "ockE5kE2DBh33J3LhqEQU2MM+Qc6tDrgfDXHYzUOKRoAqfoCAd8l3sX4W7Mmiw7YXUG1QEcl5gy1bRxrjfUX6w==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.10/iKunReminder-setup-v4.7.10.exe.part1",
+      "size": 60970776,
+      "sha512": "Y3itsMLTENunIWu8dtFw4lQ2toWxWZqySCEZaDA9F4GqfGvR6lGRbGkWm0x7e/tL4WYyn/eeUfX65nGzAxEUcg==",
       "index": 1
     },
     {
-      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.9/iKunReminder-setup-v4.7.9.exe.part2",
-      "size": 60969785,
-      "sha512": "sz9Kd5lI6+2kgT6SutddpPHmRbSpWSi+GcIQ5HcusPJuet/vDqkzt3v7LcHps96p2AfxAj8EJn6nDL3biGkjPw==",
+      "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.10/iKunReminder-setup-v4.7.10.exe.part2",
+      "size": 60970776,
+      "sha512": "KWp/0bP4Kg7yYl7Ma1XN1iNDaCNecdgDCa2IAY/XEAHMPQZA5XELkS4LnkrOVvw4p1n+tUH8HvIRmKnpH1sZAA==",
       "index": 2
     }
   ],
   "asar": {
-    "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.9/iKunReminder-v4.7.9-asar-update.asar",
-    "size": 5490132,
-    "sha256": "c0369d9d684d897ae8616d9d07f273e8b74b0acc488bec6d3ee3ac5cc50a9cb8",
+    "url": "https://gitee.com/gaofan666/iKunReminder/releases/download/v4.7.10/iKunReminder-v4.7.10-asar-update.asar",
+    "size": 5498073,
+    "sha256": "ba165a30374a3157ae7f7008b8ffaa20184fdcfb017f9a80030beab4865dba36",
     "runtime": "44.3.0"
   }
 }
